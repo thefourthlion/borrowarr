@@ -1,89 +1,107 @@
----
 id: torrentgalaxyclone
 name: TorrentGalaxyClone
-description: "TorrentGalaxy is a Public torrent site with a large collection of verified torrents"
+description: TorrentGalaxyClone is a Public site for MOVIES / TV / GENERAL
 language: en-US
 type: public
-encoding: UTF-8
 links:
   - https://torrentgalaxy.one/
   - https://torrentgalaxy.info/
   - https://torrentgalaxy.space/
-
 caps:
   categorymappings:
-    - {id: 1, cat: Movies, desc: "Movies"}
-    - {id: 2, cat: TV, desc: "TV"}
-    - {id: 3, cat: Audio, desc: "Music"}
-    - {id: 4, cat: PC/Games, desc: "Games"}
-    - {id: 5, cat: PC, desc: "Applications"}
-    - {id: 6, cat: XXX, desc: "Anime"}
-    - {id: 7, cat: Other, desc: "Other"}
-
+    - id: Anime
+      cat: TV/Anime
+      desc: Anime
+    - id: Apps
+      cat: PC
+      desc: Apps
+    - id: Books
+      cat: Books
+      desc: Books
+    - id: Docus
+      cat: TV/Documentary
+      desc: Documentaries
+    - id: Games
+      cat: Console
+      desc: Games
+    - id: Movies
+      cat: Movies
+      desc: Movies
+    - id: Music
+      cat: Audio
+      desc: Music
+    - id: Other
+      cat: Other
+      desc: Other
+    - id: TV
+      cat: TV
+      desc: TV
+    - id: XXX
+      cat: XXX
+      desc: XXX
+    - id: Documentaries
+      cat: TV/Documentary
+      desc: Docus
+    - id: E-books
+      cat: Books
+      desc: E-books
   modes:
-    search: [q]
-    tv-search: [q, season, ep]
-    movie-search: [q]
-
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+      - imdbid
+    movie-search:
+      - q
+      - imdbid
+    music-search:
+      - q
+    book-search:
+      - q
 search:
   paths:
-    - path: /torrents.php?search={{ .Keywords }}
-  
+    - path: >-
+        get-posts/{{ if or .Query.IMDBID .Keywords }}keywords:{{ or .Query.IMDBID .Keywords }}{{ else }}{{ end }}{{
+        range .Categories }}:category:{{.}}{{end}}
   rows:
-    selector: .tgxtablerow.txlight, div.tgxtablerow
-  
+    selector: div.tgxtablerow{{ if .Config.uploader }}:has(a.username:contains({{ .Config.uploader }})){{ else }}{{ end }}
   fields:
     category:
-      selector: .tgxtablecell a[href*="/torrents.php?cat="], .tgxtablecell a[href*="cat="]
-      attribute: href
-      filters:
-        - name: regexp
-          args: ["cat=([^&]+)", 1]
-    
+      selector: a[href^="/get-posts/category:"]
     title:
-      selector: .tgxtablecell a[href*="/post-detail/"][title], .tgxtablecell a[title], .tgxtablecell a[href*="/post-detail/"] b
+      selector: a[href^="/post-detail/"]
       attribute: title
-      filters:
-        - name: trim
-    
     details:
-      selector: .tgxtablecell a[href*="/post-detail/"]
+      selector: a[href^="/post-detail/"]
       attribute: href
-    
     download:
-      selector: .tgxtablecell a[href*="itorrents.org/torrent/"], .tgxtablecell a[href*="download"]
+      selector: a[href^="/post-detail/"]
       attribute: href
-    
-    magnet:
-      selector: .tgxtablecell a[href^="magnet:"]
+    imdbid:
+      selector: a[href^="/get-posts/keywords:tt"]
       attribute: href
-    
     size:
-      selector: .tgxtablecell:nth-child(7)
-      filters:
-        - name: trim
-    
+      selector: div.tgxtablecell:nth-last-child(5)
     seeders:
-      selector: .tgxtablecell:nth-child(10)
-      filters:
-        - name: regexp
-          args: ["(\\d+)\\s*/", 1]
-        - name: parseNumber
-    
+      selector: div.tgxtablecell:nth-last-child(2) span font
     leechers:
-      selector: .tgxtablecell:nth-child(10)
-      filters:
-        - name: regexp
-          args: ["/\\s*(\\d+)", 1]
-        - name: parseNumber
-    
+      selector: div.tgxtablecell:nth-last-child(2) span font:nth-of-type(2)
     date:
-      selector: .tgxtablecell:nth-child(11)
+      selector: div.tgxtablecell:nth-last-child(1)
+      remove: div.bighide
       filters:
-        - name: trim
         - name: timeago
-
+    _username:
+      selector: a.username
+    description:
+      text: 'Uploader: {{ .Result._username }}'
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1
 download:
-  selector: .tgxtablecell a[href*="download.php"]
-  attribute: href
-
+  selectors:
+    - selector: a[href^="magnet:?xt="]
+      attribute: href

@@ -1,0 +1,206 @@
+id: thekitchen
+name: The Kitchen
+description: TheKitchen (TK) is a Private Torrent Tracker for COOKING / CUISINES / RECIPES
+language: en-US
+type: private
+links:
+  - https://thekitchen.click/
+caps:
+  categorymappings:
+    - id: 240
+      cat: Other
+      desc: 'Business : Catering'
+    - id: 221
+      cat: Other
+      desc: 'Cuisine : Indian'
+    - id: 215
+      cat: Other
+      desc: 'Food : Dairy Free'
+    - id: 232
+      cat: Other
+      desc: 'Food : Meat'
+    - id: 257
+      cat: Other
+      desc: 'Franchise : Bake Off/Baking Sh'
+    - id: 241
+      cat: Other
+      desc: 'Business : Food Prep'
+    - id: 222
+      cat: Other
+      desc: 'Cuisine : Italian'
+    - id: 251
+      cat: Other
+      desc: 'Food : Dating/Romance'
+    - id: 234
+      cat: Other
+      desc: 'Food : Organic Food'
+    - id: 255
+      cat: Other
+      desc: 'Franchise : Hells Kitchen'
+    - id: 243
+      cat: Other
+      desc: 'Cuisine : African'
+    - id: 223
+      cat: Other
+      desc: 'Cuisine : Mexican'
+    - id: 225
+      cat: Other
+      desc: 'Food : Desserts/Pastries'
+    - id: 235
+      cat: Other
+      desc: 'Food : Seasonal'
+    - id: 254
+      cat: Other
+      desc: 'Franchise : Iron Chef'
+    - id: 216
+      cat: Other
+      desc: 'Cuisine : American'
+    - id: 224
+      cat: Other
+      desc: 'Cuisine : Middle Eastern'
+    - id: 228
+      cat: Other
+      desc: 'Food : Fish'
+    - id: 238
+      cat: Other
+      desc: 'Food : Soups/Salads/Starter'
+    - id: 253
+      cat: Other
+      desc: 'Franchise : Masterchef'
+    - id: 217
+      cat: Other
+      desc: 'Cuisine : Asian'
+    - id: 214
+      cat: Other
+      desc: 'Cuisine : Spanish'
+    - id: 230
+      cat: Other
+      desc: 'Food : Fruit'
+    - id: 236
+      cat: Other
+      desc: 'Food : Sugar Free'
+    - id: 256
+      cat: Other
+      desc: 'Franchise : Top Chef'
+    - id: 249
+      cat: Other
+      desc: 'Cuisine : Australasia'
+    - id: 226
+      cat: Other
+      desc: 'Drinks : Alchohol'
+    - id: 231
+      cat: Other
+      desc: 'Food : Health Food/Nutrition'
+    - id: 229
+      cat: Other
+      desc: 'Food : Tech/Hygiene'
+    - id: 252
+      cat: TV
+      desc: 'TV : Chef/Food Ent/Drama'
+    - id: 218
+      cat: Other
+      desc: 'Cuisine : British'
+    - id: 227
+      cat: Other
+      desc: 'Drinks : Non-Alchohol'
+    - id: 246
+      cat: Other
+      desc: 'Food : Herbs/Spice/Fungi'
+    - id: 233
+      cat: Other
+      desc: 'Food : Vegan'
+    - id: 242
+      cat: TV
+      desc: 'TV : Chef/Food Shows'
+    - id: 219
+      cat: Other
+      desc: 'Cuisine : European(other)'
+    - id: 239
+      cat: Other
+      desc: 'Food : Bread'
+    - id: 250
+      cat: Other
+      desc: 'Food : Kids'
+    - id: 248
+      cat: Other
+      desc: 'Food : Vegetables'
+    - id: 245
+      cat: TV
+      desc: 'TV : Chef/Food Travel'
+    - id: 220
+      cat: Other
+      desc: 'Cuisine : French'
+    - id: 247
+      cat: Other
+      desc: 'Food : Cooking On A Budget'
+    - id: 259
+      cat: Other
+      desc: 'Food : Kosher'
+    - id: 244
+      cat: Other
+      desc: 'Food : Vegetarian'
+    - id: 237
+      cat: TV
+      desc: 'TV : Reality Food Shows'
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+search:
+  paths:
+    - path: browse.php
+  rows:
+    selector: >-
+      table[border="0"] > tbody >
+      tr.ttable:has(a[href^="browse.php?cat="]):not(:has(font[color="blue"])):not(:contains("*TCG*"))
+  fields:
+    category:
+      selector: a[href^="browse.php?cat="]
+      attribute: href
+      filters:
+        - name: querystring
+          args: cat
+    title:
+      selector: a[href^="details.php?id="]
+      attribute: title
+    details:
+      selector: a[href^="details.php?id="]
+      attribute: href
+    download:
+      selector: a[href^="download.php/"]
+      attribute: href
+    grabs:
+      selector: td:nth-child(8)
+      filters:
+        - name: replace
+          args:
+            - Never
+            - '0'
+    files:
+      selector: td:nth-child(4)
+    size:
+      selector: td:nth-child(7)
+    seeders:
+      selector: td:nth-child(9)
+    leechers:
+      selector: td:nth-child(10)
+    date:
+      selector: td:nth-child(6)
+      filters:
+        - name: dateparse
+          args: yyyy-MM-ddHH:mm:ss
+    downloadvolumefactor:
+      case:
+        font[color="green"]: 0
+        '*': 1
+    uploadvolumefactor:
+      case:
+        font[color="green"]: 0
+        '*': 1
+    minimumratio:
+      text: 1
+    minimumseedtime:
+      text: 86400

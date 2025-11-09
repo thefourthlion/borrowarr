@@ -741,18 +741,63 @@ async function searchIndexer(indexer, query, categoryIds = [], limit = 100, offs
 }
 
 // Search multiple indexers in parallel
-async function searchIndexers(indexers, query, categoryIds = [], limit = 100, offset = 0) {
-  console.log(`\n[SearchIndexers] Starting search for "${query}" across ${indexers.length} indexer(s)`);
-  console.log(`[SearchIndexers] Indexers to search:`);
-  indexers.forEach(idx => {
-    console.log(`  - ${idx.name} (${idx.protocol}, ${idx.indexerType || 'unknown type'}): ${idx.baseUrl || 'NO URL'}`);
+// Concurrent request limiter
+async function pMap(items, mapper, concurrency = 5) {
+  const results = [];
+  const executing = [];
+  
+  for (const item of items) {
+    const p = Promise.resolve().then(() => mapper(item));
+    results.push(p);
+    
+    if (concurrency <= items.length) {
+      const e = p.then(() => executing.splice(executing.indexOf(e), 1));
+      executing.push(e);
+      if (executing.length >= concurrency) {
+        await Promise.race(executing);
+      }
+    }
+  }
+  
+  return Promise.allSettled(results);
+}
+
+// Timeout wrapper for individual indexer searches
+function withTimeout(promise, timeoutMs, indexerName) {
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`Search timeout after ${timeoutMs}ms`));
+    }, timeoutMs);
   });
   
-  const searchPromises = indexers.map((indexer) =>
-    searchIndexer(indexer, query, categoryIds, limit, offset)
-  );
+  return Promise.race([promise, timeoutPromise])
+    .finally(() => clearTimeout(timeoutId));
+}
 
-  const results = await Promise.allSettled(searchPromises);
+async function searchIndexers(indexers, query, categoryIds = [], limit = 100, offset = 0) {
+  const startTime = Date.now();
+  console.log(`\n[SearchIndexers] Starting search for "${query}" across ${indexers.length} indexer(s)`);
+  
+  // Sort indexers by priority: verified working ones first
+  const sortedIndexers = [...indexers].sort((a, b) => {
+    if (a.verified && !b.verified) return -1;
+    if (!a.verified && b.verified) return 1;
+    return 0;
+  });
+  
+  // Search with concurrency limit and individual timeouts
+  const CONCURRENT_SEARCHES = 5; // Limit concurrent requests
+  const SEARCH_TIMEOUT = 10000; // 10 seconds per indexer
+  
+  const searchWithTimeout = (indexer) => 
+    withTimeout(
+      searchIndexer(indexer, query, categoryIds, limit, offset),
+      SEARCH_TIMEOUT,
+      indexer.name
+    );
+
+  const results = await pMap(sortedIndexers, searchWithTimeout, CONCURRENT_SEARCHES);
 
   const allResults = [];
   const indexerSummaries = [];
@@ -760,31 +805,32 @@ async function searchIndexers(indexers, query, categoryIds = [], limit = 100, of
   let errorCount = 0;
 
   results.forEach((result, index) => {
-    const indexer = indexers[index];
+    const indexer = sortedIndexers[index];
     
     if (result.status === "fulfilled") {
       const { results: searchResults, error } = result.value;
-      allResults.push(...searchResults);
+      
+      // Only add valid results
+      if (searchResults && Array.isArray(searchResults)) {
+        allResults.push(...searchResults);
+      }
       
       if (error) {
         errorCount++;
-        console.log(`[SearchIndexers] ❌ ${indexer.name}: ${error} (${searchResults.length} results before error)`);
       } else {
         successCount++;
-        console.log(`[SearchIndexers] ✅ ${indexer.name}: ${searchResults.length} results`);
       }
       
       indexerSummaries.push({
         id: indexer.id,
         name: indexer.name,
         protocol: indexer.protocol,
-        resultCount: searchResults.length,
+        resultCount: searchResults ? searchResults.length : 0,
         error: error,
       });
     } else {
       errorCount++;
       const errorMsg = result.reason?.message || "Search failed";
-      console.log(`[SearchIndexers] ❌ ${indexer.name}: ${errorMsg}`);
       indexerSummaries.push({
         id: indexer.id,
         name: indexer.name,
@@ -795,7 +841,8 @@ async function searchIndexers(indexers, query, categoryIds = [], limit = 100, of
     }
   });
 
-  console.log(`[SearchIndexers] Search complete: ${successCount} successful, ${errorCount} failed, ${allResults.length} total results\n`);
+  const duration = Date.now() - startTime;
+  console.log(`[SearchIndexers] Complete in ${duration}ms: ${successCount} successful, ${errorCount} failed, ${allResults.length} results\n`);
 
   return {
     results: allResults,

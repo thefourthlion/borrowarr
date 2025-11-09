@@ -1,0 +1,128 @@
+id: springsunday
+name: SpringSunday
+description: SpringSunday (SSD) is a CHINESE Private Torrent Tracker for HD MOVIES / TV / GENERAL
+language: zh-CN
+type: private
+links:
+  - https://springsunday.net/
+caps:
+  categorymappings:
+    - id: 501
+      cat: Movies
+      desc: Movies(电影)
+    - id: 502
+      cat: TV
+      desc: TV Series(剧集)
+    - id: 503
+      cat: TV/Documentary
+      desc: Docs(纪录)
+    - id: 504
+      cat: TV/Anime
+      desc: Animations(动画)
+    - id: 505
+      cat: TV
+      desc: TV Shows(综艺)
+    - id: 506
+      cat: TV/Sport
+      desc: Sports(体育)
+    - id: 507
+      cat: Audio/Video
+      desc: MV(音乐视频)
+    - id: 508
+      cat: Audio
+      desc: Music(音乐)
+    - id: 509
+      cat: Other
+      desc: Others(其他)
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+      - imdbid
+      - doubanid
+    movie-search:
+      - q
+      - imdbid
+      - doubanid
+    music-search:
+      - q
+search:
+  paths:
+    - path: torrents.php
+  rows:
+    selector: table.torrents > tbody > tr:has(table.torrentname)
+  fields:
+    category:
+      selector: a[href*="?cat="]
+      attribute: href
+      filters:
+        - name: querystring
+          args: cat
+    title_default:
+      selector: a[href*="details.php?id="]
+    title:
+      selector: a[title][href*="details.php?id="]
+      attribute: title
+      optional: true
+      default: '{{ .Result.title_default }}'
+    details:
+      selector: a[href*="details.php?id="]
+      attribute: href
+    download:
+      selector: a[href*="download.php?id="]
+      attribute: href
+    imdbid:
+      selector: a[href*="imdb.com/title/tt"]
+      attribute: href
+    doubanid:
+      selector: a[href*="movie.douban.com/subject/"]
+      attribute: href
+    date_elapsed:
+      selector: td.rowfollow:nth-last-child(6) > span[title]
+      attribute: title
+      optional: true
+      filters:
+        - name: append
+          args: ' +08:00'
+        - name: dateparse
+          args: yyyy-MM-dd HH:mm:ss zzz
+    date_added:
+      selector: td.rowfollow:nth-last-child(6):not(:has(span))
+      optional: true
+      filters:
+        - name: append
+          args: ' +08:00'
+        - name: dateparse
+          args: yyyy-MM-ddHH:mm:ss zzz
+    date:
+      text: >-
+        {{ if or .Result.date_elapsed .Result.date_added }}{{ or .Result.date_elapsed .Result.date_added }}{{ else
+        }}now{{ end }}
+    size:
+      selector: td.rowfollow:nth-last-child(5)
+    seeders:
+      selector: td.rowfollow:nth-last-child(4)
+    leechers:
+      selector: td.rowfollow:nth-last-child(3)
+    grabs:
+      selector: td.rowfollow:nth-last-child(2)
+    downloadvolumefactor:
+      case:
+        span.torrent-pro-free: 0
+        span.torrent-pro-twoupfree: 0
+        span.torrent-pro-halfdown: 0.5
+        span.torrent-pro-twouphalfdown: 0.5
+        span.torrent-pro-thirtypercent: 0.3
+        '*': 1
+    uploadvolumefactor:
+      case:
+        span.torrent-pro-twouphalfdown: 2
+        span.torrent-pro-twoupfree: 2
+        span.torrent-pro-twoup: 2
+        '*': 1
+    description:
+      selector: td:nth-child(2)
+      remove: a, b, font, img, span

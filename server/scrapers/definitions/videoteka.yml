@@ -1,0 +1,239 @@
+id: videoteka
+name: ViDEOTEKA
+description: ViDEOTEKA (VT) is a SLOVENIAN Semi-Private Torrent Tracker for MOVIES / TV
+language: sl-SI
+type: semi-private
+links:
+  - http://videoteka.org/
+caps:
+  categorymappings:
+    - id: 1
+      cat: Movies
+      desc: FILMI
+    - id: 50
+      cat: Movies/WEB-DL
+      desc: WEBRip-1080
+    - id: 17
+      cat: Movies/WEB-DL
+      desc: WEBRip-720
+    - id: 51
+      cat: Movies/WEB-DL
+      desc: WEBRip
+    - id: 48
+      cat: Movies/BluRay
+      desc: BluRay-1080
+    - id: 49
+      cat: Movies/BluRay
+      desc: BluRay-720
+    - id: 52
+      cat: Movies/BluRay
+      desc: BRRip
+    - id: 44
+      cat: Movies/BluRay
+      desc: BDRip
+    - id: 32
+      cat: Movies/DVD
+      desc: DVDRip
+    - id: 36
+      cat: Movies/SD
+      desc: TVRip
+    - id: 43
+      cat: Movies/HD
+      desc: HDRip
+    - id: 16
+      cat: Movies/HD
+      desc: HDTV
+    - id: 31
+      cat: Movies/SD
+      desc: HDSD
+    - id: 46
+      cat: Movies/DVD
+      desc: DVD
+    - id: 45
+      cat: Movies/SD
+      desc: XviD
+    - id: 38
+      cat: TV
+      desc: TV - Serija
+    - id: 35
+      cat: TV/Documentary
+      desc: Dokumentarni
+    - id: 40
+      cat: TV
+      desc: Slo
+    - id: 33
+      cat: TV/Anime
+      desc: Risanke
+    - id: 34
+      cat: XXX
+      desc: xxx
+    - id: 6
+      cat: PC
+      desc: PROGRAMI
+    - id: 18
+      cat: PC
+      desc: Programi
+    - id: 47
+      cat: Console
+      desc: Igre
+    - id: 37
+      cat: Books/EBook
+      desc: E-Knjiga
+    - id: 19
+      cat: Other
+      desc: Ostalo
+    - id: 39
+      cat: PC/Mobile-Android
+      desc: Android App
+    - id: 7
+      cat: Audio
+      desc: GLASBA
+    - id: 20
+      cat: Audio/Video
+      desc: Video
+    - id: 21
+      cat: Audio
+      desc: Glasba
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+    movie-search:
+      - q
+    music-search:
+      - q
+    book-search:
+      - q
+search:
+  paths:
+    - path: /
+  rows:
+    selector: >-
+      table#torrents_table_classic tr:has(td.torrent_name){{ if .Config.freeleech
+      }}:has(img[src$="/torrent_free.png"]){{ else }}{{ end }}
+    filters:
+      - name: andmatch
+  fields:
+    category:
+      selector: a[href*="?p=torrents"][href*="&cid="]
+      attribute: href
+      filters:
+        - name: querystring
+          args: cid
+    title:
+      selector: a[href*="?p=torrents"][href*="&action=details"]
+    details:
+      selector: a[href*="?p=torrents"][href*="&action=details"]
+      attribute: href
+    download:
+      selector: a[href*="?p=torrents"][href*="&action=download"]
+      attribute: href
+    magnet:
+      selector: a[href^="magnet:?xt="]
+      attribute: href
+    poster:
+      selector: a[rel="fancybox"]
+      attribute: href
+    imdbid:
+      selector: a[href*="imdb.com/title/tt"]
+      attribute: href
+    size:
+      selector: a[rel="torrent_size"]
+    seeders:
+      selector: a[rel="torrent_seeders"]
+    leechers:
+      selector: a[rel="torrent_leechers"]
+    grabs:
+      selector: a[rel="times_completed"]
+    downloadvolumefactor:
+      case:
+        img[src*="torrent_free.png"]: 0
+        '*': 1
+    uploadvolumefactor:
+      text: 1
+    date_day:
+      selector: >-
+        td.torrent_name:contains("day"), td.torrent_name:contains("Nedelja"), td.torrent_name:contains("Ponedeljek"),
+        td.torrent_name:contains("Torek"), td.torrent_name:contains("Sreda"), td.torrent_name:contains("Četrtek"),
+        td.torrent_name:contains("Petek"), td.torrent_name:contains("Sobota"), td.torrent_name:contains("Danes"),
+        td.torrent_name:contains("Včeraj")
+      optional: true
+      remove: span, a, br
+      filters:
+        - name: replace
+          args:
+            - 'Uploaded '
+            - ''
+        - name: replace
+          args:
+            - ' by'
+            - ''
+        - name: replace
+          args:
+            - ' naložil'
+            - ''
+        - name: replace
+          args:
+            - 'ob '
+            - 'at '
+        - name: replace
+          args:
+            - Danes
+            - Today
+        - name: replace
+          args:
+            - Včeraj
+            - Yesterday
+        - name: replace
+          args:
+            - Ponedeljek
+            - Monday
+        - name: replace
+          args:
+            - Torek
+            - Tuesday
+        - name: replace
+          args:
+            - Sreda
+            - Wednesday
+        - name: replace
+          args:
+            - Četrtek
+            - Thursday
+        - name: replace
+          args:
+            - Petek
+            - Friday
+        - name: replace
+          args:
+            - Sobota
+            - Saturday
+        - name: replace
+          args:
+            - Nedelja
+            - Sunday
+        - name: fuzzytime
+    date_year:
+      selector: td.torrent_name:contains("-")
+      optional: true
+      remove: span, a, br
+      filters:
+        - name: replace
+          args:
+            - 'Uploaded '
+            - ''
+        - name: replace
+          args:
+            - ' by'
+            - ''
+        - name: replace
+          args:
+            - ' naložil'
+            - ''
+        - name: dateparse
+          args: dd-MM-yyyy HH:mm
+    date:
+      text: '{{ if or .Result.date_day .Result.date_year }}{{ or .Result.date_day .Result.date_year }}{{ else }}now{{ end }}'

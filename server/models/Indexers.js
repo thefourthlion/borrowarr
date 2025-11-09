@@ -142,6 +142,15 @@ const Indexers = sequelize.define(
       allowNull: false,
       defaultValue: "enabled",
     },
+    verified: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    verifiedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   },
   {
     tableName: "indexers",

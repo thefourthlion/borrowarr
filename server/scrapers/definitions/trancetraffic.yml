@@ -1,0 +1,49 @@
+id: trancetraffic
+name: TranceTraffic
+description: TranceTraffic is a Private Torrent Tracker for MUSIC
+language: en-US
+type: private
+links:
+  - https://www.trancetraffic.com/
+search:
+  paths:
+    - path: browse.php
+  rows:
+    selector: table.mainouter table > tbody > tr:has(a[href^="details.php?id="])
+  fields:
+    category:
+      text: 1
+    download:
+      selector: a[href^="download.php/"]
+      attribute: href
+    title:
+      selector: a[href^="details.php?id="]
+    details:
+      selector: a[href^="details.php?id="]
+      attribute: href
+      filters:
+        - name: replace
+          args:
+            - '&hit=1'
+            - ''
+    date:
+      selector: td:nth-child(6)
+      filters:
+        - name: dateparse
+          args: yyyy-MM-ddHH:mm:ss
+    seeders:
+      selector: td:nth-child(9)
+    leechers:
+      selector: td:nth-child(10)
+    grabs:
+      selector: td:nth-child(8)
+    files:
+      selector: td:nth-child(4)
+    size:
+      selector: td:nth-child(7)
+    downloadvolumefactor:
+      case:
+        span:contains("FREELEECH"): 0
+        '*': 1
+    uploadvolumefactor:
+      text: 1

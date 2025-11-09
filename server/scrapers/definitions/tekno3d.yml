@@ -1,0 +1,126 @@
+id: tekno3d
+name: TEKNO3D
+description: TEKNO3D is a Private Torrent Tracker for UHD MOVIES / TV
+language: en-US
+type: private
+links:
+  - https://tracker.tekno3d.com/
+caps:
+  categorymappings:
+    - id: 29
+      cat: Audio
+      desc: Audio Tracks
+    - id: 26
+      cat: Movies/UHD
+      desc: BETA UHD HDR-X
+    - id: 32
+      cat: Movies
+      desc: Dolby Vision
+    - id: 28
+      cat: Movies
+      desc: INTERNAL HDR-X
+    - id: 37
+      cat: Movies
+      desc: Member Grades
+    - id: 37
+      cat: TV
+      desc: Member Grades
+    - id: 37
+      cat: Audio/Video
+      desc: Member Grades
+    - id: 31
+      cat: Other
+      desc: YouTube HDR
+    - id: 30
+      cat: Other
+      desc: '[SAMPLES] INTERNAL HDR-X'
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+    movie-search:
+      - q
+    music-search:
+      - q
+search:
+  paths:
+    - path: browse.php
+  rows:
+    selector: tr.highlight, tr.browse_color, tr.freeleech_color, tr[id^="kdescr"]
+    after: 1
+  fields:
+    category:
+      selector: a[href^="browse.php?cat="]
+      attribute: href
+      filters:
+        - name: querystring
+          args: cat
+    title:
+      selector: a[href^="details.php?id="]
+      attribute: onmouseover
+      filters:
+        - name: split
+          args:
+            - '>'
+            - '1'
+        - name: replace
+          args:
+            - </b
+            - ''
+    details:
+      selector: a[href^="details.php?id="]
+      attribute: href
+    download:
+      selector: a[href^="download.php?torrent="]
+      attribute: href
+    poster:
+      selector: a[href^="details.php?id="]
+      attribute: onmouseover
+      filters:
+        - name: regexp
+          args: src=\\\'(.+?)\\\'
+    genre:
+      selector: a[href$="searchin=genre"]
+    files:
+      selector: td:nth-of-type(5)
+    date_day:
+      selector: td:nth-of-type(7):contains("day")
+      optional: true
+    date_year:
+      selector: td:nth-of-type(7):not(:contains("day"))
+      optional: true
+      filters:
+        - name: append
+          args: ' -07:00'
+        - name: dateparse
+          args: MMM d yyyy hh:mm tt zzz
+    date:
+      text: '{{ if or .Result.date_year .Result.date_day }}{{ or .Result.date_year .Result.date_day }}{{ else }}now{{ end }}'
+    size:
+      selector: td:nth-of-type(8)
+    grabs:
+      selector: td:nth-of-type(9)
+    seeders:
+      selector: td:nth-of-type(10)
+    leechers:
+      selector: td:nth-of-type(11)
+    description:
+      selector: td[colspan="14"]
+      filters:
+        - name: replace
+          args:
+            - |+
+
+            - |
+              <br>
+        - name: prepend
+          args: '{{ if .Result.genre }}{{ .Result.genre }}</br>{{ else }}{{ end }}'
+    downloadvolumefactor:
+      case:
+        a.info:contains("FREE"): 0
+        '*': 1
+    uploadvolumefactor:
+      text: 1

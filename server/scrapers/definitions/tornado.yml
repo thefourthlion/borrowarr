@@ -1,0 +1,156 @@
+id: tornado
+name: Tornado
+description: Tornado is a SLOVENIAN Private Torrent Tracker for MOVIES / TV / GENERAL
+language: sl-SI
+type: private
+links:
+  - https://www.tornado.si/
+caps:
+  categorymappings:
+    - id: 32
+      cat: Movies/SD
+      desc: Filmi Xvid
+    - id: 33
+      cat: Movies/DVD
+      desc: Filmi DVD
+    - id: 34
+      cat: Movies/BluRay
+      desc: Filmi BluRay
+    - id: 35
+      cat: TV/Documentary
+      desc: Dokumentarci Filmi
+    - id: 36
+      cat: TV/Anime
+      desc: Risanke
+    - id: 37
+      cat: Audio/Video
+      desc: Koncerti
+    - id: 38
+      cat: Audio/MP3
+      desc: Glasba MP3
+    - id: 39
+      cat: Audio/Lossless
+      desc: Glasba FLAC
+    - id: 40
+      cat: PC/Games
+      desc: Igre PC
+    - id: 41
+      cat: Console/PS3
+      desc: Igre PS3
+    - id: 42
+      cat: Console/PS4
+      desc: Igre PS4
+    - id: 43
+      cat: Console/XBox
+      desc: Igre Xbox
+    - id: 47
+      cat: Console/NDS
+      desc: Igre Nintendo
+    - id: 44
+      cat: PC
+      desc: Programi
+    - id: 45
+      cat: Books/EBook
+      desc: E-Knjige
+    - id: 46
+      cat: Books/Mags
+      desc: E-Revije
+    - id: 48
+      cat: TV
+      desc: TV-Rip
+    - id: 49
+      cat: XXX/ImageSet
+      desc: Slike
+    - id: 50
+      cat: XXX/DVD
+      desc: Erotika
+    - id: 51
+      cat: Other/Misc
+      desc: Ostalo
+    - id: 52
+      cat: Other
+      desc: VIP
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+    movie-search:
+      - q
+    music-search:
+      - q
+    book-search:
+      - q
+search:
+  paths:
+    - path: /
+  rows:
+    selector: div.torrent-box[id^="torrent_"]{{ if .Config.freeleech }}:has(img[src$="/torrent_free.png"]){{ else }}{{ end }}
+  fields:
+    category:
+      selector: a[href*="?p=torrents&pid=10&cid="]
+      attribute: href
+      filters:
+        - name: querystring
+          args: cid
+    title:
+      selector: a[href*="?p=torrents&pid=10&action=details&tid="]
+    details:
+      selector: a[href*="?p=torrents&pid=10&action=details&tid="]
+      attribute: href
+    download:
+      selector: a[href*="?p=torrents&pid=10&action=download&tid="]
+      attribute: href
+    magnet:
+      selector: a[href^="magnet:?xt="]
+      attribute: href
+      optional: true
+    poster:
+      selector: a[href*="data/torrents/torrent_images/"]
+      attribute: href
+    imdbid:
+      selector: a[href*="imdb.com/title/tt"]
+      attribute: href
+    size:
+      selector: a[rel="torrent_size"]
+    grabs:
+      selector: a[rel="times_completed"]
+    seeders:
+      selector: a[rel="torrent_seeders"]
+    leechers:
+      selector: a[rel="torrent_leechers"]
+    date_day:
+      selector: div.torrentOwner:contains("day")
+      optional: true
+      filters:
+        - name: regexp
+          args: Uploaded (.+?) by
+        - name: fuzzytime
+    date_year:
+      selector: div.torrentOwner:contains("-")
+      optional: true
+      filters:
+        - name: regexp
+          args: Uploaded (.+?) by
+        - name: dateparse
+          args: dd-MM-yyyy HH:mm
+    date_unix:
+      selector: div.torrentOwner abbr
+      optional: true
+      attribute: data-time
+    date:
+      text: >-
+        {{ if or .Result.date_day .Result.date_year .Result.date_unix }}{{ or .Result.date_day .Result.date_year
+        .Result.date_unix }}{{ else }}now{{ end }}
+    downloadvolumefactor:
+      case:
+        img[src$="/torrent_free.png"]: 0
+        '*': 1
+    uploadvolumefactor:
+      text: 1
+    minimumratio:
+      text: 1
+    minimumseedtime:
+      text: 172800

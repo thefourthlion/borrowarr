@@ -1,0 +1,51 @@
+id: traht
+name: TrahT
+description: TrahT is a RUSSIAN Public Torrent Tracker for 3X
+language: ru-RU
+type: public
+links:
+  - https://traht.org/
+search:
+  paths:
+    - path: browse.php
+  rows:
+    selector: div[id^="releases-table"] table.embedded tbody tr:has(a[href^="download.php?id="])
+  fields:
+    category:
+      text: xxx
+    title:
+      selector: a[href^="details.php?id="]
+    details:
+      selector: a[href^="details.php?id="]
+      attribute: href
+    download:
+      selector: a[href^="download.php?id="]
+      attribute: href
+      filters:
+        - name: append
+          args: '&ok='
+    date:
+      text: now
+    size:
+      selector: td:nth-child(5)
+    seeders:
+      selector: td:nth-child(6)
+      filters:
+        - name: split
+          args:
+            - '|'
+            - 0
+    leechers:
+      selector: td:nth-child(6)
+      filters:
+        - name: split
+          args:
+            - '|'
+            - 1
+    description:
+      selector: img
+      attribute: title
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1

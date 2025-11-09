@@ -1,0 +1,52 @@
+id: RockBox
+name: RockBox
+description: RockBox Semi-Private Torrent Tracker dedicated to HEAVY METAL/ROCK MUSIC. This definition is for the English site.
+language: en-US
+type: semi-private
+links:
+  - https://rawkbawx.rocks/
+search:
+  paths:
+    - path: torrents.php
+  rows:
+    selector: table.lista[width="100%"] tbody tr:has(a[href^="download.php?id="])
+  fields:
+    category:
+      text: Music
+    title:
+      selector: td a[href^="details.php?id="]
+    details:
+      selector: td a[href^="details.php?id="]
+      attribute: href
+    download:
+      selector: td a[href^="download.php?id="]
+      attribute: href
+    date_year:
+      selector: td:nth-child(6):contains("/")
+      optional: true
+      filters:
+        - name: dateparse
+          args: dd/MM/yyyy
+    date_ago:
+      selector: td:nth-child(6):not(:contains("/"))
+      optional: true
+      filters:
+        - name: timeago
+    date:
+      text: '{{ if or .Result.date_year .Result.date_ago }}{{ or .Result.date_year .Result.date_ago }}{{ else }}now{{ end }}'
+    size:
+      selector: td:nth-child(7)
+    seeders:
+      selector: td:nth-child(9)
+    leechers:
+      selector: td:nth-child(10)
+    grabs:
+      selector: td:nth-child(11)
+    downloadvolumefactor:
+      text: 1
+    uploadvolumefactor:
+      text: 1
+    minimumratio:
+      text: 1
+    minimumseedtime:
+      text: 86400

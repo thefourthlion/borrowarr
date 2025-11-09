@@ -1,0 +1,79 @@
+id: snowpt
+name: SnowPT
+description: SnowPT (SSPT) is a CHINESE Private Torrent Tracker for ANIME
+language: zh-CN
+type: private
+links:
+  - https://skyeysnow.com/
+caps:
+  categorymappings:
+    - id: 1
+      cat: TV/Anime
+      desc: Anime
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+search:
+  paths:
+    - path: forum.php
+  rows:
+    selector: >-
+      table.torrents > tbody > tr:has(a[href^="/download.php?id="]){{ if .Config.freeleech }}:has(img.sp_4){{ else }}{{
+      end }}
+  fields:
+    category:
+      text: 1
+    title_default:
+      selector: a[href^="/forum.php?mod=viewthread&tid="]
+    title:
+      selector: a[title][href^="/forum.php?mod=viewthread&tid="]
+      attribute: title
+      optional: true
+      default: '{{ .Result.title_default }}'
+    details:
+      selector: a[href^="/forum.php?mod=viewthread&tid="]
+      attribute: href
+    download:
+      selector: a[href^="/download.php?id="]
+      attribute: href
+    date_elapsed:
+      selector: td:nth-child(3) > span[title]
+      attribute: title
+      optional: true
+      filters:
+        - name: append
+          args: ' +08:00'
+        - name: dateparse
+          args: yyyy-MM-dd HH:mm:ss zzz
+    date_added:
+      selector: td:nth-child(3):not(:has(span))
+      optional: true
+      filters:
+        - name: append
+          args: ' +08:00'
+        - name: dateparse
+          args: yyyy-MM-ddHH:mm:ss zzz
+    date:
+      text: >-
+        {{ if or .Result.date_elapsed .Result.date_added }}{{ or .Result.date_elapsed .Result.date_added }}{{ else
+        }}now{{ end }}
+    size:
+      selector: td:nth-child(4)
+    seeders:
+      selector: td:nth-child(5)
+    leechers:
+      selector: td:nth-child(6)
+    grabs:
+      selector: td:nth-child(7)
+    downloadvolumefactor:
+      case:
+        img.sp_4: 0
+        img.sp_2: 0.5
+        '*': 1
+    uploadvolumefactor:
+      case:
+        '*': 1

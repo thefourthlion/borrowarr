@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Button } from "@nextui-org/button";
 import { Card, CardBody } from "@nextui-org/card";
 import { Input } from "@nextui-org/input";
@@ -13,19 +13,36 @@ import {
   ArrowUpDown,
   Filter,
   Download,
-  Flag,
-  Settings,
   Link as LinkIcon,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Check,
+  Copy,
 } from "lucide-react";
-import axios from "axios";
+import axios, { CancelTokenSource } from "axios";
 import { useDebounce } from "@/hooks/useDebounce";
 import "../../../styles/Search.scss";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+
+// Simple in-memory cache with TTL
+const cache = new Map<string, { data: any; timestamp: number; ttl: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCached(key: string) {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < cached.ttl) {
+    return cached.data;
+  }
+  cache.delete(key);
+  return null;
+}
+
+function setCached(key: string, data: any, ttl: number = CACHE_TTL) {
+  cache.set(key, { data, timestamp: Date.now(), ttl });
+}
 
 interface SearchResult {
   id: string;
@@ -68,7 +85,7 @@ interface IndexerSummary {
   resultCount: number;
 }
 
-type SortField = "protocol" | "age" | "title" | "indexer" | "size" | "grabs" | "peers" | "category";
+type SortField = "protocol" | "age" | "title" | "indexer" | "size" | "grabs" | "peers" | "seeders" | "leechers" | "category";
 type SortOrder = "asc" | "desc";
 
 const Search = () => {
@@ -82,89 +99,165 @@ const Search = () => {
   const [indexerSummaries, setIndexerSummaries] = useState<IndexerSummary[]>([]);
   const [selectedIndexers, setSelectedIndexers] = useState<Set<string>>(new Set());
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
-  const [sortBy, setSortBy] = useState<SortField>("age");
+  const [sortBy, setSortBy] = useState<SortField>("seeders");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [resultsPerPage, setResultsPerPage] = useState(25);
-  const [totalPages, setTotalPages] = useState(1);
   const [serverConnected, setServerConnected] = useState<boolean | null>(null);
+  const [grabbing, setGrabbing] = useState<Set<string>>(new Set());
+  const [grabSuccess, setGrabSuccess] = useState<Set<string>>(new Set());
+  const [grabError, setGrabError] = useState<Map<string, string>>(new Map());
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
-  const debouncedQuery = useDebounce(searchQuery, 500);
+  // Request cancellation
+  const cancelTokenRef = useRef<CancelTokenSource | null>(null);
+  const lastSearchKeyRef = useRef<string>("");
+  const isInitialMount = useRef(true);
 
-  // Fetch categories and indexers on mount
-  useEffect(() => {
-    fetchCategories();
-    fetchIndexers();
-  }, []);
+  const debouncedQuery = useDebounce(searchQuery, 300); // Reduced from 500ms to 300ms
 
-  // Perform search when query changes
-  useEffect(() => {
-    if (debouncedQuery.trim()) {
-      setCurrentPage(1); // Reset to first page on new search
-      performSearch();
-    } else {
-      setResults([]);
-      setTotal(0);
-      setCurrentPage(1);
-      setTotalPages(1);
+  // Memoized category grouping
+  const groupedCategories = useMemo(() => {
+    return categories.reduce((acc, cat) => {
+      if (!cat.parentId) {
+        acc[cat.type] = acc[cat.type] || [];
+        acc[cat.type].push(cat);
+      }
+      return acc;
+    }, {} as Record<string, Category[]>);
+  }, [categories]);
+
+  // Memoized subcategories getter
+  const getSubCategories = useCallback((parentId: number): Category[] => {
+    return categories.filter((c) => c.parentId === parentId);
+  }, [categories]);
+
+  // Memoized category name getter
+  const getCategoryName = useCallback((categoryId: number): string => {
+    const category = categories.find((c) => c.id === categoryId);
+    return category ? category.name : `Category ${categoryId}`;
+  }, [categories]);
+
+  // Memoized search key for deduplication
+  const searchKey = useMemo(() => {
+    return JSON.stringify({
+      query: debouncedQuery.trim(),
+      indexers: Array.from(selectedIndexers).sort().join(","),
+      categories: Array.from(selectedCategories).sort().join(","),
+      sortBy,
+      sortOrder,
+      page: currentPage,
+      limit: resultsPerPage,
+    });
+  }, [debouncedQuery, selectedIndexers, selectedCategories, sortBy, sortOrder, currentPage, resultsPerPage]);
+
+  // Define functions before using them in useEffect
+  const fetchCategories = useCallback(async () => {
+    const cacheKey = "categories";
+    const cached = getCached(cacheKey);
+    if (cached) {
+      setCategories(cached);
+      setServerConnected(true);
+      return;
     }
-  }, [debouncedQuery, selectedIndexers, selectedCategories, sortBy, sortOrder]);
 
-  // Perform search when page or results per page changes
-  useEffect(() => {
-    if (debouncedQuery.trim() && currentPage > 0) {
-      performSearch();
-    }
-  }, [currentPage, resultsPerPage]);
-
-  const fetchCategories = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/Search/categories`);
+      const response = await axios.get(`${API_BASE_URL}/api/Search/categories`, {
+        timeout: 5000, // 5 second timeout
+      });
       setCategories(response.data);
+      setCached(cacheKey, response.data, 10 * 60 * 1000); // Cache for 10 minutes
       setServerConnected(true);
     } catch (error: any) {
+      if (axios.isCancel(error)) return;
       console.error("Error fetching categories:", error);
-      // If it's a network error, the server might not be running
       if (error.code === "ERR_NETWORK" || error.message === "Network Error") {
         console.warn("Backend server may not be running. Please start the server on port 3002.");
         setServerConnected(false);
       }
-      // Set empty array as fallback
       setCategories([]);
     }
-  };
+  }, []);
 
-  const fetchIndexers = async () => {
+  const fetchIndexers = useCallback(async () => {
+    const cacheKey = "indexers";
+    const cached = getCached(cacheKey);
+    if (cached) {
+      const enabledIndexers = cached.filter((idx: Indexer) => idx.enabled);
+      setIndexers(enabledIndexers);
+      setSelectedIndexers(new Set(enabledIndexers.map((idx: Indexer) => idx.id.toString())));
+      setServerConnected(true);
+      return;
+    }
+
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/Indexers/read`);
+      const response = await axios.get(`${API_BASE_URL}/api/Indexers/read`, {
+        timeout: 5000, // 5 second timeout
+      });
       const enabledIndexers = (response.data.data || []).filter(
         (idx: Indexer) => idx.enabled
       );
       setIndexers(enabledIndexers);
-      // Select all indexers by default
       setSelectedIndexers(new Set(enabledIndexers.map((idx: Indexer) => idx.id.toString())));
+      setCached(cacheKey, response.data.data || [], 5 * 60 * 1000); // Cache for 5 minutes
       setServerConnected(true);
     } catch (error: any) {
+      if (axios.isCancel(error)) return;
       console.error("Error fetching indexers:", error);
-      // If it's a network error, the server might not be running
       if (error.code === "ERR_NETWORK" || error.message === "Network Error") {
         console.warn("Backend server may not be running. Please start the server on port 3002.");
         setServerConnected(false);
       }
-      // Set empty array as fallback
       setIndexers([]);
     }
-  };
+  }, []);
 
-  const performSearch = async () => {
+  const performSearch = useCallback(async () => {
     if (!debouncedQuery.trim()) return;
+
+    // Check cache first
+    const cacheKey = `search:${searchKey}`;
+    const cached = getCached(cacheKey);
+    if (cached) {
+      let results = cached.results || [];
+      
+      // Apply name filtering even for cached results
+      if (debouncedQuery.trim()) {
+        const queryLower = debouncedQuery.trim().toLowerCase();
+        results = results.filter((result: SearchResult) => {
+          return result.title.toLowerCase().includes(queryLower);
+        });
+      }
+
+      // Sort by seeders (descending) - most seeders first
+      results.sort((a: SearchResult, b: SearchResult) => {
+        const aSeeders = a.seeders !== null && a.seeders !== undefined ? a.seeders : 0;
+        const bSeeders = b.seeders !== null && b.seeders !== undefined ? b.seeders : 0;
+        return bSeeders - aSeeders; // Descending order
+      });
+
+      setResults(results);
+      setTotal(results.length);
+      setIndexerSummaries(cached.indexers || []);
+      setLoading(false);
+      return;
+    }
+
+    // Cancel previous request
+    if (cancelTokenRef.current) {
+      cancelTokenRef.current.cancel("New search initiated");
+    }
+
+    // Create new cancel token
+    const cancelToken = axios.CancelToken.source();
+    cancelTokenRef.current = cancelToken;
 
     try {
       setLoading(true);
       const offset = (currentPage - 1) * resultsPerPage;
       const params: any = {
-        query: debouncedQuery,
+        query: debouncedQuery.trim(),
         sortBy,
         sortOrder,
         limit: resultsPerPage,
@@ -179,85 +272,277 @@ const Search = () => {
         params.categoryIds = Array.from(selectedCategories);
       }
 
-      const response = await axios.get(`${API_BASE_URL}/api/Search`, { params });
-      setResults(response.data.results || []);
-      setTotal(response.data.total || 0);
-      setIndexerSummaries(response.data.indexers || []);
-      
-      // Log indexer errors for debugging
-      if (response.data.indexers) {
-        response.data.indexers.forEach((idx: any) => {
-          if (idx.error) {
-            console.warn(`Indexer ${idx.name} error:`, idx.error);
-          }
+      const response = await axios.get(`${API_BASE_URL}/api/Search`, {
+        params,
+        cancelToken: cancelToken.token,
+        timeout: 30000, // 30 second timeout
+      });
+
+      if (response.data) {
+        let results = response.data.results || [];
+        const indexers = response.data.indexers || [];
+
+        // Filter results by name/title matching the search query (case-insensitive)
+        if (debouncedQuery.trim()) {
+          const queryLower = debouncedQuery.trim().toLowerCase();
+          results = results.filter((result: SearchResult) => {
+            return result.title.toLowerCase().includes(queryLower);
+          });
+        }
+
+        // Sort by seeders (descending) - most seeders first
+        results.sort((a: SearchResult, b: SearchResult) => {
+          const aSeeders = a.seeders !== null && a.seeders !== undefined ? a.seeders : 0;
+          const bSeeders = b.seeders !== null && b.seeders !== undefined ? b.seeders : 0;
+          return bSeeders - aSeeders; // Descending order
         });
+
+        const total = results.length;
+
+        setResults(results);
+        setTotal(total);
+        setIndexerSummaries(indexers);
+
+        // Cache the results
+        setCached(cacheKey, { results, total, indexers }, 2 * 60 * 1000); // Cache for 2 minutes
+
+        // Log indexer errors for debugging (only in dev)
+        if (process.env.NODE_ENV === "development" && indexers) {
+          indexers.forEach((idx: any) => {
+            if (idx.error) {
+              console.warn(`Indexer ${idx.name} error:`, idx.error);
+            }
+          });
+        }
       }
-      
-      // Calculate total pages
-      const pages = Math.ceil((response.data.total || 0) / resultsPerPage);
-      setTotalPages(pages || 1);
     } catch (error: any) {
+      if (axios.isCancel(error)) {
+        // Request was cancelled, don't update state
+        return;
+      }
       console.error("Error performing search:", error);
       setResults([]);
       setTotal(0);
-      setTotalPages(1);
       setIndexerSummaries([]);
-      
-      // Set server connection status
+
       if (error.code === "ERR_NETWORK" || error.message === "Network Error") {
         setServerConnected(false);
       }
     } finally {
       setLoading(false);
+      cancelTokenRef.current = null;
     }
-  };
+  }, [debouncedQuery, selectedIndexers, selectedCategories, sortBy, sortOrder, currentPage, resultsPerPage, searchKey]);
 
-  const handleSearch = () => {
+  // Fetch categories and indexers in parallel on mount
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      Promise.all([fetchCategories(), fetchIndexers()]).catch((err) => {
+        console.error("Error fetching initial data:", err);
+      });
+    }
+  }, [fetchCategories, fetchIndexers]);
+
+  // Cleanup: cancel any pending requests on unmount
+  useEffect(() => {
+    return () => {
+      if (cancelTokenRef.current) {
+        cancelTokenRef.current.cancel("Component unmounting");
+      }
+    };
+  }, []);
+
+  // Perform search when search key changes
+  useEffect(() => {
+    // Cancel previous request
+    if (cancelTokenRef.current) {
+      cancelTokenRef.current.cancel("New search initiated");
+    }
+
+    if (debouncedQuery.trim()) {
+      // Reset to first page only if query or filters changed (not pagination)
+      const queryChanged = lastSearchKeyRef.current && 
+        !lastSearchKeyRef.current.startsWith(JSON.stringify({ query: debouncedQuery.trim() }));
+      
+      if (queryChanged) {
+        setCurrentPage(1);
+      }
+      
+      performSearch();
+      lastSearchKeyRef.current = searchKey;
+    } else {
+      setResults([]);
+      setTotal(0);
+      setCurrentPage(1);
+    }
+  }, [searchKey, debouncedQuery, performSearch]);
+
+  const handleSearch = useCallback(() => {
     setSearchQuery(query);
-  };
+  }, [query]);
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       handleSearch();
     }
-  };
+  }, [handleSearch]);
 
-  const toggleResultSelection = (resultId: string) => {
-    const newSelected = new Set(selectedResults);
-    if (newSelected.has(resultId)) {
-      newSelected.delete(resultId);
-    } else {
-      newSelected.add(resultId);
+  // Apply client-side filtering and sorting to results
+  const filteredAndSortedResults = useMemo(() => {
+    let filtered = results;
+
+    // Filter by name/title matching the search query (case-insensitive)
+    if (debouncedQuery.trim()) {
+      const queryLower = debouncedQuery.trim().toLowerCase();
+      filtered = filtered.filter((result) => {
+        return result.title.toLowerCase().includes(queryLower);
+      });
     }
-    setSelectedResults(newSelected);
-  };
 
-  const toggleAllResults = () => {
-    if (selectedResults.size === results.length) {
-      setSelectedResults(new Set());
-    } else {
-      setSelectedResults(new Set(results.map((r) => r.id)));
-    }
-  };
+    // Sort by seeders (descending) - most seeders first
+    const sorted = [...filtered].sort((a, b) => {
+      const aSeeders = a.seeders !== null && a.seeders !== undefined ? a.seeders : 0;
+      const bSeeders = b.seeders !== null && b.seeders !== undefined ? b.seeders : 0;
+      return bSeeders - aSeeders; // Descending order
+    });
 
-  const handleSort = (field: SortField) => {
-    if (sortBy === field) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    } else {
-      setSortBy(field);
-      setSortOrder("desc");
-    }
-  };
+    return sorted;
+  }, [results, debouncedQuery]);
 
-  const handlePageChange = (page: number) => {
+  const toggleResultSelection = useCallback((resultId: string) => {
+    setSelectedResults((prev) => {
+      const newSelected = new Set(prev);
+      if (newSelected.has(resultId)) {
+        newSelected.delete(resultId);
+      } else {
+        newSelected.add(resultId);
+      }
+      return newSelected;
+    });
+  }, []);
+
+  const toggleAllResults = useCallback(() => {
+    setSelectedResults((prev) => {
+      if (prev.size === filteredAndSortedResults.length) {
+        return new Set();
+      } else {
+        return new Set(filteredAndSortedResults.map((r) => r.id));
+      }
+    });
+  }, [filteredAndSortedResults]);
+
+  const handleSort = useCallback((field: SortField) => {
+    setSortBy((prevSortBy) => {
+      if (prevSortBy === field) {
+        setSortOrder((prevOrder => (prevOrder === "asc" ? "desc" : "asc")));
+        return prevSortBy;
+      } else {
+        setSortOrder("desc");
+        return field;
+      }
+    });
+  }, []);
+
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredAndSortedResults.length / resultsPerPage) || 1;
+  }, [filteredAndSortedResults.length, resultsPerPage]);
+
+  const handlePageChange = useCallback((page: number) => {
     if (page > 0 && page <= totalPages) {
       setCurrentPage(page);
     }
-  };
+  }, [totalPages]);
 
-  const getPageNumbers = (): (number | string)[] => {
+  const handleGrabRelease = useCallback(async (result: SearchResult) => {
+    if (!result.downloadUrl) {
+      alert("No download URL available for this release");
+      return;
+    }
+
+    setGrabbing((prev) => new Set(prev).add(result.id));
+    setGrabError((prev) => {
+      const next = new Map(prev);
+      next.delete(result.id);
+      return next;
+    });
+    setGrabSuccess((prev) => {
+      const next = new Set(prev);
+      next.delete(result.id);
+      return next;
+    });
+
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, {
+        downloadUrl: result.downloadUrl,
+      });
+
+      if (response.data.success) {
+        setGrabSuccess((prev) => new Set(prev).add(result.id));
+        setTimeout(() => {
+          setGrabSuccess((prev) => {
+            const next = new Set(prev);
+            next.delete(result.id);
+            return next;
+          });
+        }, 3000);
+      } else {
+        throw new Error(response.data.error || "Failed to grab release");
+      }
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error || error.message || "Failed to grab release";
+      setGrabError((prev) => new Map(prev).set(result.id, errorMsg));
+      setTimeout(() => {
+        setGrabError((prev) => {
+          const next = new Map(prev);
+          next.delete(result.id);
+          return next;
+        });
+      }, 5000);
+    } finally {
+      setGrabbing((prev) => {
+        const next = new Set(prev);
+        next.delete(result.id);
+        return next;
+      });
+    }
+  }, []);
+
+  const handleGrabSelected = useCallback(async () => {
+    if (selectedResults.size === 0) return;
+
+    const resultsToGrab = filteredAndSortedResults.filter((r) => selectedResults.has(r.id));
+    
+    for (const result of resultsToGrab) {
+      if (result.downloadUrl) {
+        await handleGrabRelease(result);
+        // Small delay between grabs to avoid overwhelming the client
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+  }, [selectedResults, filteredAndSortedResults, handleGrabRelease]);
+
+  const handleCopyMagnetLink = useCallback(async (result: SearchResult) => {
+    if (!result.downloadUrl) {
+      alert("No download URL available for this release");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(result.downloadUrl);
+      setCopiedLink(result.id);
+      setTimeout(() => {
+        setCopiedLink(null);
+      }, 2000);
+    } catch (error) {
+      console.error("Failed to copy link:", error);
+      alert("Failed to copy link to clipboard");
+    }
+  }, []);
+
+  const getPageNumbers = useMemo((): (number | string)[] => {
     const pageNumbers: (number | string)[] = [];
-    const maxPagesToShow = 5; // Number of page buttons to show directly
+    const maxPagesToShow = 5;
 
     if (totalPages <= maxPagesToShow) {
       for (let i = 1; i <= totalPages; i++) {
@@ -287,32 +572,8 @@ const Search = () => {
       }
       pageNumbers.push(totalPages);
     }
-    return Array.from(new Set(pageNumbers)); // Remove duplicates
-  };
-
-  const getCategoryName = (categoryId: number): string => {
-    const category = categories.find((c) => c.id === categoryId);
-    return category ? category.name : `Category ${categoryId}`;
-  };
-
-  const groupedCategories = categories.reduce((acc, cat) => {
-    if (!cat.parentId) {
-      acc[cat.type] = acc[cat.type] || [];
-      acc[cat.type].push(cat);
-    }
-    return acc;
-  }, {} as Record<string, Category[]>);
-
-  const getSubCategories = (parentId: number): Category[] => {
-    return categories.filter((c) => c.parentId === parentId);
-  };
-
-  const formatSize = (size: number): string => {
-    if (size >= 1024) {
-      return `${(size / 1024).toFixed(1)} TiB`;
-    }
-    return `${size.toFixed(1)} GiB`;
-  };
+    return Array.from(new Set(pageNumbers));
+  }, [totalPages, currentPage]);
 
     return (
     <div className="Search page min-h-screen bg-background p-3 sm:p-6">
@@ -334,42 +595,145 @@ const Search = () => {
           </Card>
         )}
         
-        {/* Top Search Bar */}
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-6">
-          <Input
-            placeholder="Search..."
-            value={query}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
-            onKeyPress={handleKeyPress}
-            startContent={<SearchIcon size={20} />}
-            className="flex-1"
-            size="lg"
-          />
-          <div className="flex gap-2">
-            <Button
-              color="primary"
-              onPress={handleSearch}
-              startContent={<SearchIcon size={16} />}
-              size="lg"
-              className="flex-1 sm:flex-initial"
-            >
-              <span className="hidden sm:inline">Search</span>
-              <span className="sm:hidden">Go</span>
-            </Button>
-            <Button variant="flat" isIconOnly className="hidden sm:flex">
-              <Grid3x3 size={20} />
-            </Button>
-            <Button variant="flat" isIconOnly className="hidden sm:flex">
-              <ArrowUpDown size={20} />
-            </Button>
-            <Button variant="flat" isIconOnly className="hidden sm:flex">
-              <Filter size={20} />
-            </Button>
-          </div>
-        </div>
+        {/* Top Search Bar & Filters */}
+        <Card className="mb-6">
+          <CardBody>
+            <div className="flex flex-col gap-4">
+              {/* Search Input */}
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+                <Input
+                  placeholder="Search torrents..."
+                  value={query}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  startContent={<SearchIcon size={20} />}
+                  className="flex-1"
+                  size="lg"
+                />
+                <Button
+                  color="primary"
+                  onPress={handleSearch}
+                  startContent={<SearchIcon size={16} />}
+                  size="lg"
+                  className="w-full sm:w-auto"
+                >
+                  Search
+                </Button>
+              </div>
+
+              {/* Filters Row */}
+              <div className="flex flex-col lg:flex-row gap-3">
+                <Select
+                  label="Indexers"
+                  selectedKeys={selectedIndexers}
+                  onSelectionChange={(keys: any) => {
+                    const keyArray = Array.from(keys) as string[];
+                    const keySet = new Set<string>(keyArray);
+                    setSelectedIndexers(keySet);
+                  }}
+                  selectionMode="multiple"
+                  className="flex-1"
+                  placeholder="All Indexers"
+                  startContent={<Filter size={16} />}
+                >
+                  {indexerSummaries.length > 0
+                    ? indexerSummaries.map((idx) => (
+                        <SelectItem key={idx.id.toString()} value={idx.id.toString()}>
+                          {idx.name} ({idx.resultCount})
+                        </SelectItem>
+                      ))
+                    : indexers.map((idx) => (
+                        <SelectItem key={idx.id.toString()} value={idx.id.toString()}>
+                          {idx.name}
+                        </SelectItem>
+                      ))}
+                </Select>
+
+                <Select
+                  label="Categories"
+                  selectedKeys={selectedCategories}
+                  onSelectionChange={(keys: any) =>
+                    setSelectedCategories(new Set(Array.from(keys)))
+                  }
+                  selectionMode="multiple"
+                  className="flex-1"
+                  placeholder="All Categories"
+                  startContent={<Grid3x3 size={16} />}
+                >
+                  {Object.entries(groupedCategories).map(([type, cats]) => (
+                    <React.Fragment key={type}>
+                      {cats.map((cat) => (
+                        <React.Fragment key={cat.id}>
+                          <SelectItem key={cat.id.toString()} value={cat.id.toString()}>
+                            {cat.name}
+                          </SelectItem>
+                          {getSubCategories(cat.id).map((subCat) => (
+                            <SelectItem
+                              key={subCat.id.toString()}
+                              value={subCat.id.toString()}
+                            >
+                              {subCat.name}
+                            </SelectItem>
+                          ))}
+                        </React.Fragment>
+                      ))}
+                    </React.Fragment>
+                  ))}
+                </Select>
+
+                <Select
+                  label="Sort By"
+                  selectedKeys={[sortBy]}
+                  onSelectionChange={(keys: any) => {
+                    const key = Array.from(keys)[0] as SortField;
+                    if (key) setSortBy(key);
+                  }}
+                  className="flex-1 lg:max-w-[200px]"
+                  startContent={<ArrowUpDown size={16} />}
+                >
+                  <SelectItem key="seeders">Seeders</SelectItem>
+                  <SelectItem key="leechers">Leechers</SelectItem>
+                  <SelectItem key="age">Age</SelectItem>
+                  <SelectItem key="title">Title</SelectItem>
+                  <SelectItem key="size">Size</SelectItem>
+                  <SelectItem key="grabs">Grabs</SelectItem>
+                  <SelectItem key="indexer">Indexer</SelectItem>
+                </Select>
+              </div>
+
+              {/* Action Buttons Row */}
+              {selectedResults.size > 0 && (
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-2 border-t border-divider">
+                  <div className="text-sm text-default-500">
+                    Selected {selectedResults.size} of {filteredAndSortedResults.length} releases
+                  </div>
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <Button
+                      color="success"
+                      startContent={<Download size={16} />}
+                      onPress={handleGrabSelected}
+                      isDisabled={selectedResults.size === 0 || grabbing.size > 0}
+                      isLoading={grabbing.size > 0}
+                      className="flex-1 sm:flex-initial"
+                    >
+                      Grab {selectedResults.size} Release{selectedResults.size !== 1 ? 's' : ''}
+                    </Button>
+                    <Button
+                      variant="flat"
+                      onPress={() => setSelectedResults(new Set())}
+                      className="flex-1 sm:flex-initial"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardBody>
+        </Card>
 
         {/* Results Per Page & Pagination Info */}
-        {results.length > 0 && (
+        {filteredAndSortedResults.length > 0 && (
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
             <div className="flex items-center gap-2">
               <span className="text-sm text-default-500">Results per page:</span>
@@ -392,7 +756,7 @@ const Search = () => {
               </Select>
             </div>
             <div className="text-sm text-default-500">
-              Showing {((currentPage - 1) * resultsPerPage) + 1} - {Math.min(currentPage * resultsPerPage, total)} of {total} results
+              Showing {((currentPage - 1) * resultsPerPage) + 1} - {Math.min(currentPage * resultsPerPage, filteredAndSortedResults.length)} of {filteredAndSortedResults.length} results
             </div>
           </div>
         )}
@@ -402,7 +766,7 @@ const Search = () => {
           <div className="flex justify-center items-center py-12">
             <Spinner size="lg" />
           </div>
-        ) : results.length > 0 ? (
+        ) : filteredAndSortedResults.length > 0 ? (
           <>
             <Card>
               <CardBody>
@@ -413,7 +777,7 @@ const Search = () => {
                         <th className="text-left p-2 sm:p-3 w-10 sm:w-12">
                           <input
                             type="checkbox"
-                            checked={selectedResults.size === results.length && results.length > 0}
+                              checked={selectedResults.size === filteredAndSortedResults.length && filteredAndSortedResults.length > 0}
                             onChange={toggleAllResults}
                             className="cursor-pointer"
                           />
@@ -452,7 +816,7 @@ const Search = () => {
                           </div>
                         </th>
                         <th
-                          className="text-left p-2 sm:p-3 cursor-pointer hover:bg-content2 hidden lg:table-cell"
+                          className="text-left p-2 sm:p-3 cursor-pointer hover:bg-content2"
                           onClick={() => handleSort("indexer")}
                         >
                           <div className="flex items-center gap-2">
@@ -485,6 +849,28 @@ const Search = () => {
                           </div>
                         </th>
                         <th
+                          className="text-left p-2 sm:p-3 cursor-pointer hover:bg-content2"
+                          onClick={() => handleSort("seeders")}
+                        >
+                          <div className="flex items-center gap-2">
+                            Seeders
+                            {sortBy === "seeders" && (
+                              <ArrowUpDown size={14} className={sortOrder === "desc" ? "rotate-180" : ""} />
+                            )}
+                          </div>
+                        </th>
+                        <th
+                          className="text-left p-2 sm:p-3 cursor-pointer hover:bg-content2"
+                          onClick={() => handleSort("leechers")}
+                        >
+                          <div className="flex items-center gap-2">
+                            Leechers
+                            {sortBy === "leechers" && (
+                              <ArrowUpDown size={14} className={sortOrder === "desc" ? "rotate-180" : ""} />
+                            )}
+                          </div>
+                        </th>
+                        <th
                           className="text-left p-2 sm:p-3 cursor-pointer hover:bg-content2 hidden xl:table-cell"
                           onClick={() => handleSort("peers")}
                         >
@@ -510,7 +896,11 @@ const Search = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {results.map((result) => (
+                      {filteredAndSortedResults
+                        .slice((currentPage - 1) * resultsPerPage, currentPage * resultsPerPage)
+                        .map((result) => {
+                        const isSelected = selectedResults.has(result.id);
+                        return (
                         <tr
                           key={result.id}
                           className="border-b border-divider hover:bg-content2 transition-colors"
@@ -518,7 +908,7 @@ const Search = () => {
                           <td className="p-2 sm:p-3">
                             <input
                               type="checkbox"
-                              checked={selectedResults.has(result.id)}
+                              checked={isSelected}
                               onChange={() => toggleResultSelection(result.id)}
                               className="cursor-pointer"
                             />
@@ -549,9 +939,15 @@ const Search = () => {
                               </div>
                             </div>
                           </td>
-                          <td className="p-2 sm:p-3 hidden lg:table-cell">{result.indexer}</td>
+                          <td className="p-2 sm:p-3">{result.indexer}</td>
                           <td className="p-2 sm:p-3 text-sm hidden sm:table-cell">{result.sizeFormatted}</td>
                           <td className="p-2 sm:p-3 text-sm hidden lg:table-cell">{result.grabs.toLocaleString()}</td>
+                          <td className="p-2 sm:p-3 text-sm">
+                            {result.seeders !== null && result.seeders !== undefined ? result.seeders.toLocaleString() : "-"}
+                          </td>
+                          <td className="p-2 sm:p-3 text-sm">
+                            {result.leechers !== null && result.leechers !== undefined ? result.leechers.toLocaleString() : "-"}
+                          </td>
                           <td className="p-2 sm:p-3 text-sm hidden xl:table-cell">
                             {result.peers || "-"}
                           </td>
@@ -571,22 +967,41 @@ const Search = () => {
                           </td>
                           <td className="p-2 sm:p-3 hidden sm:table-cell">
                             <div className="flex gap-2">
-                              <Button size="sm" variant="light" isIconOnly>
-                                <Flag size={14} />
+                              <Button
+                                size="sm"
+                                variant="light"
+                                color={grabSuccess.has(result.id) ? "success" : grabError.has(result.id) ? "danger" : "default"}
+                                isIconOnly
+                                onPress={() => handleGrabRelease(result)}
+                                isLoading={grabbing.has(result.id)}
+                                isDisabled={!result.downloadUrl || grabbing.has(result.id)}
+                                title={grabSuccess.has(result.id) ? "Grabbed successfully" : grabError.get(result.id) || "Grab release"}
+                              >
+                                {grabSuccess.has(result.id) ? (
+                                  <Check size={14} />
+                                ) : (
+                                  <Download size={14} />
+                                )}
                               </Button>
-                              <Button size="sm" variant="light" isIconOnly>
-                                <Settings size={14} />
-                              </Button>
-                              <Button size="sm" variant="light" isIconOnly>
-                                <Download size={14} />
-                              </Button>
-                              <Button size="sm" variant="light" isIconOnly>
-                                <LinkIcon size={14} />
+                              <Button
+                                size="sm"
+                                variant="light"
+                                color={copiedLink === result.id ? "success" : "default"}
+                                isIconOnly
+                                onPress={() => handleCopyMagnetLink(result)}
+                                title={copiedLink === result.id ? "Copied!" : "Copy magnet link"}
+                              >
+                                {copiedLink === result.id ? (
+                                  <Check size={14} />
+                                ) : (
+                                  <LinkIcon size={14} />
+                                )}
                               </Button>
                             </div>
                           </td>
                         </tr>
-                      ))}
+                      );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -622,7 +1037,7 @@ const Search = () => {
                       </Button>
                       
                       <div className="flex gap-1">
-                        {getPageNumbers().map((page, idx) => {
+                        {getPageNumbers.map((page, idx) => {
                           if (page === "...") {
                             return (
                               <span key={`ellipsis-${idx}`} className="px-2 py-1 text-default-500">
@@ -670,96 +1085,6 @@ const Search = () => {
               </Card>
             )}
 
-            {/* Bottom Filter Bar */}
-            <Card className="mt-6">
-              <CardBody>
-                <div className="flex flex-col gap-4">
-                  <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
-                    <Input
-                      placeholder="Query"
-                      value={query}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                      startContent={<SearchIcon size={16} />}
-                      className="flex-1"
-                    />
-                    <Select
-                      label="Indexers"
-                      selectedKeys={selectedIndexers}
-                      onSelectionChange={(keys: any) => {
-                        const keyArray = Array.from(keys) as string[];
-                        const keySet = new Set<string>(keyArray);
-                        setSelectedIndexers(keySet);
-                      }}
-                      selectionMode="multiple"
-                      className="w-full sm:w-[200px]"
-                      placeholder="All Indexers"
-                    >
-                      {indexerSummaries.length > 0
-                        ? indexerSummaries.map((idx) => (
-                            <SelectItem key={idx.id.toString()} value={idx.id.toString()}>
-                              {idx.name} ({idx.resultCount})
-                            </SelectItem>
-                          ))
-                        : indexers.map((idx) => (
-                            <SelectItem key={idx.id.toString()} value={idx.id.toString()}>
-                              {idx.name}
-                            </SelectItem>
-                          ))}
-                    </Select>
-                    <Select
-                      label="Categories"
-                      selectedKeys={selectedCategories}
-                      onSelectionChange={(keys: any) =>
-                        setSelectedCategories(new Set(Array.from(keys)))
-                      }
-                      selectionMode="multiple"
-                      className="w-full sm:w-[200px]"
-                      placeholder="All Categories"
-                    >
-                      {Object.entries(groupedCategories).map(([type, cats]) => (
-                        <React.Fragment key={type}>
-                          {cats.map((cat) => (
-                            <React.Fragment key={cat.id}>
-                              <SelectItem key={cat.id.toString()} value={cat.id.toString()}>
-                                {cat.name}
-                              </SelectItem>
-                              {getSubCategories(cat.id).map((subCat) => (
-                                <SelectItem
-                                  key={subCat.id.toString()}
-                                  value={subCat.id.toString()}
-                                >
-                                  {subCat.name}
-                                </SelectItem>
-                              ))}
-                            </React.Fragment>
-                          ))}
-                        </React.Fragment>
-                      ))}
-                    </Select>
-                  </div>
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div className="text-sm text-default-500">
-                      Selected {selectedResults.size} of {total} releases
-                    </div>
-                    <div className="flex gap-2 w-full sm:w-auto">
-                      <Button
-                        color="success"
-                        startContent={<Download size={16} />}
-                        isDisabled={selectedResults.size === 0}
-                        className="flex-1 sm:flex-initial"
-                      >
-                        <span className="hidden sm:inline">Grab Release(s)</span>
-                        <span className="sm:hidden">Grab</span>
-                      </Button>
-                      <Button color="primary" startContent={<SearchIcon size={16} />} onPress={handleSearch} className="flex-1 sm:flex-initial">
-                        Search
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardBody>
-            </Card>
           </>
         ) : searchQuery ? (
           <Card>

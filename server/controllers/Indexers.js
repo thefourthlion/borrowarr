@@ -256,9 +256,26 @@ exports.testIndexer = async (req, res) => {
       const testResult = await scraperManager.testScraper(matchedScraper.id);
       
       if (testResult.success) {
+        // Mark as verified if test passes and indexer exists in DB
+        if (req.params.id) {
+          await Indexers.update(
+            { verified: true, verifiedAt: new Date() },
+            { where: { id: req.params.id } }
+          );
+        }
+        
+        // Also update AvailableIndexers if it exists
+        if (indexer.name) {
+          await AvailableIndexers.update(
+            { verified: true, verifiedAt: new Date() },
+            { where: { name: indexer.name } }
+          ).catch(() => {}); // Ignore errors if not found
+        }
+        
         return res.json({
           success: true,
           message: "Connection successful",
+          verified: true,
         });
       } else {
         // Extract the domain from baseUrl for better error messages
@@ -280,9 +297,18 @@ exports.testIndexer = async (req, res) => {
           errorMessage = `Unable to access ${domain}, page not found.`;
         }
         
+        // Mark as unverified if test fails
+        if (req.params.id) {
+          await Indexers.update(
+            { verified: false, verifiedAt: null },
+            { where: { id: req.params.id } }
+          );
+        }
+        
         return res.json({
           success: false,
           error: errorMessage,
+          verified: false,
         });
       }
     }
@@ -331,12 +357,38 @@ exports.testIndexer = async (req, res) => {
       });
     }
     
+    // Mark as verified if test passes and indexer exists in DB
+    if (req.params.id) {
+      await Indexers.update(
+        { verified: true, verifiedAt: new Date() },
+        { where: { id: req.params.id } }
+      );
+    }
+    
+    // Also update AvailableIndexers if it exists
+    if (indexer.name) {
+      await AvailableIndexers.update(
+        { verified: true, verifiedAt: new Date() },
+        { where: { name: indexer.name } }
+      ).catch(() => {}); // Ignore errors if not found
+    }
+    
     res.json({
       success: true,
       message: "Connection successful",
+      verified: true,
     });
   } catch (err) {
     console.error("Error testing indexer:", err);
+    
+    // Mark as unverified if test fails and indexer exists in DB
+    if (req.params.id) {
+      await Indexers.update(
+        { verified: false, verifiedAt: null },
+        { where: { id: req.params.id } }
+      );
+    }
+    
     res.status(500).json({ 
       success: false,
       error: err.message || "Test failed" 
@@ -358,6 +410,9 @@ exports.getAvailableIndexers = async (req, res) => {
     }
     if (req.query.privacy) {
       whereClause.privacy = req.query.privacy;
+    }
+    if (req.query.verified === 'true' || req.query.verified === true) {
+      whereClause.verified = true;
     }
     
     // Fetch all available indexers from database

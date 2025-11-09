@@ -1,0 +1,172 @@
+id: tmghub
+name: TmGHuB
+description: TmGHuB (TH) is an INDIAN Private Torrent Tracker for MOVIES / TV / GENERAL
+language: en-US
+type: private
+links:
+  - https://tmghub.org/
+caps:
+  categorymappings:
+    - id: 29
+      cat: Movies
+      desc: Movie Packs
+    - id: 30
+      cat: Movies
+      desc: V.I.P
+    - id: 13
+      cat: Movies/BluRay
+      desc: BD-25/BD-50
+    - id: 32
+      cat: Movies/BluRay
+      desc: 1080p BluRay
+    - id: 33
+      cat: Movies/HD
+      desc: BDRip / 720p
+    - id: 11
+      cat: Movies/DVD
+      desc: DVD-R/DVD-DL
+    - id: 22
+      cat: Movies/DVD
+      desc: Encoded DVDs
+    - id: 17
+      cat: Movies/WEB-DL
+      desc: WEB-DL/DTH
+    - id: 14
+      cat: Movies/DVD
+      desc: DVD-Rips
+    - id: 15
+      cat: Movies/HD
+      desc: DTH/HD-Rip
+    - id: 20
+      cat: Movies/SD
+      desc: VHS/TV-Rip
+    - id: 21
+      cat: Movies
+      desc: Video CDs
+    - id: 19
+      cat: Movies
+      desc: 'Pre Releases '
+    - id: 42
+      cat: Movies
+      desc: Dubbed Movies
+    - id: 44
+      cat: Movies
+      desc: TmG Special
+    - id: 27
+      cat: Audio
+      desc: MP3/FLAC/WAV
+    - id: 23
+      cat: Audio/Video
+      desc: Music Videos
+    - id: 37
+      cat: Audio
+      desc: Music Packs
+    - id: 40
+      cat: TV
+      desc: TV Shows
+    - id: 28
+      cat: TV
+      desc: TV Series
+    - id: 25
+      cat: TV/Sport
+      desc: Sports
+    - id: 26
+      cat: TV/Documentary
+      desc: Documentary
+    - id: 38
+      cat: Books/EBook
+      desc: E-Books
+    - id: 34
+      cat: Books
+      desc: Guides / Tutorials
+    - id: 5
+      cat: TV/Anime
+      desc: Anime
+    - id: 39
+      cat: Other
+      desc: Religious
+    - id: 43
+      cat: Other
+      desc: Other
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+      - imdbid
+    movie-search:
+      - q
+      - imdbid
+    music-search:
+      - q
+    book-search:
+      - q
+search:
+  paths:
+    - path: index.php
+  rows:
+    selector: >-
+      table#tottest[width="100%"] tr:has(a[href^="index.php?page=torrent-details"]):not(:has(img[title="Allready Grabbed
+      !!"]))
+  fields:
+    category:
+      selector: td a[href^="index.php?page=torrents&category="]
+      attribute: href
+      filters:
+        - name: querystring
+          args: category
+    title:
+      selector: td a[href^="index.php?page=torrent-details"]
+    details:
+      selector: td a[href^="index.php?page=torrent-details"]
+      attribute: href
+    download:
+      selector: td a[href^="index.php?page=torrent-details"]
+      attribute: href
+    imdbid:
+      selector: a[href*="imdb.com/title/tt"]
+      attribute: href
+    poster:
+      selector: td a[href^="index.php?page=torrent-details"]
+      attribute: onmouseover
+      filters:
+        - name: regexp
+          args: src=(.+?)  width
+    date:
+      selector: td a[href^="index.php?page=torrent-details"]
+      attribute: onmouseover
+      filters:
+        - name: regexp
+          args: Added\:(\d+ \w+ \w+)<
+        - name: timeago
+    size:
+      selector: td:nth-child(5)
+    grabs:
+      selector: td:nth-child(6)
+    seeders:
+      selector: td:nth-child(7)
+    leechers:
+      selector: td:nth-child(8)
+    downloadvolumefactor:
+      case:
+        img[src="gold/gold.gif"]: 0
+        img[src="gold/silver.gif"]: 0.5
+        '*': 1
+    uploadvolumefactor:
+      text: 1
+    minimumratio:
+      text: 0.7
+    minimumseedtime:
+      text: 7200
+download:
+  before:
+    path: '{{ .DownloadUri.AbsoluteUri }}'
+    method: post
+    inputs:
+      comment: '{{ .Config.thankyou }}'
+      confirm: Confirm
+  selectors:
+    - selector: td a[href^="download.php"]
+      attribute: href

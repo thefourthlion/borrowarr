@@ -56,6 +56,8 @@ interface Indexer {
   description?: string;
   indexerType?: string;
   status?: "enabled" | "enabled_redirected" | "disabled" | "error";
+  verified?: boolean;
+  verifiedAt?: string;
   createdAt?: string;
 }
 
@@ -67,6 +69,8 @@ interface AvailableIndexer {
   privacy: "Private" | "Public";
   categories: string[];
   availableBaseUrls?: string[];
+  verified?: boolean;
+  verifiedAt?: string;
 }
 
 const Indexers = () => {
@@ -85,6 +89,7 @@ const Indexers = () => {
   const [protocolFilter, setProtocolFilter] = useState<string>("");
   const [languageFilter, setLanguageFilter] = useState<string>("");
   const [privacyFilter, setPrivacyFilter] = useState<string>("");
+  const [verifiedFilter, setVerifiedFilter] = useState<boolean>(false);
   const [openSelects, setOpenSelects] = useState<Set<string>>(new Set());
   const [openConfigSelects, setOpenConfigSelects] = useState<Set<string>>(new Set());
   
@@ -114,6 +119,7 @@ const Indexers = () => {
       setProtocolFilter("");
       setLanguageFilter("");
       setPrivacyFilter("");
+      setVerifiedFilter(false);
       setOpenSelects(new Set());
     }
   }, [isAddModalOpen]);
@@ -131,7 +137,7 @@ const Indexers = () => {
       fetchAvailableIndexers();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAddModalOpen, searchQuery, protocolFilter, languageFilter, privacyFilter]);
+  }, [isAddModalOpen, searchQuery, protocolFilter, languageFilter, privacyFilter, verifiedFilter]);
 
   const fetchIndexers = async () => {
     try {
@@ -152,10 +158,13 @@ const Indexers = () => {
       if (protocolFilter) params.protocol = protocolFilter;
       if (languageFilter) params.language = languageFilter;
       if (privacyFilter) params.privacy = privacyFilter;
+      if (verifiedFilter) params.verified = 'true';
       
       console.log("Fetching indexers with filters:", params);
       const response = await axios.get(`${API_BASE_URL}/api/Indexers/available`, { params });
       console.log("Received indexers:", response.data.indexers?.length || 0);
+      console.log("Verified filter active:", verifiedFilter);
+      console.log("Sample indexers:", response.data.indexers?.slice(0, 3).map((i: AvailableIndexer) => ({ name: i.name, verified: i.verified })));
       setAvailableIndexers(response.data.indexers || []);
     } catch (error) {
       console.error("Error fetching available indexers:", error);
@@ -443,6 +452,11 @@ const Indexers = () => {
                                   }`}
                                 />
                                 {indexer.name}
+                                {indexer.verified && (
+                                  <Chip size="sm" color="success" variant="flat">
+                                    Verified
+                                  </Chip>
+                                )}
                               </div>
                             </td>
                             <td className="p-3">
@@ -600,6 +614,14 @@ const Indexers = () => {
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
                   startContent={<Filter size={16} />}
                 />
+                <div className="flex items-center gap-2 mb-2">
+                  <Switch
+                    isSelected={verifiedFilter}
+                    onValueChange={setVerifiedFilter}
+                  >
+                    Show Only Verified Working
+                  </Switch>
+                </div>
                 <div className="grid grid-cols-4 gap-2">
                   <Select
                     placeholder="Protocol"
@@ -711,7 +733,16 @@ const Indexers = () => {
                               {indexer.protocol}
                             </Chip>
                           </td>
-                          <td className="p-3 font-medium">{indexer.name}</td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{indexer.name}</span>
+                              {indexer.verified && (
+                                <Chip size="sm" color="success" variant="flat">
+                                  Verified
+                                </Chip>
+                              )}
+                            </div>
+                          </td>
                           <td className="p-3">{indexer.language}</td>
                           <td className="p-3 text-sm text-default-500">
                             {indexer.description}

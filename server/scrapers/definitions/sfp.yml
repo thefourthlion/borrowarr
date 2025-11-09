@@ -1,0 +1,228 @@
+id: sfp
+name: SFP
+description: SFP (Share Friends Projekt) is a GERMAN Private Torrent Tracker for MOVIES / TV / GENERAL
+language: de-DE
+type: private
+links:
+  - https://s-f-p.dyndns.dk/
+caps:
+  categorymappings:
+    - id: 111
+      cat: TV/Anime
+      desc: Anime
+    - id: 113
+      cat: TV/Anime
+      desc: Anime - Filme
+    - id: 137
+      cat: TV/Anime
+      desc: Anime - Serien
+    - id: 170
+      cat: TV/Anime
+      desc: Anime - Serienpacks
+    - id: 92
+      cat: PC
+      desc: Apps
+    - id: 136
+      cat: PC/Mobile-Android
+      desc: Apps - Android
+    - id: 122
+      cat: PC/Mobile-iOS
+      desc: Apps - iOS
+    - id: 100
+      cat: PC
+      desc: Apps - Linux
+    - id: 99
+      cat: PC/0day
+      desc: Apps - Windows
+    - id: 164
+      cat: TV/Documentary
+      desc: Doku
+    - id: 171
+      cat: TV/Documentary
+      desc: Doku - HD
+    - id: 173
+      cat: TV/Documentary
+      desc: Doku - Packs
+    - id: 172
+      cat: TV/Documentary
+      desc: Doku - SD
+    - id: 165
+      cat: XXX
+      desc: Erotik Filme
+    - id: 166
+      cat: XXX
+      desc: Erotik Filme - XXX
+    - id: 74
+      cat: Movies
+      desc: Filme
+    - id: 77
+      cat: Movies/DVD
+      desc: Filme - DVD
+    - id: 82
+      cat: Movies/HD
+      desc: Filme - HD 1080
+    - id: 79
+      cat: Movies/HD
+      desc: Filme - HD 720
+    - id: 76
+      cat: Movies/SD
+      desc: Filme - SD
+    - id: 160
+      cat: Movies/UHD
+      desc: Filme - UHD
+    - id: 124
+      cat: Movies
+      desc: Kid's Only
+    - id: 125
+      cat: Movies
+      desc: Kids  - Filme
+    - id: 127
+      cat: Audio/Audiobook
+      desc: Kids - Hörbücher
+    - id: 129
+      cat: Audio
+      desc: Kids - Musik
+    - id: 139
+      cat: TV
+      desc: Kids - Serien
+    - id: 75
+      cat: Audio
+      desc: Musik
+    - id: 146
+      cat: Audio
+      desc: Musik - Flac
+    - id: 88
+      cat: Audio/MP3
+      desc: Musik - MP3
+    - id: 161
+      cat: Audio
+      desc: Musik - Packs
+    - id: 90
+      cat: Audio/Video
+      desc: Musik - Videos
+    - id: 106
+      cat: TV
+      desc: Serien
+    - id: 130
+      cat: TV/HD
+      desc: Serien - HD
+    - id: 133
+      cat: TV/HD
+      desc: Serien - Packs HD
+    - id: 134
+      cat: TV/SD
+      desc: Serien - Packs SD
+    - id: 163
+      cat: TV/UHD
+      desc: Serien - Packs UHD
+    - id: 131
+      cat: TV/SD
+      desc: Serien - SD
+    - id: 162
+      cat: TV/UHD
+      desc: Serien - UHD
+    - id: 109
+      cat: Other
+      desc: Sonstiges
+    - id: 123
+      cat: Audio/Audiobook
+      desc: Sonstiges - A-Books
+    - id: 110
+      cat: Books/EBook
+      desc: Sonstiges - E-Books
+    - id: 178
+      cat: Movies/Foreign
+      desc: Sonstiges - Filme - Englisch
+    - id: 158
+      cat: Movies
+      desc: Sonstiges - Klassiker
+    - id: 159
+      cat: Movies/HD
+      desc: Sonstiges - SFP - Highlights
+    - id: 176
+      cat: TV/Sport
+      desc: Sonstiges - Sport
+    - id: 91
+      cat: Console
+      desc: Spiele
+    - id: 94
+      cat: Console/NDS
+      desc: Spiele - Nintendo
+    - id: 93
+      cat: PC/Games
+      desc: Spiele - PC Games
+    - id: 95
+      cat: Console/PS3
+      desc: Spiele - Playstation
+    - id: 119
+      cat: Console/XBox
+      desc: Spiele - Xbox
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+    movie-search:
+      - q
+      - imdbid
+    music-search:
+      - q
+    book-search:
+      - q
+search:
+  paths:
+    - path: browse.php
+  rows:
+    selector: >-
+      table.sortable tr:has(a[href*="/download.php?id="]){{ if .Config.freeleech }}:has(img[src$="/freedownload.gif"]){{
+      else }}{{ end }}
+  fields:
+    category:
+      selector: a[href*="/browse.php?category="]
+      attribute: href
+      filters:
+        - name: querystring
+          args: category
+    title:
+      selector: a[href*="/details.php?id="]
+    details:
+      selector: a[href*="/details.php?id="]
+      attribute: href
+    download:
+      selector: a[href*="/download.php?id="]
+      attribute: href
+    poster:
+      selector: img[src*="/torrents/images/"]
+      attribute: src
+    date:
+      selector: td:nth-child(2)
+      filters:
+        - name: regexp
+          args: (\d{2}-\d{2}-\d{2} \d{2}:\d{2})
+        - name: dateparse
+          args: dd-MM-yy HH:mm
+    size:
+      selector: td:nth-last-child(5)
+    grabs:
+      selector: td:nth-last-child(4)
+    seeders:
+      selector: td:nth-last-child(3)
+    leechers:
+      selector: td:nth-last-child(2)
+    description:
+      selector: div.tooltip-content > div:last-child
+    downloadvolumefactor:
+      case:
+        img[src$="/freedownload.gif"]: 0
+        img[src$="/silverdownload.gif"]: 0.5
+        '*': 1
+    uploadvolumefactor:
+      case:
+        img[src$="/x2.gif"]: 2
+        '*': 1
+    minimumratio:
+      text: 0.7
+    minimumseedtime:
+      text: 259200

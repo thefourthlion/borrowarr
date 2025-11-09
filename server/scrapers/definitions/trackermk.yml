@@ -1,0 +1,153 @@
+id: trackermk
+name: TrackerMK
+description: TrackerMK is a MACEDONIAN Private Torrent Tracker for MOVIES / TV / GENERAL
+language: mk-MK
+type: private
+links:
+  - http://trackermk.com/
+caps:
+  categorymappings:
+    - id: 75
+      cat: Movies/UHD
+      desc: Movies 4K
+    - id: 49
+      cat: Movies/DVD
+      desc: Movies DVD-R
+    - id: 68
+      cat: PC/Mobile-Android
+      desc: Андроид (Android)
+    - id: 72
+      cat: PC/Mobile-Android
+      desc: Андроид - Апликации (Android)
+    - id: 47
+      cat: PC
+      desc: Апликации (Software)
+    - id: 71
+      cat: PC/Mac
+      desc: Апликации - Mac OS
+    - id: 70
+      cat: PC/0day
+      desc: Апликации - Window 7/8.1/10/11
+    - id: 63
+      cat: Audio/Audiobook
+      desc: Аудио (Audiobooks)
+    - id: 60
+      cat: TV/Documentary
+      desc: Документарци (Documentaries)
+    - id: 61
+      cat: TV
+      desc: Домашни серии (TV Local)
+    - id: 69
+      cat: TV
+      desc: Домашни серии - Српски / Хрватски / Босански (TV Local)
+    - id: 57
+      cat: Books/EBook
+      desc: Е-Книги (EBooks)
+    - id: 53
+      cat: Console
+      desc: Игри (Games)
+    - id: 54
+      cat: Audio/Video
+      desc: Концерти (Concerts)
+    - id: 52
+      cat: Audio/Video
+      desc: Музички Спотови (Music Videos)
+    - id: 67
+      cat: Other
+      desc: Од се по нешто (VIP)
+    - id: 73
+      cat: Audio
+      desc: Рип од Плоча (Music Rips)
+    - id: 65
+      cat: Other
+      desc: Слики (pictures)
+    - id: 55
+      cat: TV/Sport
+      desc: Спорт (sport)
+    - id: 48
+      cat: TV/Anime
+      desc: Цртани (Animations)
+    - id: 64
+      cat: Audio/Lossless
+      desc: FLAC
+    - id: 62
+      cat: Movies/HD
+      desc: Movies HDTV
+    - id: 50
+      cat: Audio/MP3
+      desc: Mp3
+    - id: 56
+      cat: Movies/SD
+      desc: Movies Xvid
+    - id: 59
+      cat: XXX
+      desc: XXX
+    - id: 74
+      cat: XXX
+      desc: XXX 4K
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+    movie-search:
+      - q
+    music-search:
+      - q
+    book-search:
+      - q
+search:
+  paths:
+    - path: browse.php
+  rows:
+    selector: >-
+      table.sortable tr:has(a[href*="/download.php?id="]){{ if .Config.freeleech }}:has(img[src$="/freedownload.gif"]){{
+      else }}{{ end }}
+  fields:
+    category:
+      selector: a[href*="/browse.php?category="]
+      attribute: href
+      filters:
+        - name: querystring
+          args: category
+    title:
+      selector: a[href*="/details.php?id="]
+    details:
+      selector: a[href*="/details.php?id="]
+      attribute: href
+    download:
+      selector: a[href*="/download.php?id="]
+      attribute: href
+    poster:
+      selector: img[src*="/torrents/images/"]
+      attribute: src
+    date:
+      selector: td:nth-child(2)
+      filters:
+        - name: regexp
+          args: (\d{2}-\d{2}-\d{4} \d{2}:\d{2})
+        - name: dateparse
+          args: dd-MM-yyyy HH:mm
+    size:
+      selector: td:nth-last-child(5)
+    grabs:
+      selector: td:nth-last-child(4)
+    seeders:
+      selector: td:nth-last-child(3)
+    leechers:
+      selector: td:nth-last-child(2)
+    downloadvolumefactor:
+      case:
+        img[src$="/freedownload.gif"]: 0
+        img[src$="/silverdownload.gif"]: 0.5
+        '*': 1
+    uploadvolumefactor:
+      case:
+        img[src$="/x2.gif"]: 2
+        '*': 1
+    minimumratio:
+      text: 1
+    minimumseedtime:
+      text: 86400

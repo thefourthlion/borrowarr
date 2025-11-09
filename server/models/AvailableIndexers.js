@@ -84,6 +84,15 @@ const AvailableIndexers = sequelize.define(
         this.setDataValue("definitionData", value ? JSON.stringify(value) : null);
       },
     },
+    verified: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    verifiedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   },
   {
     tableName: "available_indexers",

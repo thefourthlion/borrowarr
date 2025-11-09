@@ -122,6 +122,15 @@ async function main() {
           result.id = indexer.id;
           batchResults.push(result);
           
+          // Check if already processed to avoid duplicates
+          const alreadyProcessed = progress.processed.find(p => p.id === indexer.id);
+          const alreadyFailed = progress.failed.find(f => f.id === indexer.id);
+          
+          if (alreadyProcessed || alreadyFailed) {
+            // Skip if already processed
+            continue;
+          }
+          
           if (result.success && !result.skipped) {
             totalSuccessful++;
             progress.processed.push({
@@ -129,6 +138,9 @@ async function main() {
               name: indexer.name,
               success: true,
               scraperId: result.scraperId,
+              tested: result.tested || false,
+              resultCount: result.resultCount || 0,
+              testFailed: result.testFailed || false,
               timestamp: new Date().toISOString(),
             });
           } else if (result.skipped) {

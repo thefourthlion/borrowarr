@@ -1,0 +1,79 @@
+id: themixingbowl
+name: themixingbowl
+description: themixingbowl (TMB) is a Semi-Private Torrent Tracker for DJ Music mixes
+language: en-US
+type: semi-private
+links:
+  - https://tmb.dj/
+  - https://themixingbowl.org/
+caps:
+  categorymappings:
+    - id: 1
+      cat: Audio
+      desc: Music
+  modes:
+    search:
+      - q
+    music-search:
+      - q
+      - artist
+search:
+  paths:
+    - path: torrent/advancedsearch/
+  rows:
+    selector: table.torrenttable > tbody > tr:has(a[href^="/torrent/download/"])
+  fields:
+    category:
+      text: 1
+    title:
+      selector: td.name a
+    details:
+      selector: td:nth-child(16) a
+      attribute: href
+      filters:
+        - name: append
+          args: /details/
+    download:
+      selector: a[href^="/torrent/download/"]
+      attribute: href
+    size:
+      selector: td:nth-child(5)
+    artist:
+      selector: span.artist
+      optional: true
+    genre:
+      selector: span.tag
+      optional: true
+    _codec:
+      selector: td:nth-child(6)
+      optional: true
+    _bit:
+      selector: td:nth-child(7)
+      optional: true
+    description:
+      text: >-
+        Artist=[{{ .Result.artist }}] , Tags={{ .Result.genre }} , Codec=[{{ .Result._codec }}] , BitRate=[{{
+        .Result._bit }}]
+    grabs:
+      selector: td:nth-child(8)
+    seeders:
+      selector: td:nth-child(9)
+    leechers:
+      selector: td:nth-child(10)
+    date:
+      selector: td:nth-child(12)
+      filters:
+        - name: replace
+          args:
+            - at
+            - ''
+        - name: dateparse
+          args: d MMM yyyy  HH:mm
+    downloadvolumefactor:
+      case:
+        img[src$="freeleech.png"]: 0
+        '*': 1
+    uploadvolumefactor:
+      text: 1
+    minimumratio:
+      text: 1

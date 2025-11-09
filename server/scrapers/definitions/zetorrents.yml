@@ -1,0 +1,66 @@
+id: zetorrents
+name: zetorrents
+description: zetorrents is a FRENCH Public site for MOVIES / TV / GENERAL
+language: fr-FR
+type: public
+links:
+  - https://www.zetorrents.town/
+search:
+  paths:
+    - path: '{{ if .Keywords }}recherche/{{ .Keywords }}{{ else }}home{{ end }}'
+  rows:
+    selector: table.table > tbody > tr:has(a[href^="/detail/"])
+  fields:
+    category:
+      text: Other
+    title_phase1:
+      selector: a[href^="/detail/"]
+      filters:
+        - name: replace
+          args:
+            - WEBRIP
+            - WEBDL
+        - name: re_replace
+          args:
+            - (?i)\b(FRENCH|MULTI|TRUEFRENCH|VOSTFR|SUBFRENCH)\b(.+?)(\b((19|20)\d{2})\b)$
+            - $3 $1$2
+    title_vostfr:
+      text: '{{ .Result.title_phase1 }}'
+      filters:
+        - name: re_replace
+          args:
+            - (?i)\b(vostfr|subfrench)\b
+            - ENGLISH
+    title_phase2:
+      text: '{{ if .Config.vostfr }}{{ .Result.title_vostfr }}{{ else }}{{ .Result.title_phase1 }}{{ end }}'
+    title_multilang:
+      text: '{{ .Result.title_phase2 }}'
+      filters:
+        - name: re_replace
+          args:
+            - (?i)\b(MULTI(?!.*(?:FRENCH|ENGLISH|VOSTFR)))\b
+            - '{{ .Config.multilanguage }}'
+    title:
+      text: '{{ if .Config.multilang }}{{ .Result.title_multilang }}{{ else }}{{ .Result.title_phase2 }}{{ end }}'
+    details:
+      selector: a[href^="/detail/"]
+      attribute: href
+    download:
+      selector: a[href^="/detail/"]
+      attribute: href
+    date:
+      text: now
+    size:
+      selector: td:nth-child(2)
+    seeders:
+      selector: td:nth-child(3)
+    leechers:
+      selector: td:nth-child(4)
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1
+download:
+  selectors:
+    - selector: a[href^="magnet:?"]
+      attribute: href

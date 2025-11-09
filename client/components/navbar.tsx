@@ -51,6 +51,7 @@ export const Navbar = () => {
             { label: "Indexers", href: "/pages/indexers" },
             { label: "Stats", href: "/pages/stats" },
             { label: "Settings", href: "/pages/settings" },
+            { label: "Download Clients", href: "/pages/settings/downloadclients" },
             { label: "System", href: "/pages/system" },
             { label: "Account", href: "/pages/account" },
           ].map((item) => (
@@ -102,6 +103,7 @@ export const Navbar = () => {
             { label: "Indexers", href: "/pages/indexers" },
             { label: "Stats", href: "/pages/stats" },
             { label: "Settings", href: "/pages/settings" },
+            { label: "Download Clients", href: "/pages/settings/downloadclients" },
             { label: "System", href: "/pages/system" },
             { label: "Account", href: "/pages/account" },
             { 

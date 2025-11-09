@@ -21,6 +21,7 @@ const Footer = () => {
           <Link className="nav-link" href="/pages/indexers">Indexers</Link>
           <Link className="nav-link" href="/pages/stats">Stats</Link>
           <Link className="nav-link" href="/pages/settings">Settings</Link>
+          <Link className="nav-link" href="/pages/settings/downloadclients">Download Clients</Link>
           <Link className="nav-link" href="/pages/system">System</Link>
           <Link className="nav-link" href="/pages/account">Account</Link>
           <Link className="nav-link" href="/pages/products">Pricing</Link>

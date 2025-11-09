@@ -280,16 +280,115 @@ function saveScraperDefinition(def) {
 }
 
 /**
- * Test scraper by loading it
+ * Test scraper by performing an actual search
  */
 async function testScraper(scraperId) {
   try {
     const scraperManager = require('../scrapers');
+    
+    // First check if scraper exists
     const available = scraperManager.getAvailableIndexers();
     const found = available.find(s => s.id === scraperId);
-    return found !== undefined;
+    
+    if (!found) {
+      return { success: false, loaded: false, searched: false, error: 'Scraper not found' };
+    }
+    
+    // Perform actual search test
+    try {
+      const testResult = await scraperManager.testScraper(scraperId);
+      
+      if (testResult.success) {
+        // Try multiple test queries to find one that works
+        const testQueries = ['test', 'ubuntu', 'matrix'];
+        let bestResult = null;
+        
+        for (const query of testQueries) {
+          try {
+            const searchResult = await scraperManager.search(scraperId, query, { limit: 5 });
+            
+            if (searchResult.success) {
+              if (searchResult.results.length > 0) {
+                // Found results! This is the best result
+                return {
+                  success: true,
+                  loaded: true,
+                  searched: true,
+                  resultCount: searchResult.results.length,
+                  testQuery: query,
+                  error: null,
+                };
+              } else if (!bestResult) {
+                // No results but connection works - save as fallback
+                bestResult = {
+                  success: true,
+                  loaded: true,
+                  searched: true,
+                  resultCount: 0,
+                  testQuery: query,
+                  error: 'No results for test queries (connection works)',
+                };
+              }
+            } else if (!bestResult) {
+              bestResult = {
+                success: false,
+                loaded: true,
+                searched: true,
+                resultCount: 0,
+                testQuery: query,
+                error: searchResult.error || 'Search failed',
+              };
+            }
+          } catch (err) {
+            if (!bestResult) {
+              bestResult = {
+                success: false,
+                loaded: true,
+                searched: true,
+                resultCount: 0,
+                testQuery: query,
+                error: err.message || 'Search error',
+              };
+            }
+          }
+          
+          // Small delay between queries
+          await new Promise(r => setTimeout(r, 300));
+        }
+        
+        // Return best result found
+        return bestResult || {
+          success: false,
+          loaded: true,
+          searched: true,
+          resultCount: 0,
+          error: 'All test queries failed',
+        };
+      } else {
+        return {
+          success: false,
+          loaded: true,
+          searched: true,
+          resultCount: 0,
+          error: testResult.message || 'Test failed',
+        };
+      }
+    } catch (searchError) {
+      return {
+        success: false,
+        loaded: true,
+        searched: true,
+        resultCount: 0,
+        error: searchError.message || 'Search failed',
+      };
+    }
   } catch (error) {
-    return false;
+    return {
+      success: false,
+      loaded: false,
+      searched: false,
+      error: error.message || 'Unknown error',
+    };
   }
 }
 
@@ -339,16 +438,33 @@ async function processIndexer(indexer, index) {
     const filePath = saveScraperDefinition(ourDef);
     console.log(`   ✅ Saved: ${filePath}`);
     
-    // Test loading
-    console.log(`   🧪 Testing scraper...`);
+    // Test scraper with actual search
+    console.log(`   🧪 Testing scraper with real search...`);
     const testResult = await testScraper(ourDef.id);
     
-    if (testResult) {
-      console.log(`   ✅ Scraper loaded successfully!`);
-      return { success: true, indexer: indexer.name, scraperId: ourDef.id };
+    if (testResult.success) {
+      if (testResult.resultCount > 0) {
+        console.log(`   ✅ Scraper tested successfully! Found ${testResult.resultCount} result(s)`);
+      } else {
+        console.log(`   ✅ Scraper connection successful (0 results for test query, but connection works)`);
+      }
+      return { 
+        success: true, 
+        indexer: indexer.name, 
+        scraperId: ourDef.id,
+        tested: true,
+        resultCount: testResult.resultCount,
+      };
     } else {
-      console.log(`   ⚠️  Scraper definition saved but not yet loaded`);
-      return { success: true, indexer: indexer.name, scraperId: ourDef.id, warning: 'Not loaded' };
+      console.log(`   ⚠️  Scraper saved but test failed: ${testResult.error || 'Unknown error'}`);
+      return { 
+        success: true, // Still mark as success since definition is valid
+        indexer: indexer.name, 
+        scraperId: ourDef.id, 
+        warning: `Test failed: ${testResult.error}`,
+        tested: true,
+        testFailed: true,
+      };
     }
     
   } catch (error) {

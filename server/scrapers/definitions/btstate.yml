@@ -1,0 +1,41 @@
+id: btstate
+name: btstate
+description: btstate is a Public BitTorrent DHT search engine.
+language: en-US
+type: public
+links:
+  - https://btstate.com/
+search:
+  paths:
+    - path: api/searchByKeyword/{{ if .Keywords }}{{ .Keywords }}{{ else }}{{ .Today.Year }}{{ end }}
+      response:
+        type: json
+  rows:
+    selector: items
+    attribute: _source
+    filters:
+      - name: andmatch
+  fields:
+    category:
+      text: Other
+    title:
+      selector: name
+    details:
+      text: '{{ .Config.sitelink }}'
+    infohash:
+      selector: infohash
+    date:
+      selector: createTime
+      filters:
+        - name: regexp
+          args: ^(\d{10})
+    size:
+      selector: size
+    seeders:
+      text: 1
+    leechers:
+      text: 1
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1

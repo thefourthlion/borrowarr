@@ -1,0 +1,159 @@
+id: uhdbits
+name: UHDBits
+description: UHDBits is a Private Torrent Tracker for UHD Movies / TV
+language: en-US
+type: private
+links:
+  - https://uhdbits.org/
+caps:
+  categorymappings:
+    - id: 1
+      cat: Movies
+      desc: Movies
+    - id: 2
+      cat: Audio
+      desc: Music
+    - id: 3
+      cat: TV
+      desc: TV
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+      - imdbid
+    movie-search:
+      - q
+      - imdbid
+    music-search:
+      - q
+search:
+  paths:
+    - path: torrents.php
+  rows:
+    selector: table#torrent_table > tbody > tr.torrent
+  fields:
+    category_id:
+      selector: a[href^="torrents.php?filter_cat"]
+      attribute: href
+      filters:
+        - name: regexp
+          args: \[(\d+)\]
+    category:
+      text: '{{ .Result.category_id }}'
+    download:
+      selector: a[href^="torrents.php?action=download&id="]
+      attribute: href
+      filters:
+        - name: replace
+          args:
+            - "\t"
+            - ' '
+    details:
+      selector: a.torrent_name
+      attribute: href
+      filters:
+        - name: replace
+          args:
+            - "\t"
+            - ' '
+        - name: regexp
+          args: (.*)#torrent\d+$
+    size:
+      selector: td[class="number_column nobr"]
+    grabs:
+      selector: td[class="number_column nobr"] ~ td
+    files:
+      selector: td:nth-child(3)
+    seeders:
+      selector: td[class="number_column nobr"] ~ td ~ td
+    leechers:
+      selector: td[class="number_column nobr"] ~ td ~ td ~ td
+    date:
+      selector: td:nth-child(5) > span[title]
+      attribute: title
+      filters:
+        - name: replace
+          args:
+            - ','
+            - ''
+        - name: append
+          args: ' +07:00'
+        - name: dateparse
+          args: MMM dd yyyy HH:mm zzz
+    downloadvolumefactor:
+      case:
+        strong.blink_me:contains("Free"): 0
+        strong.blink_me:contains("50"): 0.5
+        strong.blink_me:contains("25"): 0.75
+        strong.blink_me:contains("75"): 0.25
+        '*': 1
+    uploadvolumefactor:
+      case:
+        strong.blink_me:contains("2x"): 2
+        '*': 1
+    minimumratio:
+      text: 0.6
+    _release_info:
+      selector: div.torrent_info
+      remove: >-
+        .torrent_label.red, .torrent_label.blink_me, .torrent_label:contains("User"), .torrent_label:contains("ViE"),
+        .torrent_label:contains("Exclusive")
+      filters:
+        - name: re_replace
+          args:
+            - '[\s\/]+$'
+            - ''
+        - name: replace
+          args:
+            - ' / '
+            - ' '
+        - name: re_replace
+          args:
+            - \s+([\w@\.\[\]\$\-\!\u2122]+)$
+            - ' -$1'
+        - name: re_replace
+          args:
+            - \bEncode\b
+            - Blu-Ray
+        - name: re_replace
+          args:
+            - \b(H\.264 )?Blu-ray\b
+            - BR-DISK
+        - name: re_replace
+          args:
+            - \bRemux\b
+            - Blu-Ray Remux
+        - name: re_replace
+          args:
+            - \s+
+            - ' '
+    _release_info_music:
+      selector: div.torrent_info
+      remove: .torrent_label.red, .torrent_label.blink_me
+      filters:
+        - name: re_replace
+          args:
+            - '[\s\/]+$'
+            - ''
+        - name: replace
+          args:
+            - ' / '
+            - ' '
+        - name: re_replace
+          args:
+            - \s+
+            - ' '
+    title:
+      selector: div.group_info
+      remove: span, div.tags, div.torrent_info
+      filters:
+        - name: re_replace
+          args:
+            - (?i)\bSeason (\d+)\b
+            - S$1
+        - name: trim
+        - name: append
+          args: ' {{ if eq .Result.category_id "2" }}{{ .Result._release_info_music }}{{ else }}{{ .Result._release_info }}{{ end }}'

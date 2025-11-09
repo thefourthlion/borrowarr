@@ -1,0 +1,77 @@
+id: cpasbienclone
+name: cpasbien clone
+description: cpasbien clone is a FRENCH Public site for MOVIES / TV / GENERAL
+language: fr-FR
+type: public
+links:
+  - https://www1.cpasbien.to/
+search:
+  paths:
+    - path: '{{ if .Keywords }}search_torrent/{{ .Keywords }}.html,{{ .Config.sort }}{{ else }}home/{{ end }}'
+  rows:
+    selector: table.table-corps > tbody > tr:has(a)
+  fields:
+    category:
+      text: Other
+    title_phase1:
+      selector: a
+      filters:
+        - name: re_replace
+          args:
+            - (?i)\b(FRENCH|MULTI|TRUEFRENCH|VOSTFR|SUBFRENCH)\b(.+?)(\b((19|20)\d{2})\b)$
+            - $3 $1$2
+    title_vostfr:
+      text: '{{ .Result.title_phase1 }}'
+      filters:
+        - name: re_replace
+          args:
+            - (?i)\b(vostfr|subfrench)\b
+            - ENGLISH
+    title_phase2:
+      text: '{{ if .Config.vostfr }}{{ .Result.title_vostfr }}{{ else }}{{ .Result.title_phase1 }}{{ end }}'
+    title_multilang:
+      text: '{{ .Result.title_phase2 }}'
+      filters:
+        - name: re_replace
+          args:
+            - (?i)\b(MULTI(?!.*(?:FRENCH|ENGLISH|VOSTFR)))\b
+            - '{{ .Config.multilanguage }}'
+    title:
+      text: '{{ if .Config.multilang }}{{ .Result.title_multilang }}{{ else }}{{ .Result.title_phase2 }}{{ end }}'
+    details:
+      selector: a
+      attribute: href
+    download:
+      selector: a
+      attribute: href
+    size:
+      selector: div.poid
+      filters:
+        - name: re_replace
+          args:
+            - (\w)o
+            - $1B
+        - name: re_replace
+          args:
+            - (\d+\.\d)$
+            - $1MB
+    date:
+      text: now
+    seeders:
+      selector: div.up
+      optional: true
+      default: 0
+    leechers:
+      selector: div.down
+      optional: true
+      default: 0
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1
+download:
+  before:
+    path: download_magnet?id={{ re_replace .DownloadUri.AbsoluteUri "^.*-(\d+)\.html" "$1" }}
+  selectors:
+    - selector: body
+      usebeforeresponse: true

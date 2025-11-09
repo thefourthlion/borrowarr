@@ -1,0 +1,36 @@
+id: aussierules
+name: Aussierul.es
+description: AussieRul.es is a Private Torrent Tracker for AUSTRALIAN RULES FOOTBALL
+language: en-AU
+type: private
+links:
+  - https://aussierul.es/
+search:
+  paths:
+    - path: browse.php
+  rows:
+    selector: table#sortabletable > tbody > tr:not(:first-child)
+  fields:
+    category:
+      text: 1
+    title:
+      selector: td:nth-child(2) > div:nth-child(1) > a > strong
+    details:
+      selector: td:nth-child(2) > div:nth-child(1) > a
+      attribute: href
+    download:
+      selector: a[href*="download.php?id="]
+      attribute: href
+    date:
+      selector: td:nth-child(2) > div:nth-child(2)
+      filters:
+        - name: dateparse
+          args: d-MM-yyyy HH:mm
+    size:
+      selector: td:nth-child(5)
+    grabs:
+      selector: td:nth-child(6)
+    seeders:
+      selector: td:nth-child(7)
+    leechers:
+      selector: td:nth-child(8)

@@ -1,0 +1,120 @@
+id: happyfappy2fa
+name: HappyFappy2FA
+description: HappyFappy (HF) is a Private Torrent Tracker for 3X. This indexer uses cookie login for 2FA.
+language: en-US
+type: private
+links:
+  - https://www.happyfappy.org/
+caps:
+  categorymappings:
+    - id: 11
+      cat: XXX
+      desc: Asian
+    - id: 6
+      cat: XXX
+      desc: Fansite
+    - id: 13
+      cat: XXX
+      desc: Games
+    - id: 3
+      cat: XXX
+      desc: Gay / Bi
+    - id: 4
+      cat: XXX
+      desc: Interracial
+    - id: 5
+      cat: XXX
+      desc: Lesbian
+    - id: 9
+      cat: XXX
+      desc: Packs
+    - id: 10
+      cat: XXX
+      desc: Pics
+    - id: 1
+      cat: XXX
+      desc: Pron
+    - id: 8
+      cat: XXX
+      desc: Retro
+    - id: 14
+      cat: XXX
+      desc: Scat
+    - id: 12
+      cat: XXX
+      desc: Transsexual
+    - id: 7
+      cat: XXX
+      desc: VR
+  modes:
+    search:
+      - q
+search:
+  paths:
+    - path: torrents.php
+  rows:
+    selector: table#torrent_table > tbody > tr[class^="torrent row"]:has(a[href*="action=download"])
+  fields:
+    category:
+      selector: a[href^="/torrents.php?filter_cat["]
+      attribute: href
+      filters:
+        - name: regexp
+          args: \[(\d+)\]
+    title:
+      selector: a[href^="/torrents.php?id="]
+    details:
+      selector: a[href^="/torrents.php?id="]
+      attribute: href
+    download:
+      selector: a[href^="torrents.php?action=download&id="]
+      attribute: href
+    description_tags:
+      selector: div.tags
+    description:
+      case:
+        span.icon_okay: 'Verified: {{ .Result.description_tags }}'
+        '*': 'Unverified: {{ .Result.description_tags }}'
+    poster:
+      selector: td:nth-child(2) > script
+      filters:
+        - name: regexp
+          args: src=\\"(.*?)\\"
+        - name: re_replace
+          args:
+            - \\(.)
+            - $1
+        - name: replace
+          args:
+            - /static/common/noartwork/noimage.png
+            - ''
+    files:
+      selector: td:nth-child(3)
+    date:
+      selector: td:nth-child(5) > span
+      attribute: title
+      filters:
+        - name: dateparse
+          args: MMM dd yyyy, HH:mm
+    size:
+      selector: td:nth-child(6)
+    grabs:
+      selector: td:nth-child(7)
+    seeders:
+      selector: td:nth-child(8)
+    leechers:
+      selector: td:nth-child(9)
+    downloadvolumefactor:
+      case:
+        span.icon[title*="Freeleech"]: 0
+        img[alt="Freeleech"]: 0
+        '*': 1
+    uploadvolumefactor:
+      case:
+        span.icon[title*="DoubleSeed"]: 2
+        img[alt="DoubleSeed"]: 2
+        '*': 1
+    minimumratio:
+      text: 0.5
+    minimumseedtime:
+      text: 259200

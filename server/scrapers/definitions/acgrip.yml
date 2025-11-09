@@ -1,0 +1,36 @@
+id: acgrip
+name: ACG.RIP
+description: ACG.RIP is a CHINESE Public torrent tracker for the latest anime and Japanese related torrents
+language: zh-CN
+type: public
+links:
+  - https://acg.rip/
+search:
+  paths:
+    - path: /
+  rows:
+    selector: tbody tr
+  fields:
+    category:
+      text: 1
+    title:
+      selector: td.title > span.title a
+    details:
+      selector: td.title > span.title a
+      attribute: href
+    download:
+      selector: td.action a
+      attribute: href
+    size:
+      selector: td.size
+    seeders:
+      text: 1
+    leechers:
+      text: 1
+    date:
+      selector: td.date time
+      attribute: datetime
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1

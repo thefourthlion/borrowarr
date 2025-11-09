@@ -1,0 +1,16 @@
+node_modules
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.DS_Store
+dist
+.vscode/
+*.log
+coverage/
+.idea/
+build/
+.tmp/
+.cache/
+database.sqlite

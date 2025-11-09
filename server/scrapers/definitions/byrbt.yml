@@ -1,0 +1,132 @@
+id: byrbt
+name: BYRBT
+description: BYRBT is a CHINESE Private Torrent Tracker for HD MOVIES / TV / GENERAL
+language: zh-CN
+type: private
+links:
+  - https://byr.pt/
+caps:
+  categorymappings:
+    - id: 408
+      cat: Movies
+      desc: 电影Movies
+    - id: 401
+      cat: TV
+      desc: 剧集TV Series
+    - id: 404
+      cat: TV/Anime
+      desc: 动漫Animations
+    - id: 402
+      cat: Audio
+      desc: 音乐Music
+    - id: 405
+      cat: Other
+      desc: 综艺Arts
+    - id: 403
+      cat: Console
+      desc: 游戏Games
+    - id: 406
+      cat: PC
+      desc: 软件Software
+    - id: 407
+      cat: TV/Documentary
+      desc: 资料Documentaries
+    - id: 409
+      cat: TV/Sport
+      desc: 体育Sports
+    - id: 410
+      cat: Other/Misc
+      desc: 纪录Records
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+      - imdbid
+      - doubanid
+    movie-search:
+      - q
+      - imdbid
+      - doubanid
+    music-search:
+      - q
+search:
+  paths:
+    - path: torrents.php
+  rows:
+    selector: table.torrents > tbody > tr:has(table.torrentname)
+  fields:
+    category:
+      selector: a[href^="torrents.php?cat="]
+      attribute: href
+      filters:
+        - name: querystring
+          args: cat
+    title_default:
+      selector: a[href^="details.php?id="]
+    title:
+      selector: a[title][href^="details.php?id="]
+      attribute: title
+      optional: true
+      default: '{{ .Result.title_default }}'
+    details:
+      selector: a[href^="details.php?id="]
+      attribute: href
+    download:
+      selector: a[href^="download.php?id="]
+      attribute: href
+    imdbid:
+      selector: a[href*="imdb.com/title/tt"]
+      attribute: href
+    date_elapsed:
+      selector: td.rowfollow:nth-last-of-type(6) > span[title]
+      attribute: title
+      optional: true
+      filters:
+        - name: append
+          args: ' +08:00'
+        - name: dateparse
+          args: yyyy-MM-dd HH:mm:ss zzz
+    date_added:
+      selector: td.rowfollow:nth-last-of-type(6):not(:has(span))
+      optional: true
+      filters:
+        - name: append
+          args: ' +08:00'
+        - name: dateparse
+          args: yyyy-MM-ddHH:mm:ss zzz
+    date:
+      text: >-
+        {{ if or .Result.date_elapsed .Result.date_added }}{{ or .Result.date_elapsed .Result.date_added }}{{ else
+        }}now{{ end }}
+    size:
+      selector: td.rowfollow:nth-last-of-type(5)
+    seeders:
+      selector: td.rowfollow:nth-last-of-type(4)
+    leechers:
+      selector: td.rowfollow:nth-last-of-type(3)
+    grabs:
+      selector: td.rowfollow:nth-last-of-type(2)
+    downloadvolumefactor:
+      case:
+        img.pro_free: 0
+        img.pro_free2up: 0
+        img.pro_50pctdown: 0.5
+        img.pro_50pctdown2up: 0.5
+        img.pro_30pctdown: 0.3
+        '*': 1
+    uploadvolumefactor:
+      case:
+        img.pro_50pctdown2up: 2
+        img.pro_free2up: 2
+        img.pro_2up: 2
+        '*': 1
+    minimumratio:
+      text: 1
+    minimumseedtime:
+      text: 86400
+    description:
+      selector: td:nth-child(2)
+      remove: a, b, font, img, span

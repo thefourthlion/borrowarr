@@ -1,0 +1,110 @@
+id: abnormal
+name: Abnormal
+description: ABNormal (ABN) is a FRENCH Private Torrent Tracker for MOVIES / TV / GENERAL
+language: fr-FR
+type: private
+links:
+  - https://abn.lol/
+caps:
+  categorymappings:
+    - id: 1
+      cat: TV
+      desc: Series
+    - id: 2
+      cat: Movies
+      desc: Movies
+    - id: 3
+      cat: TV/Documentary
+      desc: Documentaries
+    - id: 4
+      cat: TV/Anime
+      desc: Anime
+    - id: 5
+      cat: PC/Games
+      desc: Games
+    - id: 6
+      cat: PC
+      desc: Applications
+    - id: 7
+      cat: Books/EBook
+      desc: Ebooks
+    - id: 9
+      cat: TV
+      desc: Emissions
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+    movie-search:
+      - q
+    book-search:
+      - q
+search:
+  paths:
+    - path: Torrent
+  rows:
+    selector: table.table-rows > tbody > tr:has(a[href^="/Torrent/Download?ReleaseId="])
+  fields:
+    category:
+      selector: a[href^="/Torrent?SelectedCats="]
+      attribute: href
+      filters:
+        - name: querystring
+          args: SelectedCats
+    title_phase1:
+      selector: td.grid-release-column > a
+    title_vostfr:
+      text: '{{ .Result.title_phase1 }}'
+      filters:
+        - name: re_replace
+          args:
+            - (?i)\b(vostfr|subfrench)\b
+            - ENGLISH
+    title_phase2:
+      text: '{{ if .Config.vostfr }}{{ .Result.title_vostfr }}{{ else }}{{ .Result.title_phase1 }}{{ end }}'
+    title_multilang:
+      text: '{{ .Result.title_phase2 }}'
+      filters:
+        - name: re_replace
+          args:
+            - (?i)\b(MULTI(?!.*(?:FRENCH|ENGLISH|VOSTFR)))\b
+            - '{{ .Config.multilanguage }}'
+    title:
+      text: '{{ if .Config.multilang }}{{ .Result.title_multilang }}{{ else }}{{ .Result.title_phase2 }}{{ end }}'
+    details:
+      selector: a[href^="/Torrent/Details?ReleaseId="]
+      attribute: href
+    download:
+      selector: a[href^="/Torrent/Download?ReleaseId="]
+      attribute: href
+    date:
+      text: now
+    size:
+      selector: td:nth-child(6)
+      filters:
+        - name: re_replace
+          args:
+            - ','
+            - .
+        - name: replace
+          args:
+            - o
+            - B
+    seeders:
+      selector: td:nth-child(7)
+    leechers:
+      selector: td:nth-child(8)
+    downloadvolumefactor:
+      case:
+        img[title="Freeleech"]: 0
+        '*': 1
+    uploadvolumefactor:
+      case:
+        '*': 1
+    minimumratio:
+      text: 1
+    minimumseedtime:
+      text: 345600

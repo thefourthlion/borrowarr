@@ -1,0 +1,38 @@
+id: acrossthetasman
+name: Across The Tasman
+description: ATT is a Private torrent site for Rugby and other sports played in Australia
+language: en-AU
+type: private
+links:
+  - https://acrossthetasman.com/
+search:
+  paths:
+    - path: torrents.php
+  rows:
+    selector: table[width='100%'][align='center']:not([class]) > tbody > tr
+  fields:
+    category:
+      text: 1
+    date:
+      selector: td:nth-child(1)
+      filters:
+        - name: dateparse
+          args: MMM dd, yyyy
+    title:
+      selector: td:nth-child(4) > span:nth-child(1)
+      filters:
+        - name: re_replace
+          args:
+            - '[\s]+Uploaded.*'
+            - ''
+    download:
+      selector: a[href*="attachment.php?attachmentid="]
+      attribute: href
+    seeders:
+      selector: td:nth-child(5)
+    leechers:
+      selector: td:nth-child(6)
+    grabs:
+      selector: td:nth-child(7)
+    size:
+      selector: td:nth-child(10)

@@ -1,0 +1,89 @@
+---
+id: torrentgalaxyclone
+name: TorrentGalaxyClone
+description: "TorrentGalaxy is a Public torrent site with a large collection of verified torrents"
+language: en-US
+type: public
+encoding: UTF-8
+links:
+  - https://torrentgalaxy.one/
+  - https://torrentgalaxy.info/
+  - https://torrentgalaxy.space/
+
+caps:
+  categorymappings:
+    - {id: 1, cat: Movies, desc: "Movies"}
+    - {id: 2, cat: TV, desc: "TV"}
+    - {id: 3, cat: Audio, desc: "Music"}
+    - {id: 4, cat: PC/Games, desc: "Games"}
+    - {id: 5, cat: PC, desc: "Applications"}
+    - {id: 6, cat: XXX, desc: "Anime"}
+    - {id: 7, cat: Other, desc: "Other"}
+
+  modes:
+    search: [q]
+    tv-search: [q, season, ep]
+    movie-search: [q]
+
+search:
+  paths:
+    - path: /torrents.php?search={{ .Keywords }}
+  
+  rows:
+    selector: .tgxtablerow.txlight, div.tgxtablerow
+  
+  fields:
+    category:
+      selector: .tgxtablecell a[href*="/torrents.php?cat="], .tgxtablecell a[href*="cat="]
+      attribute: href
+      filters:
+        - name: regexp
+          args: ["cat=([^&]+)", 1]
+    
+    title:
+      selector: .tgxtablecell a[href*="/post-detail/"][title], .tgxtablecell a[title], .tgxtablecell a[href*="/post-detail/"] b
+      attribute: title
+      filters:
+        - name: trim
+    
+    details:
+      selector: .tgxtablecell a[href*="/post-detail/"]
+      attribute: href
+    
+    download:
+      selector: .tgxtablecell a[href*="itorrents.org/torrent/"], .tgxtablecell a[href*="download"]
+      attribute: href
+    
+    magnet:
+      selector: .tgxtablecell a[href^="magnet:"]
+      attribute: href
+    
+    size:
+      selector: .tgxtablecell:nth-child(7)
+      filters:
+        - name: trim
+    
+    seeders:
+      selector: .tgxtablecell:nth-child(10)
+      filters:
+        - name: regexp
+          args: ["(\\d+)\\s*/", 1]
+        - name: parseNumber
+    
+    leechers:
+      selector: .tgxtablecell:nth-child(10)
+      filters:
+        - name: regexp
+          args: ["/\\s*(\\d+)", 1]
+        - name: parseNumber
+    
+    date:
+      selector: .tgxtablecell:nth-child(11)
+      filters:
+        - name: trim
+        - name: timeago
+
+download:
+  selector: .tgxtablecell a[href*="download.php"]
+  attribute: href
+

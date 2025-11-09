@@ -1,0 +1,156 @@
+id: nusantarare
+name: Nusanta(RA.RE)
+description: Nusanta(RA.RE) is a MALAYSIAN Private Torrent Tracker for MOVIES / TV
+language: en-US
+type: private
+links:
+  - https://nusantara.re/
+caps:
+  categorymappings:
+    - id: 401
+      cat: Movies
+      desc: Movies
+    - id: 413
+      cat: Movies
+      desc: Malay Movie
+    - id: 412
+      cat: Movies
+      desc: Asia Movie
+    - id: 420
+      cat: Movies
+      desc: Movies Packs
+    - id: 402
+      cat: TV
+      desc: TV Series
+    - id: 419
+      cat: TV
+      desc: TV Drama
+    - id: 403
+      cat: TV
+      desc: TV Shows
+    - id: 411
+      cat: TV
+      desc: TV Packs
+    - id: 410
+      cat: TV
+      desc: Islamic
+    - id: 406
+      cat: Audio/Video
+      desc: Music Videos
+    - id: 405
+      cat: TV/Anime
+      desc: Animations
+    - id: 404
+      cat: TV/Documentary
+      desc: Documentaries
+    - id: 409
+      cat: Books/EBook
+      desc: E-Books
+    - id: 407
+      cat: TV/Sport
+      desc: Sports
+    - id: 417
+      cat: PC/Games
+      desc: Games
+    - id: 418
+      cat: PC/0day
+      desc: Apps & Software
+    - id: 421
+      cat: PC/Mobile-iOS
+      desc: Apple Apps
+    - id: 423
+      cat: Audio
+      desc: Audio
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+      - imdbid
+      - doubanid
+    movie-search:
+      - q
+      - imdbid
+      - doubanid
+    music-search:
+      - q
+    book-search:
+      - q
+search:
+  paths:
+    - path: torrents.php
+  rows:
+    selector: >-
+      table.torrents > tbody > tr:has(table.torrentname){{ if .Config.novip }}:not(:has(img[src="pic/ico_exclu.gif"])){{
+      else }}{{ end }}
+  fields:
+    category:
+      selector: a[href^="?cat="]
+      attribute: href
+      filters:
+        - name: querystring
+          args: cat
+    title_default:
+      selector: a[href^="details.php?id="]
+    title_title:
+      selector: a[title][href^="details.php?id="]
+      attribute: title
+      optional: true
+      default: '{{ .Result.title_default }}'
+    _isvip:
+      selector: table.torrentname:has(img[src="pic/ico_exclu.gif"])
+      optional: true
+    title:
+      text: '{{ .Result.title_title }}{{ if .Result._isvip }} [VIP]{{ else }}{{ end }}'
+    details:
+      selector: a[href^="details.php?id="]
+      attribute: href
+    download:
+      selector: a[href^="download.php?id="]
+      attribute: href
+    date_elapsed:
+      selector: td.rowfollow:nth-last-of-type(6) > span[title]
+      attribute: title
+      optional: true
+      filters:
+        - name: append
+          args: ' +08:00'
+        - name: dateparse
+          args: yyyy-MM-dd HH:mm:ss zzz
+    date_added:
+      selector: td.rowfollow:nth-last-of-type(6):not(:has(span))
+      optional: true
+      filters:
+        - name: append
+          args: ' +08:00'
+        - name: dateparse
+          args: yyyy-MM-ddHH:mm:ss zzz
+    date:
+      text: >-
+        {{ if or .Result.date_elapsed .Result.date_added }}{{ or .Result.date_elapsed .Result.date_added }}{{ else
+        }}now{{ end }}
+    size:
+      selector: td.rowfollow:nth-last-of-type(5)
+    seeders:
+      selector: td.rowfollow:nth-last-of-type(4)
+    leechers:
+      selector: td.rowfollow:nth-last-of-type(3)
+    grabs:
+      selector: td.rowfollow:nth-last-of-type(2)
+    downloadvolumefactor:
+      case:
+        img[src="pic/ico_free.gif"]: 0
+        img[src="pic/ico_half.gif"]: 0.5
+        img[src="pic/ico_third.gif"]: 0.3
+        '*': 1
+    uploadvolumefactor:
+      case:
+        img[src="pic/2x.gif"]: 2
+        '*': 1
+    minimumratio:
+      text: 1
+    description:
+      selector: td:nth-child(2)
+      remove: a, b, font, img, span

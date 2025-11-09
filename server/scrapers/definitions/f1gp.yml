@@ -1,0 +1,129 @@
+id: f1gp
+name: F1GP
+description: F1GP is a Private Torrent Tracker for F1, F2, F3, FE, F1 Academy Racing
+language: en-US
+type: private
+links:
+  - https://f1gp.site/
+caps:
+  categorymappings:
+    - id: 11
+      cat: TV/Sport
+      desc: F1 Races
+    - id: 1
+      cat: TV/Sport
+      desc: F1 Qualifying
+    - id: 2
+      cat: TV/Sport
+      desc: F1 Sprint Races
+    - id: 3
+      cat: TV/Sport
+      desc: F1 Free Practice
+    - id: 5
+      cat: TV/Sport
+      desc: F1 Pre Races
+    - id: 6
+      cat: TV/Sport
+      desc: F1 Warm Up
+    - id: 4
+      cat: TV/Sport
+      desc: F1 Documentary
+    - id: 7
+      cat: TV/Sport
+      desc: F1 Oldies
+    - id: 8
+      cat: TV/Sport
+      desc: F1 Press Conferences
+    - id: 9
+      cat: TV/Sport
+      desc: F1 Post Races
+    - id: 14
+      cat: TV/Sport
+      desc: F1 Academy
+    - id: 15
+      cat: TV/Sport
+      desc: F1 Movies
+    - id: 16
+      cat: TV/Sport
+      desc: F1 Series
+    - id: 17
+      cat: TV/Sport
+      desc: F2 Championship
+    - id: 18
+      cat: TV/Sport
+      desc: F3 Championship
+    - id: 19
+      cat: TV/Sport
+      desc: FE Championship
+    - id: 20
+      cat: TV/Sport
+      desc: Freeleech
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+search:
+  paths:
+    - path: index.php
+  rows:
+    selector: table.lista > tbody > tr:has(a[href^="download.php?id="])
+  fields:
+    category:
+      selector: a[href^="index.php?page=torrents&category="]
+      attribute: href
+      filters:
+        - name: querystring
+          args: category
+    title:
+      selector: a[href^="index.php?page=torrent-details&id="]
+    details:
+      selector: a[href^="index.php?page=torrent-details&id="]
+      attribute: onmouseover
+    download:
+      selector: a[href^="download.php?id="]
+      attribute: href
+    poster:
+      selector: a[href^="index.php?page=torrent-details&id="]
+      attribute: onmouseover
+      filters:
+        - name: regexp
+          args: src=(.+?) width
+        - name: replace
+          args:
+            - torrentimg/nocover.jpg
+            - ''
+    size:
+      selector: td:nth-child(11)
+    date:
+      selector: td:nth-child(6)
+      filters:
+        - name: dateparse
+          args: dd/MM/yyyy
+    seeders:
+      selector: td:nth-child(7)
+      optional: true
+      default: 0
+    leechers:
+      optional: true
+      selector: td:nth-child(8)
+      default: 0
+    grabs:
+      optional: true
+      selector: td:nth-child(9)
+      default: 0
+    downloadvolumefactor:
+      case:
+        img[src="images/freeleech.gif"]: 0
+        img[src="images/gold.gif"]: 0
+        img[src="images/silver.gif"]: 0.5
+        img[src="images/bronze.gif"]: 0.75
+        '*': 1
+    uploadvolumefactor:
+      text: 1
+    minimumratio:
+      text: 1.4
+    minimumseedtime:
+      text: 604800

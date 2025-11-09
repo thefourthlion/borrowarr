@@ -1,0 +1,117 @@
+id: mdan
+name: MDAN
+description: Mansão dos Animes (MDAN) is a BRAZILIAN Private Torrent Tracker for ANIME
+language: pt-BR
+type: private
+links:
+  - https://bt.mdan.org/
+caps:
+  categorymappings:
+    - id: 5
+      cat: TV/Anime
+      desc: Animes Completo
+    - id: 1
+      cat: TV/Anime
+      desc: Animes EpisÃ³dios
+    - id: 2
+      cat: TV/Anime
+      desc: Animes OVAs
+    - id: 3
+      cat: Movies
+      desc: Filmes
+    - id: 6
+      cat: Movies/Other
+      desc: Live
+    - id: 7
+      cat: Books/Comics
+      desc: MangÃ¡
+    - id: 4
+      cat: Audio
+      desc: OST
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+    movie-search:
+      - q
+    music-search:
+      - q
+    book-search:
+      - q
+search:
+  paths:
+    - path: browse.php
+  rows:
+    selector: >-
+      table[style^="width"] > tbody > tr:has(a[href^="details.php?id="]), table[style^="width"] > tbody >
+      tr[id^="kdescr"]
+    after: 1
+  fields:
+    category:
+      selector: a[href^="browse.php?cat="]
+      attribute: href
+      filters:
+        - name: querystring
+          args: cat
+    title:
+      selector: a[href^="details.php?id="]
+    details:
+      selector: a[href^="details.php?id="]
+      attribute: href
+    _id:
+      selector: a[href^="details.php?id="]
+      attribute: href
+      filters:
+        - name: querystring
+          args: id
+    download:
+      text: download.php?torrent={{ .Result._id }}&ssl=1
+    poster:
+      selector: td:nth-child(9) img
+      attribute: src
+    date_day:
+      selector: td:nth-child(7):contains("e")
+      optional: true
+      filters:
+        - name: replace
+          args:
+            - Hoje
+            - Today
+        - name: replace
+          args:
+            - Ontem
+            - Yesterday
+    date_year:
+      selector: td:nth-child(7):not(:contains("e"))
+      optional: true
+      filters:
+        - name: dateparse
+          args: HH:mm dd-MM-yyyy
+    date:
+      text: '{{ if or .Result.date_day .Result.date_year }}{{ or .Result.date_day .Result.date_year }}{{ else }}now{{ end }}'
+    size:
+      selector: td:nth-child(6)
+    files:
+      selector: td:nth-child(5)
+    grabs:
+      selector: td:nth-child(4)
+    seeders:
+      selector: a[href$="seeders"]
+      optional: true
+      default: 0
+    leechers:
+      selector: a[href$="leechers"]
+      optional: true
+      default: 0
+    downloadvolumefactor:
+      case:
+        img[src="./pic/free.gif"]: 0
+        img[src="./pic/silver2.gif"]: 0.5
+        '*': 1
+    uploadvolumefactor:
+      text: 1
+    minimumratio:
+      text: 0.4

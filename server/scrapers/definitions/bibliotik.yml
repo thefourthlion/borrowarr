@@ -1,0 +1,106 @@
+id: bibliotik
+name: Bibliotik
+description: Bibliotik is a Private Torrent Tracker for EBOOKS and AUDIOBOOKS
+language: en-US
+type: private
+links:
+  - https://bibliotik.me/
+caps:
+  categorymappings:
+    - id: 1
+      cat: PC
+      desc: Applications
+    - id: 3
+      cat: Audio/Audiobook
+      desc: Audiobooks
+    - id: 4
+      cat: Books/Comics
+      desc: Comics
+    - id: 5
+      cat: Books/EBook
+      desc: eBooks
+    - id: 7
+      cat: Books/Mags
+      desc: Magazines
+  modes:
+    search:
+      - q
+    book-search:
+      - q
+      - title
+      - author
+search:
+  paths:
+    - path: torrents/
+  rows:
+    selector: table#torrents_table > tbody > tr:has(.title)
+  fields:
+    category:
+      selector: td:first-child
+      case:
+        div[title="Applications"]: 1
+        div[title="Audiobooks"]: 3
+        div[title="Comics"]: 4
+        div[title="Ebooks"]: 5
+        div[title="Magazines"]: 7
+    _editor:
+      selector: .editorLink
+      optional: true
+    author:
+      selector: .authorLink
+      optional: true
+      default: '{{ .Result._editor }}'
+    year:
+      selector: .torYear
+      optional: true
+    _filetype:
+      selector: .torFormat
+      optional: true
+    _retail:
+      selector: .torRetail
+      optional: true
+    booktitle:
+      selector: .title a
+    title:
+      text: '{{ .Result.booktitle }}'
+      filters:
+        - name: append
+          args: >-
+            {{ if .Result.author }} by {{ .Result.author }}{{ else }}{{ end }}{{ if .Result.year }} {{ .Result.year }}{{
+            else }}{{ end }}{{ if .Result._filetype }} {{ .Result._filetype }}{{ else }}{{ end }}{{ if .Result._retail
+            }} {{ .Result._retail }}{{ else }}{{ end }}
+    details:
+      selector: .title a
+      attribute: href
+    date:
+      selector: .t_files_size_added time
+      attribute: datetime
+      optional: true
+      default: now
+    download:
+      selector: a[title="Download"]
+      attribute: href
+    files:
+      selector: .t_files_size_added
+      filters:
+        - name: regexp
+          args: ^\s*(\d+)\s*file
+    size:
+      selector: .t_files_size_added span
+      attribute: data-bytecount
+    seeders:
+      selector: .seeders
+      optional: true
+      default: 0
+    leechers:
+      selector: .leechers
+      optional: true
+      default: 0
+    grabs:
+      selector: .snatches
+      optional: true
+      default: 0
+    downloadvolumefactor:
+      text: 1
+    uploadvolumefactor:
+      text: 1

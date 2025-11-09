@@ -1,0 +1,91 @@
+id: animetorrentsro
+name: AnimeTorrents.ro
+description: AnimeTorrents.ro (Anime Torrents Romania) is a ROMANIAN Private Torrent Tracker for ANIME / MANGA
+language: ro-RO
+type: private
+links:
+  - https://animetorrents.ro/
+caps:
+  categorymappings:
+    - id: 1
+      cat: TV/Anime
+      desc: ANIME
+    - id: 1
+      cat: Movies/Other
+      desc: ANIME
+    - id: 2
+      cat: Books/Comics
+      desc: MANGA
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+    movie-search:
+      - q
+    book-search:
+      - q
+search:
+  paths:
+    - path: browse.php
+  rows:
+    selector: td > table > tbody > tr:has(a[href^="download.php/"])
+  fields:
+    category:
+      selector: a[href^="browse.php?cat="]
+      attribute: href
+      filters:
+        - name: querystring
+          args: cat
+    title:
+      selector: a[href^="details.php?id="]
+      filters:
+        - name: re_replace
+          args:
+            - ^(\[.+?\]).(.+)
+            - $2.$1
+    details:
+      selector: a[href^="details.php?id="]
+      attribute: href
+    download:
+      selector: a[href^="download.php/"]
+      attribute: href
+    poster:
+      selector: a[onmouseover]
+      attribute: onmouseover
+      filters:
+        - name: regexp
+          args: src=(.+?) width
+    files:
+      selector: td:nth-last-child(8)
+    date:
+      selector: td:nth-last-child(6)
+      filters:
+        - name: append
+          args: ' +00:00'
+        - name: dateparse
+          args: dd-MM-yyyyHH:mm:ss zzz
+    size:
+      selector: td:nth-last-child(5)
+    grabs:
+      selector: td:nth-last-child(4)
+    seeders:
+      selector: td:nth-last-child(3)
+    leechers:
+      selector: td:nth-last-child(2)
+    downloadvolumefactor:
+      case:
+        img[alt="Free"]: 0
+        '*': 1
+    uploadvolumefactor:
+      text: 1
+    genre:
+      selector: a[href^="download.php/"]
+    description:
+      text: '{{ .Result.genre }}'
+    minimumratio:
+      text: 1
+    minimumseedtime:
+      text: 172800

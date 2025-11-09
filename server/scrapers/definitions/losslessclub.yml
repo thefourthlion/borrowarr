@@ -1,0 +1,61 @@
+id: losslessclub
+name: LosslessClub
+description: LosslessClub is a RUSSIAN Private Torrent Tracker for High Quality Music
+language: ru-RU
+type: private
+links:
+  - https://losslessclub.com/
+search:
+  paths:
+    - path: browse.php
+  rows:
+    selector: div#releases-table > table > tbody > tr:has(a.browselink)
+  fields:
+    category:
+      text: 1
+    title:
+      selector: a.browselink
+    details:
+      selector: a.browselink
+      attribute: href
+    download:
+      selector: a[href^="download.php?id="]
+      attribute: href
+    poster:
+      selector: img.thumbnail
+      attribute: src
+    size:
+      selector: td:nth-child(5)
+    grabs:
+      optional: true
+      selector: td:nth-child(6) br + span
+    seeders:
+      selector: td:nth-child(6)
+      remove: br + span
+      filters:
+        - name: regexp
+          args: ([\.\d]+)\s+\|
+    leechers:
+      selector: td:nth-child(6)
+      remove: br + span
+      filters:
+        - name: regexp
+          args: \|\s*([\.\d]+)
+    date:
+      selector: td:nth-child(7)
+      remove: a, i
+      filters:
+        - name: replace
+          args:
+            - by
+            - ''
+        - name: append
+          args: ' +03:00'
+        - name: dateparse
+          args: d/MM/yy zzz
+    description:
+      selector: div.tag_list_browse
+    downloadvolumefactor:
+      text: 1
+    uploadvolumefactor:
+      text: 1

@@ -1,0 +1,120 @@
+id: lesbians4u
+name: Lesbians4u
+description: Lesbians4u is a Private Torrent Tracker for 3X
+language: en-US
+type: private
+links:
+  - http://lesbians4u.org/
+caps:
+  categorymappings:
+    - id: 7
+      cat: XXX
+      desc: Amateur
+    - id: 12
+      cat: XXX
+      desc: Anime &Hentai &JAV
+    - id: 17
+      cat: XXX
+      desc: Appz
+    - id: 3
+      cat: XXX
+      desc: Classics
+    - id: 6
+      cat: XXX
+      desc: Clips &Siterips
+    - id: 16
+      cat: XXX
+      desc: DVD
+    - id: 15
+      cat: XXX
+      desc: EX-V.I.P. Torrents
+    - id: 9
+      cat: XXX
+      desc: Fetish
+    - id: 8
+      cat: XXX
+      desc: Games
+    - id: 11
+      cat: XXX
+      desc: Misc.
+    - id: 10
+      cat: XXX
+      desc: Movie
+    - id: 5
+      cat: XXX
+      desc: Solo
+    - id: 14
+      cat: XXX
+      desc: V.I.P.
+    - id: 13
+      cat: XXX
+      desc: Watersport
+  modes:
+    search:
+      - q
+search:
+  paths:
+    - path: browse.php
+  rows:
+    selector: >-
+      table.sortable tr:has(a[href*="/download-torrent-"]){{ if .Config.freeleech
+      }}:has(img[src$="/freedownload.gif"]){{ else }}{{ end }}
+  fields:
+    category:
+      selector: a[href*="torrent-category-"]
+      attribute: href
+      filters:
+        - name: regexp
+          args: torrent-category-(\d+)
+    title_default:
+      selector: a[href*="torrent-details-"]
+    title:
+      selector: div[id^="port-content-"] div
+      optional: true
+      default: '{{ .Result.title_default }}'
+    details:
+      selector: a[href*="torrent-details-"]
+      attribute: href
+    download:
+      selector: a[href*="torrent-details-"]
+      attribute: href
+    poster:
+      selector: div[id^="port-content-"] img
+      attribute: src
+    date:
+      selector: td:nth-child(2) > div:last-child
+      filters:
+        - name: regexp
+          args: (\d{2}-\d{2}-\d{4} \d{2}:\d{2})
+        - name: append
+          args: ' +00:00'
+        - name: dateparse
+          args: dd-MM-yyyy HH:mm zzz
+    size:
+      selector: td:nth-child(5)
+    grabs:
+      selector: td:nth-child(6)
+    seeders:
+      selector: td:nth-child(7)
+    leechers:
+      selector: td:nth-child(8)
+    downloadvolumefactor:
+      case:
+        img[src$="/freedownload.gif"]: 0
+        img[src$="/silverdownload.gif"]: 0.5
+        '*': 1
+    uploadvolumefactor:
+      case:
+        img[src$="/x2.gif"]: 2
+        '*': 1
+    minimumratio:
+      text: 1
+download:
+  before:
+    path: takethanks.php
+    method: post
+    inputs:
+      torrentid: '{{ re_replace  .DownloadUri.PathAndQuery ".*torrent-details-(\d+).*" "$1"}}'
+  selectors:
+    - selector: a[href*="download-torrent-"]
+      attribute: href

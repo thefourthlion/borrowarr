@@ -1,0 +1,59 @@
+id: eztvl
+name: EZTVL
+description: EZTV is a Public torrent site for TV shows. This indexer supports login.
+language: en-US
+type: semi-private
+links:
+  - https://eztvx.to/
+  - https://eztv.wf/
+  - https://eztv.tf/
+  - https://eztv.yt/
+  - https://eztv1.xyz/
+search:
+  paths:
+    - path: '{{ if .Keywords }}search/{{ .Keywords }}{{ else }}home{{ end }}'
+  rows:
+    selector: >-
+      table.forum_header_border:contains('Latest') tr[name='hover'].forum_header_border:has(a.magnet),
+      table.forum_header_border:contains('Releases') tr[name='hover'].forum_header_border:has(a.magnet)
+    filters:
+      - name: andmatch
+  fields:
+    category:
+      text: 1
+    title:
+      selector: td:nth-child(2) a
+      attribute: title
+      filters:
+        - name: replace
+          args:
+            - '[eztv]'
+            - ''
+        - name: re_replace
+          args:
+            - \(.*\)$
+            - ''
+        - name: trim
+    details:
+      selector: td:nth-child(2) a
+      attribute: href
+    download:
+      selector: td:nth-child(3) a.magnet, td:nth-child(3) a
+      attribute: href
+    size:
+      selector: td:nth-child(4)
+      optional: true
+      default: 512 MB
+    date:
+      selector: td:nth-child(5)
+      filters:
+        - name: append
+          args: ' ago'
+    seeders:
+      selector: td:nth-child(6)
+    leechers:
+      text: 0
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1

@@ -1,0 +1,115 @@
+id: mousebits
+name: MouseBits
+description: MouseBits is a Private Torrent Tracker for all things Disney
+language: en-US
+type: private
+links:
+  - https://mousebits.com/
+caps:
+  categorymappings:
+    - id: 34
+      cat: TV
+      desc: Video (DVD ISO)
+    - id: 14
+      cat: TV
+      desc: Multi-angle tribute
+    - id: 36
+      cat: TV
+      desc: Martin Vid
+    - id: 15
+      cat: TV
+      desc: One-take ride-through
+    - id: 26
+      cat: TV
+      desc: TV Specials
+    - id: 28
+      cat: TV
+      desc: Promotional Content
+    - id: 29
+      cat: TV
+      desc: Vacation Planner
+    - id: 30
+      cat: Audio/MP3
+      desc: Music Album (lossy)
+    - id: 31
+      cat: Audio/Lossless
+      desc: Music Album (FLAC)
+    - id: 32
+      cat: Audio
+      desc: Attraction Series
+    - id: 35
+      cat: Audio
+      desc: Background Series
+    - id: 17
+      cat: Audio
+      desc: Multi-track collection
+    - id: 18
+      cat: Audio
+      desc: Studio mix ride-through
+    - id: 19
+      cat: Audio
+      desc: Live recording
+    - id: 33
+      cat: Audio
+      desc: Induction Recording
+    - id: 21
+      cat: Other
+      desc: Park update
+    - id: 22
+      cat: Other
+      desc: Desktops
+    - id: 23
+      cat: Other
+      desc: Vacation photos
+    - id: 25
+      cat: Other
+      desc: Community media
+    - id: 27
+      cat: Other
+      desc: Off-topic
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+    music-search:
+      - q
+search:
+  paths:
+    - path: index.php
+  rows:
+    selector: table.lista:last-of-type > tbody > tr:has(a[href^="index.php?page=torrents&category="])
+  fields:
+    category:
+      selector: a[href^="index.php?page=torrents&category="]
+      attribute: href
+      filters:
+        - name: querystring
+          args: category
+    title:
+      selector: a[href^="index.php?page=torrent-details&id="]
+    details:
+      selector: a[href^="index.php?page=torrent-details&id="]
+      attribute: href
+    download:
+      selector: a[href^="download.php?id="]
+      attribute: href
+    size:
+      text: 512 MB
+    date:
+      selector: td:nth-child(4)
+      filters:
+        - name: dateparse
+          args: dd/MM/yyyy
+    seeders:
+      selector: td:nth-child(5)
+    leechers:
+      selector: td:nth-child(6)
+    grabs:
+      selector: td:nth-child(7)
+    downloadvolumefactor:
+      text: 1
+    uploadvolumefactor:
+      text: 1

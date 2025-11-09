@@ -1,0 +1,96 @@
+id: fappaizuri
+name: Fappaizuri
+description: Fappaizuri is a Private Torrent Tracker for HENTAI / JAV
+language: en-US
+type: private
+links:
+  - https://www.fappaizuri.me/
+caps:
+  categorymappings:
+    - id: 5
+      cat: XXX
+      desc: JAV
+    - id: 6
+      cat: Books
+      desc: Manga
+    - id: 7
+      cat: Console
+      desc: H-games
+    - id: 8
+      cat: TV/Anime
+      desc: Hentai
+    - id: 9
+      cat: XXX
+      desc: OFFS
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+    book-search:
+      - q
+search:
+  paths:
+    - path: torrents-search.php
+  rows:
+    selector: tr.t-row
+  fields:
+    category:
+      selector: a[href^="torrents-search.php?cat="]
+      attribute: href
+      filters:
+        - name: querystring
+          args: cat
+    title:
+      selector: a[href^="torrents-details.php?id="] > b
+    details:
+      selector: a[href^="torrents-details.php?id="]
+      attribute: href
+    download:
+      selector: a[href^="torrents-details.php?id="]
+      attribute: href
+    poster:
+      selector: a[href^="torrents-details.php?id="]
+      attribute: onMouseover
+      filters:
+        - name: regexp
+          args: src=(.+?)>
+    _language:
+      selector: img[src*="images/languages/"]
+      attribute: alt
+      optional: true
+    description:
+      selector: font[color="red"]
+      filters:
+        - name: append
+          args: '{{ if .Result._language }} - {{ .Result._language }}{{ else }}{{ end }}'
+    size:
+      selector: td:nth-child(3)
+    seeders:
+      selector: td:nth-child(5)
+    leechers:
+      selector: td:nth-child(6)
+    grabs:
+      selector: td:nth-child(7)
+    date:
+      selector: td:nth-child(8)
+      filters:
+        - name: timeago
+    downloadvolumefactor:
+      case:
+        img[src="images/free.png"]: 0
+        '*': 1
+    uploadvolumefactor:
+      case:
+        img[src="images/doubleupload.gif"]: 2
+        '*': 1
+    minimumratio:
+      text: 1
+    minimumseedtime:
+      text: 345600
+download:
+  selectors:
+    - selector: a[href^="download.php?id="]
+      attribute: href

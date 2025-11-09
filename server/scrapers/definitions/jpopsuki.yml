@@ -1,0 +1,125 @@
+id: jpopsuki
+name: JPopsuki
+description: JPopSuki is a Private Torrent Tracker for ASIAN MUSIC
+language: en-US
+type: private
+links:
+  - https://jpopsuki.eu/
+caps:
+  categorymappings:
+    - id: 1
+      cat: Audio
+      desc: Album
+    - id: 2
+      cat: Audio
+      desc: Single
+    - id: 3
+      cat: Movies
+      desc: PV
+    - id: 4
+      cat: Movies/DVD
+      desc: DVD
+    - id: 5
+      cat: TV
+      desc: TV-Music
+    - id: 6
+      cat: TV
+      desc: TV-Variety
+    - id: 7
+      cat: TV
+      desc: TV-Drama
+    - id: 8
+      cat: Other
+      desc: Fansubs
+    - id: 9
+      cat: Other
+      desc: Pictures
+    - id: 10
+      cat: Other/Misc
+      desc: Misc
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+      - genre
+    movie-search:
+      - q
+      - genre
+    music-search:
+      - q
+      - album
+      - artist
+      - genre
+search:
+  paths:
+    - path: ajax.php
+  rows:
+    selector: table#torrent_table > tbody > tr[class^="torrent"]
+  fields:
+    category:
+      selector: a[href*="filter_cat"]
+      attribute: href
+      filters:
+        - name: regexp
+          args: '%5B(\d+?)%5D'
+    download:
+      selector: a[href^="torrents.php?action=download&id="]
+      attribute: href
+    genre:
+      selector: div.tags
+      filters:
+        - name: replace
+          args:
+            - .
+            - _
+    description:
+      text: '{{ .Result.genre }}'
+    title:
+      selector: td:nth-last-child(7)
+      remove: span, div.tags, a[title="View Comments"]
+      filters:
+        - name: replace
+          args:
+            - ' ()'
+            - ''
+        - name: replace
+          args:
+            - "\t"
+            - ''
+        - name: replace
+          args:
+            - ' / Freeleech!'
+            - ''
+    details:
+      selector: a[href^="torrents.php?id="]
+      attribute: href
+    poster:
+      selector: img[src^="static/images/torrents/"]
+      attribute: src
+    files:
+      selector: td:nth-last-child(6)
+    date:
+      selector: td:nth-last-child(5)
+      attribute: title
+      filters:
+        - name: dateparse
+          args: MMM dd yyyy, HH:mm
+    size:
+      selector: td:nth-last-child(4)
+    grabs:
+      selector: td:nth-last-child(3)
+    seeders:
+      selector: td:nth-last-child(2)
+    leechers:
+      selector: td:nth-last-child(1)
+    downloadvolumefactor:
+      case:
+        strong:contains("Freeleech!"): 0
+        '*': 1
+    uploadvolumefactor:
+      text: 1
+    minimumratio:
+      text: 0.6

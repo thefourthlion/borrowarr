@@ -1,0 +1,42 @@
+.Search {
+    .container {
+        max-width: 1400px;
+    }
+    
+    table {
+        th {
+            font-weight: 600;
+            color: var(--nextui-colors-foreground);
+            user-select: none;
+        }
+        
+        td {
+            color: var(--nextui-colors-foreground-600);
+        }
+        
+        tbody tr {
+            cursor: pointer;
+        }
+    }
+
+    // Responsive table wrapper
+    .overflow-x-auto {
+        &::-webkit-scrollbar {
+            height: 8px;
+        }
+        
+        &::-webkit-scrollbar-track {
+            background: var(--nextui-colors-content2);
+            border-radius: 4px;
+        }
+        
+        &::-webkit-scrollbar-thumb {
+            background: var(--nextui-colors-default-400);
+            border-radius: 4px;
+            
+            &:hover {
+                background: var(--nextui-colors-default-500);
+            }
+        }
+    }
+}

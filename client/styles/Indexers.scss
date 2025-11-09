@@ -1,0 +1,16 @@
+.Indexers {
+    .container {
+        max-width: 1400px;
+    }
+    
+    table {
+        th {
+            font-weight: 600;
+            color: var(--nextui-colors-foreground);
+        }
+        
+        td {
+            color: var(--nextui-colors-foreground-600);
+        }
+    }
+}

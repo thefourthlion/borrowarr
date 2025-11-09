@@ -1,0 +1,91 @@
+id: phoenixproject
+name: Phoenix Project
+description: Phoenix Project is a Private MacOS software tracker
+language: en-US
+type: private
+links:
+  - https://phoenixproject.app/
+caps:
+  categorymappings:
+    - id: 1
+      cat: PC/Mac
+      desc: Applications
+    - id: 2
+      cat: PC/Games
+      desc: Games
+    - id: 3
+      cat: PC/Mobile-iOS
+      desc: IOS Applications
+    - id: 4
+      cat: PC/Mobile-iOS
+      desc: IOS Games
+    - id: 5
+      cat: Other
+      desc: Graphics
+    - id: 6
+      cat: Audio
+      desc: Audio
+    - id: 7
+      cat: Other
+      desc: Tutorials
+    - id: 8
+      cat: Other
+      desc: Other
+  modes:
+    search:
+      - q
+    music-search:
+      - q
+search:
+  paths:
+    - path: torrents.php
+  rows:
+    selector: table.torrent_table tr.torrent:has(a[title="Download"])
+  fields:
+    category:
+      selector: a[href*="filter_cat"]
+      attribute: href
+      filters:
+        - name: regexp
+          args: \[(\d+?)\]
+    title:
+      selector: a[href^="torrents.php?id="]
+    details:
+      selector: a[href^="torrents.php?id="]
+      attribute: href
+    genre:
+      selector: div.tags a[href*="taglist"]
+    download:
+      selector: span > a[href^="torrents.php?action=download&id="]
+      attribute: href
+    poster:
+      selector: div.group_image > img
+      attribute: src
+    description:
+      text: '{{ .Result.genre }}'
+    date:
+      selector: span.time.tooltip
+      attribute: title
+      filters:
+        - name: append
+          args: ' +00:00'
+        - name: dateparse
+          args: MMM dd yyyy, HH:mm zzz
+    size:
+      selector: td.td_size
+    files:
+      selector: td.td_file_count
+    seeders:
+      selector: td.td_seeders
+    leechers:
+      selector: td.td_leechers
+    grabs:
+      selector: td.td_snatched
+    downloadvolumefactor:
+      case:
+        strong.torrent_label.tl_free: 0
+        '*': 1
+    uploadvolumefactor:
+      text: 1
+    minimumratio:
+      text: 0.6

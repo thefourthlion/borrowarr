@@ -1,0 +1,89 @@
+id: dreamingtree
+name: DreamingTree
+description: DreamingTree is a Semi-Private Torrent Tracker for DAVE MATHEWS MUSIC / BOOTLEGS
+language: en-US
+type: semi-private
+links:
+  - https://dreamingtree.org/
+caps:
+  categorymappings:
+    - id: 1
+      cat: Audio
+      desc: Music
+  modes:
+    search:
+      - q
+    music-search:
+      - q
+      - year
+      - genre
+search:
+  paths:
+    - path: torrents.php
+  rows:
+    selector: tr.torrent
+  fields:
+    category:
+      text: 1
+    title_artist:
+      selector: a[href^="artist.php?id="]
+      optional: true
+      filters:
+        - name: append
+          args: ' - '
+    title_name:
+      selector: a[href^="torrents.php?id="]
+    year:
+      selector: div.group_info.clear
+      filters:
+        - name: regexp
+          args: \[(\d{4})\]
+    title:
+      text: '{{ .Result.title_artist }}{{ .Result.title_name }} [{{ .Result.year }}]'
+    details:
+      selector: a[href^="torrents.php?id="]
+      attribute: href
+    poster:
+      selector: img
+      attribute: src
+      filters:
+        - name: replace
+          args:
+            - static/common/noartwork/music.png
+            - ''
+    genre:
+      selector: div.tags
+    description_info:
+      selector: div.torrent_info
+    description:
+      text: '{{ .Result.description_info }}</br>{{ .Result.genre }}'
+    download:
+      selector: span > a[href^="torrents.php?action=download&id="]
+      attribute: href
+    date:
+      selector: span.time.tooltip
+      filters:
+        - name: timeago
+    size:
+      selector: td.number_column.nobr
+    files:
+      selector: td:nth-last-child(6)
+    seeders:
+      selector: td:nth-last-child(2)
+    leechers:
+      selector: td:nth-last-child(1)
+    grabs:
+      selector: td:nth-last-child(3)
+    downloadvolumefactor:
+      case:
+        div.torrent_info:contains("Freeleech"): 0
+        div.torrent_info:contains("Neutral Leech"): 0
+        '*': 1
+    uploadvolumefactor:
+      case:
+        div.torrent_info:contains("Neutral Leech"): 0
+        '*': 1
+    minimumratio:
+      text: 0.6
+    minimumseedtime:
+      text: 259200

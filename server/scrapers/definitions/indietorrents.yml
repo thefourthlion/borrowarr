@@ -1,0 +1,76 @@
+id: indietorrents
+name: Indietorrents
+description: Indietorrents is a Private Music Torrent Tracker for independent MUSIC
+language: en-GB
+type: private
+links:
+  - https://www.indietorrents.com/
+caps:
+  categorymappings:
+    - id: 1
+      cat: Audio
+      desc: Music
+  modes:
+    search:
+      - q
+    music-search:
+      - q
+      - album
+      - artist
+search:
+  paths:
+    - path: torrents.php
+  rows:
+    selector: table#torrent_table > tbody > tr[class^="group"]
+    after: 2
+  fields:
+    category:
+      text: 1
+    details:
+      selector: a[href^="torrents.php?id="]:last-of-type
+      attribute: href
+    download:
+      selector: a[href^="torrents.php?action=download&id="]
+      attribute: href
+    _tags:
+      selector: div.tags
+    description:
+      selector: td.edition_info
+      filters:
+        - name: append
+          args: </br>{{ .Result._tags }}
+    files:
+      selector: td:nth-last-child(7)
+    date:
+      selector: td:nth-last-child(6) > span.time
+      attribute: title
+      filters:
+        - name: append
+          args: ' +00:00'
+        - name: dateparse
+          args: MMM d yyyy, HH:mm zzz
+    size:
+      selector: td:nth-last-child(5)
+    grabs:
+      selector: td:nth-last-child(4)
+    seeders:
+      selector: td:nth-last-child(3)
+    leechers:
+      selector: td:nth-last-child(2)
+    downloadvolumefactor:
+      case:
+        strong:contains("Freeleech!"): 0
+        '*': 1
+    uploadvolumefactor:
+      text: 1
+    title_details:
+      selector: td:nth-child(3)
+      remove: span, div.tags
+    title:
+      selector: a[href*="torrentid="]
+      remove: strong
+      filters:
+        - name: prepend
+          args: '{{ .Result.title_details }} '
+    minimumratio:
+      text: 0.6

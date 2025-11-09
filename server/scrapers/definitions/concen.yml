@@ -1,0 +1,40 @@
+id: concen
+name: ConCen
+description: ConCen (Conspiracy Central) is a Private conspiracy related torrent index
+language: en-US
+type: private
+links:
+  - https://concen.org/
+search:
+  paths:
+    - path: torrents
+  rows:
+    selector: table  > tbody > tr:has(td.views-field-title)
+  fields:
+    title:
+      selector: td.views-field-title a
+    category:
+      text: 1
+    details:
+      selector: td.views-field-title a
+      attribute: href
+    download:
+      selector: td.views-field-field-torrent a
+      attribute: href
+    magnet:
+      selector: td.views-field-name a
+      attribute: href
+    date:
+      selector: td.views-field-created
+    size:
+      selector: td.views-field-size
+    seeders:
+      selector: td.views-field-seeds
+    leechers:
+      selector: td.views-field-peers
+    grabs:
+      selector: td.views-field-completed
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1

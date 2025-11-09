@@ -1,0 +1,54 @@
+id: filemood
+name: FileMood
+description: FileMood is a Public BitTorrent DHT search engine.
+language: en-US
+type: public
+links:
+  - https://filemood.com/
+search:
+  paths:
+    - path: result
+      followredirect: true
+  rows:
+    selector: table > tbody > tr:has(a.btn-success)
+  fields:
+    category:
+      text: Other
+    title:
+      selector: a
+      attribute: title
+    details:
+      selector: a
+      attribute: href
+    infohash:
+      selector: a
+      attribute: href
+      filters:
+        - name: regexp
+          args: ([A-F|a-f|0-9]{40})
+    size:
+      selector: td.dn-size
+    date:
+      text: now
+    seeders:
+      selector: td.dn-status
+      optional: true
+      default: 0
+      filters:
+        - name: split
+          args:
+            - /
+            - 0
+    leechers:
+      selector: td.dn-status
+      optional: true
+      default: 0
+      filters:
+        - name: split
+          args:
+            - /
+            - 1
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1

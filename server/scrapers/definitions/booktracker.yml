@@ -1,0 +1,49 @@
+id: booktracker
+name: BookTracker
+description: BookTracker is a RUSSIAN Semi-Private Torrent Tracker for EBOOKS
+language: ru-RU
+type: semi-private
+links:
+  - https://booktracker.org/
+caps:
+  categorymappings:
+    - id: 1
+      cat: Books/EBook
+      desc: Ebooks
+  modes:
+    search:
+      - q
+    book-search:
+      - q
+search:
+  paths:
+    - path: tracker.php
+  rows:
+    selector: tr[id^="tor_"]:has(a[href^="./download.php?id="])
+    filters:
+      - name: andmatch
+  fields:
+    category:
+      text: 1
+    title:
+      selector: a.tLink
+    details:
+      selector: a.tLink
+      attribute: href
+    download:
+      selector: a[href^="./download.php?id="]
+      attribute: href
+    size:
+      selector: td:nth-child(6) > u
+    seeders:
+      selector: td.seedmed > b
+    leechers:
+      selector: td.leechmed > b
+    grabs:
+      selector: td:nth-child(9)
+    date:
+      selector: td:last-child > u
+    downloadvolumefactor:
+      text: 1
+    uploadvolumefactor:
+      text: 1

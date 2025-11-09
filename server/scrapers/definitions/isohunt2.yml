@@ -1,0 +1,82 @@
+id: isohunt2
+name: Isohunt2
+description: Isohunt2 is a Public torrent search engine for MOVIES / TV / GENERAL
+language: en-US
+type: public
+links:
+  - https://isohunt.sh/
+caps:
+  categorymappings:
+    - id: 1
+      cat: TV/Anime
+      desc: Anime
+    - id: 2
+      cat: PC/0day
+      desc: Software
+    - id: 3
+      cat: PC/Games
+      desc: Games
+    - id: 4
+      cat: XXX
+      desc: Adult
+    - id: 5
+      cat: Movies
+      desc: Movies
+    - id: 6
+      cat: Audio
+      desc: Music
+    - id: 7
+      cat: Other
+      desc: Other
+    - id: 8
+      cat: TV
+      desc: Series & TV
+    - id: 9
+      cat: Books
+      desc: Books
+  modes:
+    search:
+      - q
+    tv-search:
+      - q
+      - season
+      - ep
+    movie-search:
+      - q
+    music-search:
+      - q
+    book-search:
+      - q
+search:
+  paths:
+    - path: torrents
+  rows:
+    selector: table > tbody > tr[data-key="0"]
+  fields:
+    categorydesc:
+      selector: a[href^="/torrents/?iht="]
+    title:
+      selector: td.title-row > a[href^="/"] > span
+    details:
+      selector: td.title-row > a[href^="/"]
+      attribute: href
+    download:
+      selector: td.title-row > a[href^="/"]
+      attribute: href
+    size:
+      selector: td.size-row
+    seeders:
+      selector: td.sn
+    date:
+      selector: td.date-row
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1
+download:
+  selectors:
+    - selector: a.btn-magnet
+      attribute: href
+      filters:
+        - name: querystring
+          args: url

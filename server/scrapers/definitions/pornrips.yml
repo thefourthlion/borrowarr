@@ -1,0 +1,48 @@
+id: pornrips
+name: PornRips
+description: PornRips is a Public site for 3X
+language: en-US
+type: public
+links:
+  - https://pornrips.to/
+search:
+  paths:
+    - path: /
+  rows:
+    selector: article:has(a)
+    filters:
+      - name: andmatch
+  fields:
+    category:
+      text: XXX
+    title:
+      selector: .entry-title
+    details:
+      selector: .entry-title > a
+      attribute: href
+    download:
+      selector: .entry-title > a
+      attribute: href
+    poster:
+      selector: img
+      attribute: data-src
+    date:
+      selector: time
+      attribute: datetime
+    size:
+      selector: p
+      filters:
+        - name: regexp
+          args: (\d+ [M|G]i?B)
+    seeders:
+      text: 1
+    leechers:
+      text: 1
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1
+download:
+  selectors:
+    - selector: a[href*="/torrents/"]
+      attribute: href

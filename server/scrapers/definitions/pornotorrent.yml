@@ -1,0 +1,58 @@
+id: pornotorrent
+name: PornoTorrent
+description: PornoTorrent is a SPANISH Public Torrent Tracker for 3X
+language: en-US
+type: public
+links:
+  - https://www.pornotorrent.eu/
+caps:
+  categorymappings:
+    - id: XXX
+      cat: XXX
+      desc: XXX
+  modes:
+    search:
+      - q
+search:
+  paths:
+    - path: /
+  rows:
+    selector: ul.lista-filmes > li
+    filters:
+      - name: andmatch
+  fields:
+    category:
+      text: XXX
+    title:
+      selector: a
+      attribute: title
+    details:
+      selector: a
+      attribute: href
+    download:
+      selector: a
+      attribute: href
+    poster:
+      selector: img
+      attribute: data-lazy-src
+    date:
+      text: now
+    size:
+      text: 512 MB
+    seeders:
+      text: 1
+    leechers:
+      text: 1
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1
+download:
+  selectors:
+    - selector: a.button_link
+      attribute: href
+      filters:
+        - name: replace
+          args:
+            - ////
+            - //

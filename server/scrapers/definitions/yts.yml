@@ -1,0 +1,31 @@
+---
+id: yts
+name: YTS
+description: "YTS is a Public torrent site specializing in high-quality movie releases with small file sizes"
+language: en-US
+type: public
+encoding: UTF-8
+links:
+  - https://yts.mx/
+  - https://yts.am/
+  - https://yts.ag/
+
+caps:
+  categorymappings:
+    - {id: 2000, cat: Movies, desc: "Movies"}
+
+  modes:
+    search: [q]
+    movie-search: [q, imdbid]
+
+# YTS uses JSON API, not HTML scraping
+api:
+  baseUrl: https://yts.mx/api/v2
+  searchPath: /list_movies.json
+  method: GET
+  params:
+    query_term: "{{ .Keywords }}"
+    limit: 50
+    sort_by: seeds
+    order_by: desc
+

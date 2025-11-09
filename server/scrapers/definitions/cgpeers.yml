@@ -1,0 +1,99 @@
+id: cgpeers
+name: CGPeers
+description: CGPeers is a Private Torrent Tracker for GRAPHICS SOFTWARE / TUTORIALS / ETC
+language: en-US
+type: private
+links:
+  - https://cgpeers.to/
+caps:
+  categorymappings:
+    - id: 1
+      cat: PC/ISO
+      desc: Applications
+    - id: 8
+      cat: PC/ISO
+      desc: Audio
+    - id: 7
+      cat: Other
+      desc: Game Development
+    - id: 5
+      cat: Other
+      desc: Materials
+    - id: 6
+      cat: Other/Misc
+      desc: Miscellaneous
+    - id: 4
+      cat: Other
+      desc: Models
+    - id: 2
+      cat: PC/0day
+      desc: Plugins
+    - id: 3
+      cat: Other
+      desc: Tutorials
+    - id: 9
+      cat: Other
+      desc: Web Development
+  modes:
+    search:
+      - q
+search:
+  paths:
+    - path: torrents.php
+  rows:
+    selector: table#torrent_table > tbody > tr:has(a[href*="action=download"])
+  fields:
+    download:
+      selector: a[href^="/torrents.php?action=download&id="]
+      attribute: href
+    title:
+      selector: a[href^="/torrents.php?id="]
+    category:
+      selector: a[href*="filter_cat"]
+      attribute: href
+      filters:
+        - name: regexp
+          args: (\d+)]=1
+    details:
+      selector: a[href^="/torrents.php?id="]
+      attribute: href
+    poster:
+      selector: td:nth-child(2) > script
+      filters:
+        - name: regexp
+          args: src=(.*?)>
+        - name: re_replace
+          args:
+            - '[\\"]'
+            - ''
+        - name: re_replace
+          args:
+            - /static/common/noartwork/.+
+            - ''
+    files:
+      selector: td:nth-child(3)
+    date:
+      selector: td:nth-child(6) > span
+      attribute: title
+      filters:
+        - name: dateparse
+          args: MMM dd yyyy, HH:mm
+    size:
+      selector: td:nth-child(7)
+    grabs:
+      selector: td:nth-child(8)
+    seeders:
+      selector: td:nth-child(9)
+    leechers:
+      selector: td:nth-child(10)
+    downloadvolumefactor:
+      case:
+        i.unlimited_leech: 0
+        i.sitewide_leech: 0
+        img[alt="Freeleech"]: 0
+        '*': 1
+    uploadvolumefactor:
+      case:
+        span.icon[title*="DoubleSeed"]: 2
+        img[alt="DoubleSeed"]: 2
+        '*': 1

@@ -1,0 +1,276 @@
+@use "./Variables.scss" as *;
+
+.Footer {
+  width: 100%;
+  padding: 30px 20px 15px;
+  margin-top: 40px;
+  
+
+  .footer-main {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+  }
+
+  .footer-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      .brand-text {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: var(--foreground);
+        opacity: 1;
+      }
+    }
+
+    .company-slogan {
+      font-size: 0.9rem;
+      color: var(--foreground);
+      margin: 0;
+      opacity: 0.9;
+    }
+  }
+
+  .footer-navigation {
+    display: flex;
+    gap: 30px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+
+    .nav-link {
+      font-size: 0.85rem;
+      color: var(--foreground);
+      text-decoration: none;
+      transition: color 0.2s ease;
+      opacity: 0.9;
+      white-space: nowrap;
+
+      &:hover {
+        color: var(--primary);
+        opacity: 1;
+      }
+    }
+  }
+
+  .footer-divider {
+    width: 100%;
+    border: 0;
+    height: 1px;
+    margin: 25px 0;
+    border-radius: 0;
+  }
+
+  .footer-bottom {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+
+    .socials {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 20px;
+
+      .social-icon {
+        width: 40px !important;
+        height: 40px !important;
+        border-radius: 50%;
+        border: 1px solid var(--foreground);
+        opacity: 1;
+        transition: opacity 0.2s ease;
+
+        &:hover {
+          opacity: 0.8;
+        }
+      }
+    }
+
+    .copyright {
+      font-size: 0.8rem;
+      color: var(--foreground);
+      margin: 0;
+      opacity: 0.9;
+    }
+  }
+
+  // Tablet and smaller desktop
+  @media only screen and (max-width: 1024px) {
+    padding: 25px 20px 15px;
+    margin-top: 30px;
+
+    .footer-main {
+      gap: 40px;
+      margin-bottom: 15px;
+    }
+
+    .footer-navigation {
+      gap: 40px;
+    }
+  }
+
+  // Mobile landscape and tablet portrait
+  @media only screen and (max-width: 768px) {
+    padding: 20px 15px 12px;
+    margin-top: 25px;
+
+    .footer-main {
+      flex-direction: column;
+      gap: 25px;
+      margin-bottom: 15px;
+      align-items: center;
+    }
+
+    .footer-brand {
+      align-items: center;
+      text-align: center;
+
+      .brand-logo {
+        justify-content: center;
+      }
+    }
+
+    .footer-navigation {
+      gap: 25px;
+      justify-content: center;
+      width: 100%;
+
+      .nav-link {
+        font-size: 0.8rem;
+      }
+    }
+
+    .footer-bottom {
+      gap: 15px;
+
+      .socials {
+        gap: 15px;
+
+        .social-icon {
+          width: 35px !important;
+          height: 35px !important;
+        }
+      }
+
+      .copyright {
+        font-size: 0.75rem;
+      }
+    }
+  }
+
+  // Mobile portrait
+  @media only screen and (max-width: 480px) {
+    padding: 18px 10px 12px;
+    margin-top: 20px;
+
+    .footer-main {
+      gap: 20px;
+      margin-bottom: 12px;
+      align-items: center;
+    }
+
+    .footer-brand {
+      align-items: center;
+      text-align: center;
+
+      .brand-logo {
+        justify-content: center;
+
+        .brand-text {
+          font-size: 1.3rem;
+        }
+      }
+
+      .company-slogan {
+        font-size: 0.8rem;
+      }
+    }
+
+    .footer-navigation {
+      flex-direction: row;
+      gap: 15px;
+      width: 100%;
+      justify-content: center;
+      flex-wrap: wrap;
+
+      .nav-link {
+        font-size: 0.75rem;
+      }
+    }
+
+    .footer-bottom {
+      gap: 12px;
+
+      .socials {
+        gap: 12px;
+
+        .social-icon {
+          width: 32px !important;
+          height: 32px !important;
+        }
+      }
+
+      .copyright {
+        font-size: 0.7rem;
+        text-align: center;
+      }
+    }
+  }
+
+  // Very small screens
+  @media only screen and (max-width: 320px) {
+    padding: 15px 8px 10px;
+    margin-top: 15px;
+
+    .footer-brand {
+      .brand-logo {
+        .brand-text {
+          font-size: 1.2rem;
+        }
+      }
+
+      .company-slogan {
+        font-size: 0.75rem;
+      }
+    }
+
+    .footer-navigation {
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+
+      .nav-link {
+        font-size: 0.7rem;
+      }
+    }
+
+    .footer-bottom {
+      .socials {
+        gap: 10px;
+
+        .social-icon {
+          width: 28px !important;
+          height: 28px !important;
+        }
+      }
+
+      .copyright {
+        font-size: 0.65rem;
+      }
+    }
+  }
+}
+

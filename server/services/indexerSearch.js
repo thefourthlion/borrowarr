@@ -465,15 +465,26 @@ async function searchIndexer(indexer, query, categoryIds = [], limit = 100, offs
         
         if (matchedScraper) {
           console.log(`[${indexer.name}] ✨ Using custom scraper: ${matchedScraper.name}`);
-          const scraperResult = await scraperManager.search(matchedScraper.id, query, { categoryIds });
+          
+          // Extract settings from indexer (if stored in a settings field)
+          // For now, we'll use defaults from the definition
+          // In the future, indexer settings could be stored and passed here
+          const settings = {}; // Can be populated from indexer.settings if available
+          
+          const scraperResult = await scraperManager.search(matchedScraper.id, query, { 
+            categoryIds,
+            settings: settings
+          });
           
           if (scraperResult.success) {
             console.log(`[${indexer.name}] ✅ Scraper found ${scraperResult.results.length} results`);
-            // Add priority to scraper results
+            // Add priority and indexer ID to scraper results
             const resultsWithPriority = scraperResult.results.map((result) => ({
               ...result,
+              indexerId: indexer.id, // Set the actual indexer ID from database
               indexerPriority: indexer.priority || 25,
             }));
+            console.log(`[${indexer.name}] 📦 Returning ${resultsWithPriority.length} results to search service`);
             return { results: resultsWithPriority, error: null };
           } else {
             console.log(`[${indexer.name}] ⚠️ Scraper failed: ${scraperResult.error}, falling back to API method`);
@@ -482,6 +493,7 @@ async function searchIndexer(indexer, query, categoryIds = [], limit = 100, offs
         }
       } catch (scraperError) {
         console.log(`[${indexer.name}] ⚠️ Scraper error: ${scraperError.message}, falling back to API method`);
+        console.error(`[${indexer.name}] Scraper error stack:`, scraperError.stack);
         // Fall through to try API method
       }
     }
@@ -843,7 +855,10 @@ async function searchIndexers(indexers, query, categoryIds = [], limit = 100, of
       
       // Only add valid results
       if (searchResults && Array.isArray(searchResults)) {
+        console.log(`[SearchIndexers] 📥 Adding ${searchResults.length} results from ${sortedIndexers[index].name}`);
         allResults.push(...searchResults);
+      } else {
+        console.log(`[SearchIndexers] ⚠️ Invalid results from ${sortedIndexers[index].name}:`, typeof searchResults, Array.isArray(searchResults));
       }
       
       if (error) {

@@ -15,6 +15,7 @@ class FilterEngine {
       'prepend': this.prependFilter.bind(this),
       'split': this.splitFilter.bind(this),
       'regexp': this.regexpFilter.bind(this),
+      're_replace': this.re_replaceFilter.bind(this),
       
       // Number filters
       'parseNumber': this.parseNumberFilter.bind(this),
@@ -130,6 +131,22 @@ class FilterEngine {
     }
   }
 
+  /**
+   * Re_replace filter - regexp replace (re_replace(pattern, replacement))
+   */
+  re_replaceFilter(value, args) {
+    const [pattern, replacement] = args;
+    if (typeof value !== 'string') return value;
+    
+    try {
+      const regex = new RegExp(pattern, 'g');
+      return value.replace(regex, replacement || '');
+    } catch (error) {
+      console.error(`Re_replace filter error: ${error.message}`);
+      return value;
+    }
+  }
+
   // ==================== NUMBER FILTERS ====================
 
   /**
@@ -219,14 +236,14 @@ class FilterEngine {
       return now.subtract(1, 'month').toISOString();
     }
 
-    // Parse relative time (e.g., "2 hours ago", "3 days ago", "8 months ago")
+    // Parse relative time (e.g., "2 hours ago", "3 days ago", "8 months ago", "11 mo ago")
     const patterns = [
       { regex: /(\d+)\s*(?:second|sec|s)(?:s)?\s*ago/i, unit: 'seconds' },
       { regex: /(\d+)\s*(?:minute|min|m)(?:s)?\s*ago/i, unit: 'minutes' },
       { regex: /(\d+)\s*(?:hour|hr|h)(?:s)?\s*ago/i, unit: 'hours' },
       { regex: /(\d+)\s*(?:day|d)(?:s)?\s*ago/i, unit: 'days' },
       { regex: /(\d+)\s*(?:week|wk|w)(?:s)?\s*ago/i, unit: 'weeks' },
-      { regex: /(\d+)\s*(?:month|mon|mo)(?:s)?\s*ago/i, unit: 'months' },
+      { regex: /(\d+)\s*(?:month|mon|mo)\s*ago/i, unit: 'months' }, // Handle "mo" abbreviation
       { regex: /(\d+)\s*(?:year|yr|y)(?:s)?\s*ago/i, unit: 'years' },
     ];
 

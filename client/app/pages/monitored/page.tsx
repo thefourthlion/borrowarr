@@ -102,6 +102,8 @@ const Monitored = () => {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<Set<number>>(new Set());
   const [deletingSeries, setDeletingSeries] = useState<Set<number>>(new Set());
+  const [requesting, setRequesting] = useState<Set<number>>(new Set());
+  const [requestingSeries, setRequestingSeries] = useState<Set<number>>(new Set());
   
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -202,6 +204,212 @@ const Monitored = () => {
       alert("Failed to remove series from monitoring");
     } finally {
       setDeletingSeries((prev) => {
+        const next = new Set(prev);
+        next.delete(seriesId);
+        return next;
+      });
+    }
+  };
+
+  const handleRequestMovie = async (movie: MonitoredMovie) => {
+    if (!user) return;
+
+    const movieId = movie.id;
+    setRequesting((prev) => new Set(prev).add(movieId));
+
+    try {
+      const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : '';
+      
+      // Search for torrents
+      const torrentResponse = await axios.get(
+        `${API_BASE_URL}/api/TMDB/movie/${movie.tmdbId}/torrents`,
+        {
+          params: {
+            title: movie.title,
+            year: year,
+            categoryIds: '2000',
+          },
+          timeout: 30000,
+        }
+      );
+
+      if (!torrentResponse.data.success || torrentResponse.data.results.length === 0) {
+        throw new Error(`No torrents found for ${movie.title}`);
+      }
+
+      // Filter torrents by quality profile
+      let filteredTorrents = torrentResponse.data.results || [];
+      if (movie.qualityProfile !== "any") {
+        filteredTorrents = filteredTorrents.filter((torrent: TorrentResult) => {
+          const title = torrent.title.toLowerCase();
+          switch (movie.qualityProfile) {
+            case "hd-720p-1080p":
+              return title.includes("720p") || title.includes("1080p");
+            case "hd-720p":
+              return title.includes("720p");
+            case "hd-1080p":
+              return title.includes("1080p");
+            case "sd":
+              return !title.includes("720p") && !title.includes("1080p") && !title.includes("2160p") && !title.includes("4k");
+            case "ultra-hd":
+              return title.includes("2160p") || title.includes("4k") || title.includes("uhd");
+            default:
+              return true;
+          }
+        });
+      }
+
+      if (filteredTorrents.length === 0) {
+        throw new Error(`No torrents found matching quality profile: ${movie.qualityProfile}`);
+      }
+
+      // Get the best torrent (highest priority indexer, then highest seeders)
+      const bestTorrent = filteredTorrents.reduce((best: any, current: any) => {
+        const bestPriority = best.indexerPriority ?? 25;
+        const currentPriority = current.indexerPriority ?? 25;
+        if (currentPriority < bestPriority) return current;
+        if (currentPriority > bestPriority) return best;
+        
+        const bestSeeders = best.seeders || 0;
+        const currentSeeders = current.seeders || 0;
+        return currentSeeders > bestSeeders ? current : best;
+      });
+
+      // Download the torrent
+      const downloadResponse = await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, {
+        downloadUrl: bestTorrent.downloadUrl,
+        protocol: bestTorrent.protocol,
+      });
+
+      if (downloadResponse.data.success) {
+        // Update movie status
+        await axios.put(`${API_BASE_URL}/api/MonitoredMovies/${movie.id}`, {
+          status: "downloading",
+          downloadedTorrentId: bestTorrent.id,
+          downloadedTorrentTitle: bestTorrent.title,
+        });
+
+        // Refresh movies list
+        await fetchMonitoredContent();
+        alert(`Successfully requested download for ${movie.title}`);
+      } else {
+        throw new Error(downloadResponse.data.error || "Failed to download");
+      }
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error || error.message || "Request failed";
+      alert(`Error: ${errorMsg}`);
+    } finally {
+      setRequesting((prev) => {
+        const next = new Set(prev);
+        next.delete(movieId);
+        return next;
+      });
+    }
+  };
+
+  const handleRequestSeries = async (series: MonitoredSeries) => {
+    if (!user) return;
+
+    const seriesId = series.id;
+    setRequestingSeries((prev) => new Set(prev).add(seriesId));
+
+    try {
+      const title = series.title;
+      const year = series.firstAirDate ? new Date(series.firstAirDate).getFullYear() : '';
+
+      // Get TV show details including all seasons
+      const tvDetailsResponse = await axios.get(`${API_BASE_URL}/api/TMDB/tv/${series.tmdbId}`);
+      if (!tvDetailsResponse.data.success) {
+        throw new Error("Failed to fetch TV show details");
+      }
+
+      const tvDetails = tvDetailsResponse.data.tv;
+      const numberOfSeasons = tvDetails.number_of_seasons || 0;
+
+      // Fetch all seasons with episodes
+      const seasonPromises = [];
+      for (let i = 1; i <= numberOfSeasons; i++) {
+        seasonPromises.push(
+          axios.get(`${API_BASE_URL}/api/TMDB/tv/${series.tmdbId}/season/${i}`)
+            .then(res => res.data.success ? res.data.season : null)
+            .catch(() => null)
+        );
+      }
+
+      const seasons = (await Promise.all(seasonPromises)).filter(s => s !== null);
+
+      // Download each episode
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const season of seasons) {
+        if (!season.episodes) continue;
+
+        for (const episode of season.episodes) {
+          try {
+            // Search for torrents for this episode
+            const torrentResponse = await axios.get(
+              `${API_BASE_URL}/api/TMDB/tv/${series.tmdbId}/torrents`,
+              {
+                params: {
+                  title: title,
+                  season: season.season_number,
+                  episode: episode.episode_number,
+                  year: year,
+                  categoryIds: '5000',
+                },
+                timeout: 30000,
+              }
+            );
+
+            if (torrentResponse.data.success && torrentResponse.data.results.length > 0) {
+              // Get the best torrent
+              const bestTorrent = torrentResponse.data.results.reduce((best: any, current: any) => {
+                const bestPriority = best.indexerPriority ?? 25;
+                const currentPriority = current.indexerPriority ?? 25;
+                if (currentPriority < bestPriority) return current;
+                if (currentPriority > bestPriority) return best;
+                
+                const bestSeeders = best.seeders || 0;
+                const currentSeeders = current.seeders || 0;
+                return currentSeeders > bestSeeders ? current : best;
+              });
+
+              // Download the torrent
+              await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, {
+                downloadUrl: bestTorrent.downloadUrl,
+                protocol: bestTorrent.protocol,
+              });
+
+              successCount++;
+            } else {
+              failCount++;
+            }
+
+            // Small delay between downloads
+            await new Promise(resolve => setTimeout(resolve, 500));
+          } catch (error) {
+            failCount++;
+            console.error(`Failed to download episode ${season.season_number}x${episode.episode_number}:`, error);
+          }
+        }
+      }
+
+      // Update series status
+      if (successCount > 0) {
+        await axios.put(`${API_BASE_URL}/api/MonitoredSeries/${series.id}`, {
+          status: "downloading",
+        });
+      }
+
+      // Refresh series list
+      await fetchMonitoredContent();
+      alert(`Series requested!\n\nSuccessfully queued: ${successCount} episodes\nFailed: ${failCount} episodes`);
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error || error.message || "Request failed";
+      alert(`Error: ${errorMsg}`);
+    } finally {
+      setRequestingSeries((prev) => {
         const next = new Set(prev);
         next.delete(seriesId);
         return next;
@@ -652,13 +860,11 @@ const Monitored = () => {
                 : (movieItem?.releaseDate ? new Date(movieItem.releaseDate).getFullYear() : null);
               
               return (
-              <Card 
-                  key={item.id}
-                  className="card-interactive group border-2 border-secondary/10 hover:border-secondary/30 transition-all duration-200"
-                >
+              <div key={item.id} className="flex flex-col">
+                  {/* Image Section */}
                   <div 
                     className="relative aspect-[2/3] w-full overflow-hidden rounded-lg cursor-pointer"
-                    onClick={() => {
+                    onClick={(e) => {
                       if (isSeries && seriesItem) {
                         // Handle series click - could open series modal or do nothing for now
                       } else if (movieItem) {
@@ -670,7 +876,7 @@ const Monitored = () => {
                       <img
                         src={item.posterUrl}
                         alt={item.title}
-                        className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-80"
+                        className="w-full h-full object-cover"
                       />
                     ) : (
                       <div className="w-full h-full bg-content2 flex items-center justify-center">
@@ -716,20 +922,44 @@ const Monitored = () => {
                     <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/95 via-black/80 to-transparent">
                       <h3 className="font-semibold text-xs sm:text-sm text-white line-clamp-2 mb-0.5">
                         {item.title}
-                    </h3>
+                      </h3>
                       {year && (
                         <p className="text-[10px] sm:text-xs text-white/70">{year}</p>
                       )}
                     </div>
-                      </div>
+                  </div>
 
-                  {/* Remove Button */}
-                  <div className="mt-2 p-2" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        size="sm"
-                        variant="flat"
-                        color="danger"
-                        startContent={<Trash2 size={14} />}
+                  {/* Action Buttons */}
+                  <div className="mt-2 space-y-2">
+                    {/* Request Button */}
+                    <Button
+                      size="sm"
+                      variant="flat"
+                      color="secondary"
+                      startContent={<Search size={14} />}
+                      onPress={() => {
+                        if (isSeries && seriesItem) {
+                          handleRequestSeries(seriesItem);
+                        } else if (movieItem) {
+                          handleRequestMovie(movieItem);
+                        }
+                      }}
+                      isLoading={
+                        isSeries 
+                          ? requestingSeries.has(item.id)
+                          : requesting.has(item.id)
+                      }
+                      className="w-full text-xs h-7 sm:h-8"
+                    >
+                      Request
+                    </Button>
+                    
+                    {/* Remove Button */}
+                    <Button
+                      size="sm"
+                      variant="flat"
+                      color="danger"
+                      startContent={<Trash2 size={14} />}
                       onPress={() => {
                         if (isSeries && seriesItem) {
                           handleRemoveSeries(seriesItem.id);
@@ -742,12 +972,12 @@ const Monitored = () => {
                           ? deletingSeries.has(item.id)
                           : deleting.has(item.id)
                       }
-                        className="w-full text-xs h-7 sm:h-8"
-                      >
-                        Remove
-                      </Button>
-                    </div>
-              </Card>
+                      className="w-full text-xs h-7 sm:h-8"
+                    >
+                      Remove
+                    </Button>
+                  </div>
+              </div>
               );
             })}
           </div>
@@ -960,11 +1190,10 @@ const Monitored = () => {
                         </div>
                         <Button
                           color="secondary"
-                          className="btn-glow"
+                          className="btn-glow w-full sm:w-auto text-xs sm:text-sm"
                           onPress={handleUpdateSettings}
                           isLoading={updatingSettings}
                           size="sm"
-                          className="w-full sm:w-auto text-xs sm:text-sm"
                         >
                           Update Settings
                         </Button>
@@ -1008,7 +1237,7 @@ const Monitored = () => {
                                 <Button
                                   size="sm"
                                   color={downloadSuccess.has(torrent.id) ? "success" : downloadError.has(torrent.id) ? "danger" : "secondary"}
-                                  className={downloadSuccess.has(torrent.id) ? "" : "btn-glow"}
+                                  className={downloadSuccess.has(torrent.id) ? "text-xs sm:text-sm flex-shrink-0" : "btn-glow text-xs sm:text-sm flex-shrink-0"}
                                   startContent={
                                     downloadSuccess.has(torrent.id) ? (
                                       <Check size={16} />
@@ -1019,7 +1248,6 @@ const Monitored = () => {
                                   onPress={() => handleDownloadTorrent(torrent)}
                                   isLoading={downloading.has(torrent.id)}
                                   isDisabled={downloading.has(torrent.id) || !torrent.downloadUrl}
-                                  className="text-xs sm:text-sm flex-shrink-0"
                                 >
                                   {downloadSuccess.has(torrent.id) ? "Downloaded" : "Download"}
                                 </Button>

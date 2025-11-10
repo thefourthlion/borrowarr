@@ -67,6 +67,11 @@ class ScraperManager {
       };
     }
     
+    // Ensure settings are passed to scraper
+    if (options.settings) {
+      scraper.setConfig(options.settings);
+    }
+    
     return await scraper.search(query, options);
   }
 

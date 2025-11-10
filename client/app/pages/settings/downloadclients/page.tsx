@@ -29,6 +29,7 @@ import {
   Trash2,
   Clock,
   XCircle,
+  Globe,
 } from "lucide-react";
 import axios from "axios";
 import "../../../../styles/DownloadClients.scss";
@@ -288,6 +289,40 @@ const DownloadClients = () => {
     return <CheckCircle2 className="w-5 h-5 text-success" />;
   };
 
+  const getWebInterfaceUrl = (client: DownloadClient): string | null => {
+    if (!client.settings) return null;
+    
+    // Try to get host/hostname and port from settings
+    const host = client.settings.host || client.settings.hostname;
+    const port = client.settings.port;
+    const url = client.settings.url;
+    
+    // If we have a direct URL, use it
+    if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+      return url;
+    }
+    
+    // If we have host and port, build the URL
+    if (host && port) {
+      // Check if host is an IP address or hostname
+      const isIP = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);
+      if (isIP || host.includes('.')) {
+        return `http://${host}:${port}`;
+      }
+    }
+    
+    // If we only have host, try common ports
+    if (host && !port) {
+      const isIP = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);
+      if (isIP || host.includes('.')) {
+        // Try common default ports
+        return `http://${host}:8080`;
+      }
+    }
+    
+    return null;
+  };
+
   const renderField = (field: any, definition: AvailableDownloadClient) => {
     const value = formData.settings?.[field.name] ?? field.defaultValue ?? "";
 
@@ -475,21 +510,42 @@ const DownloadClients = () => {
                   <Card 
                     key={client.id} 
                 className="card-interactive group"
-                isPressable
-                onPress={() => handleEditClient(client)}
+                isPressable={false}
                   >
                 <CardHeader className="flex-col items-start pb-2 gap-2">
                   <div className="flex items-start gap-2 sm:gap-3 w-full">
                     {getStatusIcon(client)}
                           <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-sm sm:text-base lg:text-lg line-clamp-1 group-hover:text-secondary transition-colors">
+                      <h3 className="font-semibold text-sm sm:text-base lg:text-lg line-clamp-1">
                         {client.name}
                       </h3>
                       <p className="text-[10px] sm:text-xs text-foreground/60 line-clamp-1 mt-0.5">
                         {client.implementation}
                       </p>
                           </div>
-                    <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-foreground/40 group-hover:text-secondary group-hover:translate-x-1 transition-all flex-shrink-0" />
+
+                          {getWebInterfaceUrl(client) && (
+                        <a
+                          href={getWebInterfaceUrl(client) || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-7 h-7 min-w-0 flex items-center justify-center rounded-lg text-secondary hover:bg-secondary/10 transition-colors"
+                          title="Open Web Interface"
+                        >
+                          <Globe size={14} />
+                        </a>
+                      )}
+                    <Button
+                      isIconOnly
+                      size="sm"
+                      variant="light"
+                      color="secondary"
+                      onPress={() => handleEditClient(client)}
+                      title="Edit Client"
+                      className="min-w-0 w-7 h-7"
+                    >
+                      <Settings size={14} className="text-secondary" />
+                    </Button>
                         </div>
                   <div className="flex flex-wrap gap-1.5 w-full">
                     {!client.enabled && (
@@ -547,31 +603,39 @@ const DownloadClients = () => {
                   </div>
                               )}
                             </div>
-                    <Switch
-                              size="sm"
-                      color="secondary"
-                      isSelected={client.enabled}
-                      onValueChange={async (enabled) => {
-                        try {
-                          await axios.put(`${API_BASE_URL}/api/DownloadClients/update/${client.id}`, {
-                            ...client,
-                            enabled,
-                          });
-                          fetchClients();
-                        } catch (error) {
-                          console.error("Error updating client:", error);
-                        }
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      className="flex-shrink-0"
-                    />
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                     
+
+                      
+                      <Switch
+                        size="sm"
+                        color="secondary"
+                        isSelected={client.enabled}
+                        onValueChange={async (enabled) => {
+                          try {
+                            await axios.put(`${API_BASE_URL}/api/DownloadClients/update/${client.id}`, {
+                              ...client,
+                              enabled,
+                            });
+                            fetchClients();
+                          } catch (error) {
+                            console.error("Error updating client:", error);
+                          }
+                        }}
+                        className="flex-shrink-0"
+                      />
+                    </div>
                       </div>
                         </CardBody>
                       </Card>
                     ))}
                   </div>
             )}
+
+            
       </div>
+
+      
 
         {/* Add Download Client Modal */}
         <Modal

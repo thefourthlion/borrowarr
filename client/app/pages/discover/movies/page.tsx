@@ -14,10 +14,13 @@ import {
   Filter,
   X,
   Calendar,
+  Download,
+  Check,
 } from "lucide-react";
 import axios from "axios";
 import { useDebounce } from "@/hooks/useDebounce";
 import AddMovieModal from "@/components/AddMovieModal";
+import { useAuth } from "@/context/AuthContext";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
 
@@ -49,6 +52,7 @@ interface Genre {
 const MoviesPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useAuth();
   const [media, setMedia] = useState<TMDBMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -60,6 +64,10 @@ const MoviesPage = () => {
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<TMDBMedia | null>(null);
+  
+  // Download state
+  const [downloading, setDownloading] = useState<Set<number>>(new Set());
+  const [downloadSuccess, setDownloadSuccess] = useState<Set<number>>(new Set());
   
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -283,6 +291,99 @@ const MoviesPage = () => {
     setIsModalOpen(true);
   };
 
+  const handleQuickDownload = async (item: TMDBMedia, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!user) {
+      alert("Please log in to download movies");
+      return;
+    }
+
+    const movieId = item.id;
+    setDownloading((prev) => new Set(prev).add(movieId));
+
+    try {
+      const title = item.title || item.name || '';
+      const year = item.release_date 
+        ? new Date(item.release_date).getFullYear() 
+        : (item.first_air_date ? new Date(item.first_air_date).getFullYear() : '');
+      
+      // Search for torrents
+      const torrentResponse = await axios.get(
+        `${API_BASE_URL}/api/TMDB/movie/${item.id}/torrents`,
+        {
+          params: {
+            title: title,
+            year: year,
+            categoryIds: '2000',
+          },
+          timeout: 30000,
+        }
+      );
+
+      if (!torrentResponse.data.success || torrentResponse.data.results.length === 0) {
+        throw new Error(`No torrents found for ${title}`);
+      }
+
+      // Get the best torrent (highest priority indexer, then highest seeders)
+      const bestTorrent = torrentResponse.data.results.reduce((best: any, current: any) => {
+        const bestPriority = best.indexerPriority ?? 25;
+        const currentPriority = current.indexerPriority ?? 25;
+        if (currentPriority < bestPriority) return current;
+        if (currentPriority > bestPriority) return best;
+        
+        const bestSeeders = best.seeders || 0;
+        const currentSeeders = current.seeders || 0;
+        return currentSeeders > bestSeeders ? current : best;
+      });
+
+      // Save movie to monitored list
+      const posterUrl = item.poster_path 
+        ? `https://image.tmdb.org/t/p/w500${item.poster_path}` 
+        : (item.posterUrl || null);
+
+      await axios.post(`${API_BASE_URL}/api/MonitoredMovies`, {
+        userId: user.id,
+        tmdbId: item.id,
+        title: title,
+        posterUrl,
+        releaseDate: item.release_date || null,
+        overview: item.overview,
+        qualityProfile: "any",
+        minAvailability: "released",
+        monitor: "movieOnly",
+      });
+
+      // Download the torrent
+      const downloadResponse = await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, {
+        downloadUrl: bestTorrent.downloadUrl,
+        protocol: bestTorrent.protocol,
+      });
+
+      if (downloadResponse.data.success) {
+        setDownloadSuccess((prev) => new Set(prev).add(movieId));
+        setTimeout(() => {
+          setDownloadSuccess((prev) => {
+            const next = new Set(prev);
+            next.delete(movieId);
+            return next;
+          });
+        }, 3000);
+      } else {
+        throw new Error(downloadResponse.data.error || "Failed to download");
+      }
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error || error.message || "Download failed";
+      alert(`Error: ${errorMsg}`);
+    } finally {
+      setDownloading((prev) => {
+        const next = new Set(prev);
+        next.delete(movieId);
+        return next;
+      });
+    }
+  };
+
   const clearFilters = () => {
     setReleaseDateFrom("");
     setReleaseDateTo("");
@@ -313,6 +414,8 @@ const MoviesPage = () => {
     const title = getMediaTitle(item);
     const year = item.release_date ? new Date(item.release_date).getFullYear() : null;
     const posterUrl = item.posterUrl || (item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null);
+    const isDownloading = downloading.has(item.id);
+    const isDownloaded = downloadSuccess.has(item.id);
 
     return (
       <div
@@ -353,6 +456,26 @@ const MoviesPage = () => {
               </span>
             </div>
           )}
+
+          {/* Download Button - Bottom Right */}
+          <button
+            onClick={(e) => handleQuickDownload(item, e)}
+            disabled={isDownloading || isDownloaded}
+            className={`absolute bottom-1 right-1 z-10 p-1.5 rounded-full backdrop-blur-md transition-all duration-200 ${
+              isDownloaded
+                ? 'bg-success/90 hover:bg-success'
+                : 'bg-secondary/90 hover:bg-secondary'
+            } ${isDownloading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title={isDownloaded ? 'Downloaded' : isDownloading ? 'Downloading...' : 'Quick Download'}
+          >
+            {isDownloading ? (
+              <Spinner size="sm" color="white" className="w-4 h-4" />
+            ) : isDownloaded ? (
+              <Check size={16} className="text-white" />
+            ) : (
+              <Download size={16} className="text-white" />
+            )}
+          </button>
 
           {/* Title and Year Overlay - Bottom */}
           <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/95 via-black/80 to-transparent transition-all duration-300 group-hover:from-black/98 group-hover:via-black/90">

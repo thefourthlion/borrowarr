@@ -1,31 +1,19 @@
 /**
- * Test EZTV scraper
- * 
- * Usage:
- *   node test-eztv.js [query]
+ * Test script for EZTV scraper
+ * Usage: node test-eztv.js [query]
  */
 
 const scraperManager = require('./index');
 
 async function testEZTV() {
-  const query = process.argv[2] || 'game of thrones';
+  const query = process.argv[2] || 'shrek';
   
   console.log('\n🧪 Testing EZTV Scraper\n');
-  console.log(`📝 Searching for: "${query}"\n`);
+  console.log(`📝 Query: "${query}"\n`);
   
   try {
-    // Test the scraper
-    console.log('1️⃣ Testing connection...');
-    const testResult = await scraperManager.testScraper('eztv');
-    console.log('   Result:', testResult);
-    
-    if (!testResult.success) {
-      console.log('\n❌ Test failed:', testResult.message);
-      return;
-    }
-    
     // Perform actual search
-    console.log('\n2️⃣ Performing search...\n');
+    console.log('🔍 Performing search...\n');
     const searchResult = await scraperManager.search('eztv', query);
     
     console.log(`\n📊 Search Results:`);
@@ -33,7 +21,7 @@ async function testEZTV() {
     console.log(`   Results: ${searchResult.results.length}`);
     
     if (searchResult.error) {
-      console.error(`   Error: ${searchResult.error}`);
+      console.error(`   ❌ Error: ${searchResult.error}`);
     }
     
     if (searchResult.results.length > 0) {
@@ -43,13 +31,17 @@ async function testEZTV() {
         console.log(`   Size: ${result.sizeFormatted}`);
         console.log(`   Seeders: ${result.seeders}, Leechers: ${result.leechers}`);
         console.log(`   Age: ${result.ageFormatted}`);
-        console.log(`   Download: ${result.downloadUrl.substring(0, 80)}...`);
+        console.log(`   Download: ${result.downloadUrl ? result.downloadUrl.substring(0, 80) : 'N/A'}...`);
         console.log('');
       });
       
       console.log(`✅ Successfully scraped ${searchResult.results.length} results from EZTV!`);
     } else {
-      console.log('\n⚠️  No results found.');
+      console.log('\n⚠️  No results found. This could mean:');
+      console.log('   - Selectors need adjustment');
+      console.log('   - Site structure changed');
+      console.log('   - Query filters are too aggressive');
+      console.log('   - No results for this query');
     }
     
   } catch (error) {
@@ -59,4 +51,3 @@ async function testEZTV() {
 }
 
 testEZTV();
-

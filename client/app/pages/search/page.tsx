@@ -102,15 +102,13 @@ const Search = () => {
     const cached = getCached(cacheKey);
     if (cached) {
       let results = cached.results || [];
-      const queryLower = debouncedQuery.trim().toLowerCase();
-      results = results.filter((result: SearchResult) => {
-        return result.title.toLowerCase().includes(queryLower);
-      });
+      // Backend already handles search filtering, so we just sort by seeders
       results.sort((a: SearchResult, b: SearchResult) => {
         const aSeeders = a.seeders !== null && a.seeders !== undefined ? a.seeders : 0;
         const bSeeders = b.seeders !== null && b.seeders !== undefined ? b.seeders : 0;
         return bSeeders - aSeeders;
       });
+      console.log(`[Search] Using cached results: ${results.length}`);
       setResults(results);
       setLoading(false);
       return;
@@ -145,22 +143,30 @@ const Search = () => {
 
       if (response.data) {
         let results = response.data.results || [];
-
-        if (debouncedQuery.trim()) {
-          const queryLower = debouncedQuery.trim().toLowerCase();
-          results = results.filter((result: SearchResult) => {
-            return result.title.toLowerCase().includes(queryLower);
+        
+        console.log(`[Search] Received ${results.length} results from API`);
+        if (results.length > 0) {
+          console.log(`[Search] First result:`, {
+            title: results[0].title,
+            indexer: results[0].indexer,
+            seeders: results[0].seeders,
+            downloadUrl: results[0].downloadUrl?.substring(0, 50)
           });
         }
 
+        // Backend already handles search filtering, so we just sort by seeders
         results.sort((a: SearchResult, b: SearchResult) => {
           const aSeeders = a.seeders !== null && a.seeders !== undefined ? a.seeders : 0;
           const bSeeders = b.seeders !== null && b.seeders !== undefined ? b.seeders : 0;
           return bSeeders - aSeeders;
         });
 
+        console.log(`[Search] Setting ${results.length} results to state`);
         setResults(results);
         setCached(cacheKey, { results }, 2 * 60 * 1000);
+      } else {
+        console.log(`[Search] No data in response:`, response.data);
+        setResults([]);
       }
     } catch (error: any) {
       if (axios.isCancel(error)) {
@@ -315,25 +321,43 @@ const Search = () => {
   }, []);
 
 
-  return (
-    <div className="Search page min-h-screen bg-background p-2 sm:p-3 md:p-4">
-      <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8 mx-auto space-y-4 sm:space-y-6">
-        {/* Search Bar & Indexer Filter */}
-        <div className="flex flex-col gap-3 sm:gap-4 w-full">
+    return (
+    <div className="Search page min-h-screen bg-background">
+      {/* Header */}
+      <div className="border-b border-secondary/20 sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
+            <div className="min-w-0">
+              <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent truncate">
+                Search Indexers
+              </h1>
+              <p className="text-xs sm:text-sm text-foreground/60 mt-1">
+                Search torrents across all your indexers
+                  </p>
+                </div>
+              </div>
+        </div>
+      </div>
+        
+      {/* Content */}
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
+        <div className="container w-[95vw] sm:w-[92vw] md:w-[90vw] lg:w-[88vw] xl:w-[85vw] 2xl:w-[82vw] mx-auto space-y-4 sm:space-y-6">
+          {/* Search Bar & Indexer Filter */}
+          <div className="flex flex-col gap-3 sm:gap-4 w-full">
           <div className="w-full">
-            <Input
-              placeholder="Search torrents..."
-              value={query}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
-              onKeyPress={handleKeyPress}
+                <Input
+                  placeholder="Search torrents..."
+                  value={query}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
+                  onKeyPress={handleKeyPress}
               startContent={<SearchIcon size={20} className="text-secondary" />}
-              size="lg"
+                  size="lg"
               classNames={{
                 base: "w-full",
                 inputWrapper: "w-full bg-content2 border border-secondary/20 hover:border-secondary/40 transition-colors",
               }}
             />
-          </div>
+              </div>
 
           {/* Indexer Toggle Chips */}
           {indexers.length > 0 && (
@@ -358,9 +382,9 @@ const Search = () => {
                   </Chip>
                 );
               })}
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
         {/* Results */}
         {loading ? (
@@ -370,8 +394,8 @@ const Search = () => {
         ) : results.length > 0 ? (
           <div className="overflow-x-auto -mx-2 sm:-mx-4 md:-mx-6 px-2 sm:px-4 md:px-6">
             <table className="w-full min-w-[600px]">
-              <thead>
-                <tr className="border-b border-divider">
+                    <thead>
+                      <tr className="border-b border-divider">
                   <th className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold">Title</th>
                   <th className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold hidden sm:table-cell">Indexer</th>
                   <th className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold hidden md:table-cell">Size</th>
@@ -379,32 +403,32 @@ const Search = () => {
                   <th className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold hidden lg:table-cell">Leechers</th>
                   <th className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold hidden md:table-cell">Age</th>
                   <th className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+                      </tr>
+                    </thead>
+                    <tbody>
                 {results.map((result) => (
-                  <tr
-                    key={result.id}
-                    className="border-b border-divider hover:bg-content2 transition-colors"
-                  >
+                        <tr
+                          key={result.id}
+                          className="border-b border-divider hover:bg-content2 transition-colors"
+                        >
                     <td className="p-3 sm:p-4 font-medium">
-                      <div className="flex flex-col gap-1">
+                            <div className="flex flex-col gap-1">
                         <span className="text-xs sm:text-sm break-words">{result.title}</span>
                         <div className="flex flex-wrap gap-2 sm:hidden text-xs text-default-500">
                           <span>{result.indexer}</span>
                           <span>{result.sizeFormatted}</span>
                           <span>{result.ageFormatted}</span>
-                        </div>
-                      </div>
-                    </td>
+                              </div>
+                            </div>
+                          </td>
                     <td className="p-3 sm:p-4 text-xs sm:text-sm hidden sm:table-cell">{result.indexer}</td>
                     <td className="p-3 sm:p-4 text-xs sm:text-sm hidden md:table-cell">{result.sizeFormatted}</td>
                     <td className="p-3 sm:p-4 text-xs sm:text-sm">
-                      {result.seeders !== null && result.seeders !== undefined ? result.seeders.toLocaleString() : "-"}
-                    </td>
+                            {result.seeders !== null && result.seeders !== undefined ? result.seeders.toLocaleString() : "-"}
+                          </td>
                     <td className="p-3 sm:p-4 text-xs sm:text-sm hidden lg:table-cell">
-                      {result.leechers !== null && result.leechers !== undefined ? result.leechers.toLocaleString() : "-"}
-                    </td>
+                            {result.leechers !== null && result.leechers !== undefined ? result.leechers.toLocaleString() : "-"}
+                          </td>
                     <td className="p-3 sm:p-4 text-xs sm:text-sm hidden md:table-cell">{result.ageFormatted}</td>
                     <td className="p-3 sm:p-4">
                       <div className="flex gap-1 sm:gap-2">
@@ -412,42 +436,43 @@ const Search = () => {
                           onClick={() => handleGrabRelease(result)}
                           disabled={!result.downloadUrl || grabbing.has(result.id)}
                           className="p-1.5 sm:p-2 rounded-lg hover:bg-content3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          title={grabSuccess.has(result.id) ? "Grabbed successfully" : grabError.get(result.id) || "Grab release"}
-                        >
+                                title={grabSuccess.has(result.id) ? "Grabbed successfully" : grabError.get(result.id) || "Grab release"}
+                              >
                           {grabbing.has(result.id) ? (
                             <Spinner size="sm" />
                           ) : grabSuccess.has(result.id) ? (
                             <Check size={14} className="sm:w-4 sm:h-4 text-success" />
-                          ) : (
+                                ) : (
                             <Download size={14} className="sm:w-4 sm:h-4 text-secondary" />
-                          )}
+                                )}
                         </button>
                         <button
                           onClick={() => handleCopyMagnetLink(result)}
                           className="p-1.5 sm:p-2 rounded-lg hover:bg-content3 transition-colors"
-                          title={copiedLink === result.id ? "Copied!" : "Copy magnet link"}
-                        >
-                          {copiedLink === result.id ? (
+                                title={copiedLink === result.id ? "Copied!" : "Copy magnet link"}
+                              >
+                                {copiedLink === result.id ? (
                             <Check size={14} className="sm:w-4 sm:h-4 text-success" />
-                          ) : (
+                                ) : (
                             <LinkIcon size={14} className="sm:w-4 sm:h-4 text-secondary" />
-                          )}
+                                )}
                         </button>
-                      </div>
-                    </td>
-                  </tr>
+                            </div>
+                          </td>
+                        </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
+                    </tbody>
+                  </table>
+                </div>
         ) : searchQuery ? (
-          <div className="text-center py-12">
+              <div className="text-center py-12">
             <p className="text-default-500 text-sm sm:text-base">No results found for &quot;{searchQuery}&quot;</p>
-          </div>
+                      </div>
         ) : null}
-      </div>
-    </div>
-  );
+              </div>
+            </div>
+        </div>
+    );
 };
 
 export default Search;

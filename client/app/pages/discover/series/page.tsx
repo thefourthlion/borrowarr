@@ -14,10 +14,13 @@ import {
   Filter,
   X,
   Calendar,
+  Download,
+  Check,
 } from "lucide-react";
 import axios from "axios";
 import { useDebounce } from "@/hooks/useDebounce";
 import AddSeriesModal from "@/components/AddSeriesModal";
+import { useAuth } from "@/context/AuthContext";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
 
@@ -49,6 +52,7 @@ interface Genre {
 const SeriesPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useAuth();
   const [media, setMedia] = useState<TMDBMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -60,6 +64,10 @@ const SeriesPage = () => {
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<TMDBMedia | null>(null);
+  
+  // Download state
+  const [downloading, setDownloading] = useState<Set<number>>(new Set());
+  const [downloadSuccess, setDownloadSuccess] = useState<Set<number>>(new Set());
   
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -283,6 +291,162 @@ const SeriesPage = () => {
     setIsModalOpen(true);
   };
 
+  const handleQuickDownload = async (item: TMDBMedia, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!user) {
+      alert("Please log in to download series");
+      return;
+    }
+
+    const seriesId = item.id;
+    setDownloading((prev) => new Set(prev).add(seriesId));
+
+    try {
+      const title = item.name || item.title || '';
+      const year = item.first_air_date ? new Date(item.first_air_date).getFullYear() : '';
+
+      // Get TV show details including all seasons
+      const tvDetailsResponse = await axios.get(`${API_BASE_URL}/api/TMDB/tv/${item.id}`);
+      if (!tvDetailsResponse.data.success) {
+        throw new Error("Failed to fetch TV show details");
+      }
+
+      const tvDetails = tvDetailsResponse.data.tv;
+      const numberOfSeasons = tvDetails.number_of_seasons || 0;
+
+      // Fetch all seasons with episodes
+      const seasonPromises = [];
+      for (let i = 1; i <= numberOfSeasons; i++) {
+        seasonPromises.push(
+          axios.get(`${API_BASE_URL}/api/TMDB/tv/${item.id}/season/${i}`)
+            .then(res => res.data.success ? res.data.season : null)
+            .catch(() => null)
+        );
+      }
+
+      const seasons = (await Promise.all(seasonPromises)).filter(s => s !== null);
+
+      // Collect all season numbers and episode keys
+      const allSeasonNumbers = seasons.map(s => s.season_number);
+      const allEpisodes: string[] = [];
+      seasons.forEach(season => {
+        if (season.episodes) {
+          season.episodes.forEach((ep: any) => {
+            allEpisodes.push(`${season.season_number}-${ep.episode_number}`);
+          });
+        }
+      });
+
+      // Save series to monitored list
+      const posterUrl = item.poster_path 
+        ? `https://image.tmdb.org/t/p/w500${item.poster_path}` 
+        : (item.posterUrl || null);
+
+      const saveSeriesResponse = await axios.post(`${API_BASE_URL}/api/MonitoredSeries`, {
+        userId: user.id,
+        tmdbId: item.id,
+        title: title,
+        posterUrl,
+        firstAirDate: item.first_air_date || null,
+        overview: item.overview,
+        qualityProfile: "any",
+        minAvailability: "released",
+        monitor: "all",
+        selectedSeasons: allSeasonNumbers,
+        selectedEpisodes: allEpisodes,
+      });
+
+      // Download each episode
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const season of seasons) {
+        if (!season.episodes) continue;
+
+        for (const episode of season.episodes) {
+          try {
+            // Search for torrents for this episode
+            const torrentResponse = await axios.get(
+              `${API_BASE_URL}/api/TMDB/tv/${item.id}/torrents`,
+              {
+                params: {
+                  title: title,
+                  season: season.season_number,
+                  episode: episode.episode_number,
+                  year: year,
+                  categoryIds: '5000',
+                },
+                timeout: 30000,
+              }
+            );
+
+            if (torrentResponse.data.success && torrentResponse.data.results.length > 0) {
+              // Get the best torrent
+              const bestTorrent = torrentResponse.data.results.reduce((best: any, current: any) => {
+                const bestPriority = best.indexerPriority ?? 25;
+                const currentPriority = current.indexerPriority ?? 25;
+                if (currentPriority < bestPriority) return current;
+                if (currentPriority > bestPriority) return best;
+                
+                const bestSeeders = best.seeders || 0;
+                const currentSeeders = current.seeders || 0;
+                return currentSeeders > bestSeeders ? current : best;
+              });
+
+              // Download the torrent
+              await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, {
+                downloadUrl: bestTorrent.downloadUrl,
+                protocol: bestTorrent.protocol,
+              });
+
+              successCount++;
+            } else {
+              failCount++;
+            }
+
+            // Small delay between downloads
+            await new Promise(resolve => setTimeout(resolve, 500));
+          } catch (error) {
+            failCount++;
+            console.error(`Failed to download episode ${season.season_number}x${episode.episode_number}:`, error);
+          }
+        }
+      }
+
+      // Update series status
+      if (saveSeriesResponse.data.series?.id && successCount > 0) {
+        try {
+          await axios.put(`${API_BASE_URL}/api/MonitoredSeries/${saveSeriesResponse.data.series.id}`, {
+            status: "downloading",
+          });
+        } catch (error) {
+          console.error("Error updating series status:", error);
+        }
+      }
+
+      setDownloadSuccess((prev) => new Set(prev).add(seriesId));
+      alert(`Series added to monitoring!\n\nSuccessfully queued: ${successCount} episodes\nFailed: ${failCount} episodes`);
+      
+      setTimeout(() => {
+        setDownloadSuccess((prev) => {
+          const next = new Set(prev);
+          next.delete(seriesId);
+          return next;
+        });
+      }, 3000);
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error || error.message || "Download failed";
+      alert(`Error: ${errorMsg}`);
+    } finally {
+      setDownloading((prev) => {
+        const next = new Set(prev);
+        next.delete(seriesId);
+        return next;
+      });
+    }
+  };
+
   const clearFilters = () => {
     setFirstAirDateFrom("");
     setFirstAirDateTo("");
@@ -313,6 +477,8 @@ const SeriesPage = () => {
     const title = getMediaTitle(item);
     const year = item.first_air_date ? new Date(item.first_air_date).getFullYear() : null;
     const posterUrl = item.posterUrl || (item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null);
+    const isDownloading = downloading.has(item.id);
+    const isDownloaded = downloadSuccess.has(item.id);
 
     return (
       <div
@@ -353,6 +519,26 @@ const SeriesPage = () => {
               </span>
             </div>
           )}
+
+          {/* Download Button - Bottom Right */}
+          <button
+            onClick={(e) => handleQuickDownload(item, e)}
+            disabled={isDownloading || isDownloaded}
+            className={`absolute bottom-1 right-1 z-10 p-1.5 rounded-full backdrop-blur-md transition-all duration-200 ${
+              isDownloaded
+                ? 'bg-success/90 hover:bg-success'
+                : 'bg-secondary/90 hover:bg-secondary'
+            } ${isDownloading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title={isDownloaded ? 'Downloaded' : isDownloading ? 'Downloading...' : 'Quick Download All Seasons'}
+          >
+            {isDownloading ? (
+              <Spinner size="sm" color="white" className="w-4 h-4" />
+            ) : isDownloaded ? (
+              <Check size={16} className="text-white" />
+            ) : (
+              <Download size={16} className="text-white" />
+            )}
+          </button>
 
           {/* Title and Year Overlay - Bottom */}
           <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/95 via-black/80 to-transparent transition-all duration-300 group-hover:from-black/98 group-hover:via-black/90">

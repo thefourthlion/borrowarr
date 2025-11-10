@@ -1,26 +1,35 @@
 .Search {
     .container {
-        max-width: 1400px;
+        max-width: 100vw;
+        width: 100%;
     }
     
     table {
+        width: 100%;
+        border-collapse: collapse;
+        
         th {
             font-weight: 600;
             color: var(--nextui-colors-foreground);
             user-select: none;
+            white-space: nowrap;
         }
         
         td {
-            color: var(--nextui-colors-foreground-600);
+            color: var(--nextui-colors-foreground);
+            word-break: break-word;
         }
         
         tbody tr {
-            cursor: pointer;
+            transition: background-color 0.2s ease;
         }
     }
 
     // Responsive table wrapper
     .overflow-x-auto {
+        width: 100%;
+        overflow-x: auto;
+        
         &::-webkit-scrollbar {
             height: 8px;
         }

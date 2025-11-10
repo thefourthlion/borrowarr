@@ -154,6 +154,14 @@ export const Navbar = () => {
                       <Tv size={18} />
                       Series
                     </NextLink>
+                    <NextLink
+                      href="/pages/search"
+                      className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      onClick={() => setDiscoverDropdownOpen(false)}
+                    >
+                      <Search size={18} />
+                      Search Indexers
+                    </NextLink>
                   </div>
                 </div>
               )}
@@ -352,6 +360,7 @@ export const Navbar = () => {
           {[
             { label: "Discover Movies", href: "/pages/discover/movies" },
             { label: "Discover Series", href: "/pages/discover/series" },
+            { label: "Search Indexers", href: "/pages/search" },
             { label: "Indexers", href: user ? "/pages/indexers" : "/pages/login", requiresAuth: true },
             { label: "Download Clients", href: user ? "/pages/settings/downloadclients" : "/pages/login", requiresAuth: true },
             { label: "System", href: user ? "/pages/system" : "/pages/login", requiresAuth: true },

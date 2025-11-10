@@ -20,6 +20,8 @@ exports.createIndexer = async (req, res) => {
       seedRatio: req.body.seedRatio,
       username: req.body.username,
       password: req.body.password,
+      apiKey: req.body.apiKey,
+      vipExpiration: req.body.vipExpiration,
       stripCyrillicLetters: req.body.stripCyrillicLetters || false,
       searchFreeleechOnly: req.body.searchFreeleechOnly || false,
       sortRequestedFromSite: req.body.sortRequestedFromSite || "created",
@@ -31,6 +33,7 @@ exports.createIndexer = async (req, res) => {
       description: req.body.description,
       indexerType: req.body.indexerType || "Cardigann",
       status: req.body.status || "enabled",
+      userId: req.userId, // Associate with authenticated user
     });
     
     const response = newIndexer.toJSON();
@@ -49,6 +52,7 @@ exports.readIndexers = async (req, res) => {
   const offset = page * limit;
   try {
     const result = await Indexers.findAndCountAll({
+      where: { userId: req.userId }, // Only fetch indexers for the authenticated user
       limit,
       offset,
       order: [["createdAt", "DESC"]],
@@ -86,7 +90,9 @@ exports.readIndexers = async (req, res) => {
 
 exports.readIndexerFromID = async (req, res) => {
   try {
-    const result = await Indexers.findByPk(req.params.id);
+    const result = await Indexers.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this indexer
+    });
     if (!result) {
       return res.status(404).json({ error: "Record not found" });
     }
@@ -118,6 +124,8 @@ exports.updateIndexer = async (req, res) => {
         seedRatio: req.body.seedRatio,
         username: req.body.username,
         password: req.body.password,
+        apiKey: req.body.apiKey,
+        vipExpiration: req.body.vipExpiration,
         stripCyrillicLetters: req.body.stripCyrillicLetters,
         searchFreeleechOnly: req.body.searchFreeleechOnly,
         sortRequestedFromSite: req.body.sortRequestedFromSite,
@@ -131,14 +139,16 @@ exports.updateIndexer = async (req, res) => {
         status: req.body.status,
       },
       {
-        where: { id: req.params.id },
+        where: { id: req.params.id, userId: req.userId }, // Ensure user owns this indexer
         returning: true,
       }
     );
     if (updated === 0) {
       return res.status(404).json({ error: "Record not found" });
     }
-    const result = await Indexers.findByPk(req.params.id);
+    const result = await Indexers.findOne({
+      where: { id: req.params.id, userId: req.userId },
+    });
     res.json(result);
   } catch (err) {
     console.log(err);
@@ -149,7 +159,7 @@ exports.updateIndexer = async (req, res) => {
 exports.deleteIndexer = async (req, res) => {
   try {
     const deleted = await Indexers.destroy({
-      where: { id: req.params.id },
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this indexer
     });
     if (deleted === 0) {
       return res.status(404).json({ error: "Record not found" });
@@ -175,7 +185,7 @@ exports.syncAppIndexers = async (req, res) => {
 exports.testAllIndexers = async (req, res) => {
   try {
     const indexers = await Indexers.findAll({
-      where: { enabled: true },
+      where: { enabled: true, userId: req.userId }, // Only test user's indexers
     });
     
     // Simulate testing each indexer
@@ -205,7 +215,9 @@ exports.testIndexer = async (req, res) => {
     
     // If ID is provided, fetch from database
     if (req.params.id) {
-      indexer = await Indexers.findByPk(req.params.id);
+      indexer = await Indexers.findOne({
+        where: { id: req.params.id, userId: req.userId }, // Ensure user owns this indexer
+      });
       if (!indexer) {
         return res.status(404).json({ success: false, error: "Indexer not found" });
       }

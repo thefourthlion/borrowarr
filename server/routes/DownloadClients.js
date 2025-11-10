@@ -11,6 +11,13 @@ const {
   getAvailableDownloadClients,
   grabRelease,
 } = require("../controllers/DownloadClients");
+const { authenticateToken } = require("../middleware/auth");
+
+// Get available download clients (public - just templates)
+router.get("/available", getAvailableDownloadClients);
+
+// All other routes require authentication
+router.use(authenticateToken);
 
 // CRUD routes
 router.post("/create", createDownloadClient);
@@ -24,42 +31,7 @@ router.post("/test", testDownloadClient);
 router.post("/test/:id", testDownloadClient);
 router.post("/test-all", testAllDownloadClients);
 
-// Get available download clients
-router.get("/available", getAvailableDownloadClients);
-
 // Grab release (send to download client)
-router.post("/grab", grabRelease);
-
-module.exports = router;
-
-router.post("/grab", grabRelease);
-
-module.exports = router;
-
-router.post("/grab", grabRelease);
-
-module.exports = router;
-
-router.post("/grab", grabRelease);
-
-module.exports = router;
-
-router.post("/grab", grabRelease);
-
-module.exports = router;
-
-router.post("/grab", grabRelease);
-
-module.exports = router;
-
-router.post("/grab", grabRelease);
-
-module.exports = router;
-
-router.post("/grab", grabRelease);
-
-module.exports = router;
-
 router.post("/grab", grabRelease);
 
 module.exports = router;

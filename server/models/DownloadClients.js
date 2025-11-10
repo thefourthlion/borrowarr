@@ -64,6 +64,15 @@ const DownloadClients = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    userId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: "user_id",
+      references: {
+        model: "users",
+        key: "id",
+      },
+    },
   },
   {
     tableName: "download_clients",

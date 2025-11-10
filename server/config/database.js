@@ -17,7 +17,41 @@ const connectDB = async () => {
   try {
     await sequelize.authenticate();
     console.log('✅ Database connected');
-    await sequelize.sync();
+    
+    // Handle existing data with null userId before syncing
+    try {
+      const MonitoredMovies = require('../models/MonitoredMovies');
+      const MonitoredSeries = require('../models/MonitoredSeries');
+      
+      // Check if there are any rows with null userId
+      const moviesWithNullUserId = await sequelize.query(
+        "SELECT COUNT(*) as count FROM monitored_movies WHERE userId IS NULL",
+        { type: sequelize.QueryTypes.SELECT }
+      );
+      
+      if (moviesWithNullUserId[0]?.count > 0) {
+        console.log(`⚠️  Found ${moviesWithNullUserId[0].count} monitored movies with null userId - deleting them`);
+        await sequelize.query("DELETE FROM monitored_movies WHERE userId IS NULL");
+      }
+      
+      const seriesWithNullUserId = await sequelize.query(
+        "SELECT COUNT(*) as count FROM monitored_series WHERE userId IS NULL",
+        { type: sequelize.QueryTypes.SELECT }
+      );
+      
+      if (seriesWithNullUserId[0]?.count > 0) {
+        console.log(`⚠️  Found ${seriesWithNullUserId[0].count} monitored series with null userId - deleting them`);
+        await sequelize.query("DELETE FROM monitored_series WHERE userId IS NULL");
+      }
+    } catch (cleanupError) {
+      // If tables don't exist yet, that's fine
+      if (!cleanupError.message.includes('no such table')) {
+        console.warn('⚠️  Could not clean up null userId values:', cleanupError.message);
+      }
+    }
+    
+    // Use alter: true to update existing tables with new columns
+    await sequelize.sync({ alter: true });
     console.log('✅ Database synchronized');
   } catch (error) {
     console.error('❌ Unable to connect to the database:', error);

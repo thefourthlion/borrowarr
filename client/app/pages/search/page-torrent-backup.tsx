@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import axios, { CancelTokenSource } from "axios";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useSearchParams } from "next/navigation";
 import "../../../styles/Search.scss";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
@@ -89,6 +90,7 @@ type SortField = "protocol" | "age" | "title" | "indexer" | "size" | "grabs" | "
 type SortOrder = "asc" | "desc";
 
 const Search = () => {
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -344,6 +346,20 @@ const Search = () => {
     }
   }, [fetchCategories, fetchIndexers]);
 
+  // Handle URL query parameters from navbar search
+  useEffect(() => {
+    const urlQuery = searchParams.get('q');
+    const timestamp = searchParams.get('t');
+    
+    if (urlQuery) {
+      // Set both query and searchQuery to trigger immediate search
+      setQuery(urlQuery);
+      setSearchQuery(urlQuery);
+      // Reset to first page when new search comes from navbar
+      setCurrentPage(1);
+    }
+  }, [searchParams]);
+
   // Cleanup: cancel any pending requests on unmount
   useEffect(() => {
     return () => {
@@ -445,8 +461,10 @@ const Search = () => {
   }, []);
 
   const totalPages = useMemo(() => {
-    return Math.ceil(filteredAndSortedResults.length / resultsPerPage) || 1;
-  }, [filteredAndSortedResults.length, resultsPerPage]);
+    // Use the total from server (stored in state) rather than filtered results length
+    // This ensures pagination works correctly with all results
+    return Math.ceil(total / resultsPerPage) || 1;
+  }, [total, resultsPerPage]);
 
   const handlePageChange = useCallback((page: number) => {
     if (page > 0 && page <= totalPages) {
@@ -577,7 +595,7 @@ const Search = () => {
 
     return (
     <div className="Search page min-h-screen bg-background p-3 sm:p-6">
-      <div className="container max-w-7xl mx-auto">
+      <div className="container max-w-[1600px] 2xl:max-w-[1800px] mx-auto">
         {/* Server Connection Status */}
         {serverConnected === false && (
           <Card className="mb-4 border-warning">
@@ -596,7 +614,7 @@ const Search = () => {
         )}
         
         {/* Top Search Bar & Filters */}
-        <Card className="mb-6">
+        <Card className="mb-6 w-full">
           <CardBody>
             <div className="flex flex-col gap-4">
               {/* Search Input */}
@@ -716,7 +734,7 @@ const Search = () => {
                       isLoading={grabbing.size > 0}
                       className="flex-1 sm:flex-initial"
                     >
-                      Grab {selectedResults.size} Release{selectedResults.size !== 1 ? 's' : ''}
+                      Download {selectedResults.size} Release{selectedResults.size !== 1 ? 's' : ''}
                     </Button>
                     <Button
                       variant="flat"
@@ -732,34 +750,7 @@ const Search = () => {
           </CardBody>
         </Card>
 
-        {/* Results Per Page & Pagination Info */}
-        {filteredAndSortedResults.length > 0 && (
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-default-500">Results per page:</span>
-              <Select
-                selectedKeys={[resultsPerPage.toString()]}
-                onSelectionChange={(keys: any) => {
-                  const value = parseInt(Array.from(keys)[0] as string);
-                  setResultsPerPage(value);
-                  setCurrentPage(1);
-                }}
-                className="w-24"
-                size="sm"
-              >
-                <SelectItem key="10">10</SelectItem>
-                <SelectItem key="25">25</SelectItem>
-                <SelectItem key="50">50</SelectItem>
-                <SelectItem key="100">100</SelectItem>
-                <SelectItem key="250">250</SelectItem>
-                <SelectItem key="500">500</SelectItem>
-              </Select>
-            </div>
-            <div className="text-sm text-default-500">
-              Showing {((currentPage - 1) * resultsPerPage) + 1} - {Math.min(currentPage * resultsPerPage, filteredAndSortedResults.length)} of {filteredAndSortedResults.length} results
-            </div>
-          </div>
-        )}
+
 
         {/* Results Table */}
         {loading ? (
@@ -768,13 +759,13 @@ const Search = () => {
           </div>
         ) : filteredAndSortedResults.length > 0 ? (
           <>
-            <Card>
-              <CardBody>
-                <div className="overflow-x-auto -mx-2 sm:mx-0">
-                  <table className="w-full min-w-[800px]">
+            <Card className="w-full">
+              <CardBody className="overflow-x-auto p-0">
+                <div className="w-full">
+                  <table className="w-full min-w-[1200px]">
                     <thead>
                       <tr className="border-b border-divider">
-                        <th className="text-left p-2 sm:p-3 w-10 sm:w-12">
+                        <th className="text-left p-3 lg:p-4 w-12">
                           <input
                             type="checkbox"
                               checked={selectedResults.size === filteredAndSortedResults.length && filteredAndSortedResults.length > 0}
@@ -783,7 +774,7 @@ const Search = () => {
                           />
                         </th>
                         <th
-                          className="text-left p-2 sm:p-3 cursor-pointer hover:bg-content2 hidden md:table-cell"
+                          className="text-left p-3 lg:p-4 cursor-pointer hover:bg-content2 hidden md:table-cell"
                           onClick={() => handleSort("protocol")}
                         >
                           <div className="flex items-center gap-2">
@@ -794,7 +785,7 @@ const Search = () => {
                           </div>
                         </th>
                         <th
-                          className="text-left p-2 sm:p-3 cursor-pointer hover:bg-content2"
+                          className="text-left p-3 lg:p-4 cursor-pointer hover:bg-content2"
                           onClick={() => handleSort("age")}
                         >
                           <div className="flex items-center gap-2">
@@ -805,7 +796,7 @@ const Search = () => {
                           </div>
                         </th>
                         <th
-                          className="text-left p-2 sm:p-3 cursor-pointer hover:bg-content2"
+                          className="text-left p-3 lg:p-4 cursor-pointer hover:bg-content2"
                           onClick={() => handleSort("title")}
                         >
                           <div className="flex items-center gap-2">
@@ -816,7 +807,7 @@ const Search = () => {
                           </div>
                         </th>
                         <th
-                          className="text-left p-2 sm:p-3 cursor-pointer hover:bg-content2"
+                          className="text-left p-3 lg:p-4 cursor-pointer hover:bg-content2"
                           onClick={() => handleSort("indexer")}
                         >
                           <div className="flex items-center gap-2">
@@ -827,7 +818,7 @@ const Search = () => {
                           </div>
                         </th>
                         <th
-                          className="text-left p-2 sm:p-3 cursor-pointer hover:bg-content2 hidden sm:table-cell"
+                          className="text-left p-3 lg:p-4 cursor-pointer hover:bg-content2 hidden sm:table-cell"
                           onClick={() => handleSort("size")}
                         >
                           <div className="flex items-center gap-2">
@@ -838,7 +829,7 @@ const Search = () => {
                           </div>
                         </th>
                         <th
-                          className="text-left p-2 sm:p-3 cursor-pointer hover:bg-content2 hidden lg:table-cell"
+                          className="text-left p-3 lg:p-4 cursor-pointer hover:bg-content2 hidden lg:table-cell"
                           onClick={() => handleSort("grabs")}
                         >
                           <div className="flex items-center gap-2">
@@ -849,7 +840,7 @@ const Search = () => {
                           </div>
                         </th>
                         <th
-                          className="text-left p-2 sm:p-3 cursor-pointer hover:bg-content2"
+                          className="text-left p-3 lg:p-4 cursor-pointer hover:bg-content2"
                           onClick={() => handleSort("seeders")}
                         >
                           <div className="flex items-center gap-2">
@@ -860,7 +851,7 @@ const Search = () => {
                           </div>
                         </th>
                         <th
-                          className="text-left p-2 sm:p-3 cursor-pointer hover:bg-content2"
+                          className="text-left p-3 lg:p-4 cursor-pointer hover:bg-content2"
                           onClick={() => handleSort("leechers")}
                         >
                           <div className="flex items-center gap-2">
@@ -871,7 +862,7 @@ const Search = () => {
                           </div>
                         </th>
                         <th
-                          className="text-left p-2 sm:p-3 cursor-pointer hover:bg-content2 hidden xl:table-cell"
+                          className="text-left p-3 lg:p-4 cursor-pointer hover:bg-content2 hidden xl:table-cell"
                           onClick={() => handleSort("peers")}
                         >
                           <div className="flex items-center gap-2">
@@ -882,7 +873,7 @@ const Search = () => {
                           </div>
                         </th>
                         <th
-                          className="text-left p-2 sm:p-3 cursor-pointer hover:bg-content2 hidden md:table-cell"
+                          className="text-left p-3 lg:p-4 cursor-pointer hover:bg-content2 hidden md:table-cell"
                           onClick={() => handleSort("category")}
                         >
                           <div className="flex items-center gap-2">
@@ -892,7 +883,7 @@ const Search = () => {
                             )}
                           </div>
                         </th>
-                        <th className="text-left p-2 sm:p-3 hidden sm:table-cell">Actions</th>
+                        <th className="text-left p-3 lg:p-4 hidden sm:table-cell">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -905,7 +896,7 @@ const Search = () => {
                           key={result.id}
                           className="border-b border-divider hover:bg-content2 transition-colors"
                         >
-                          <td className="p-2 sm:p-3">
+                          <td className="p-3 lg:p-4">
                             <input
                               type="checkbox"
                               checked={isSelected}
@@ -913,7 +904,7 @@ const Search = () => {
                               className="cursor-pointer"
                             />
                           </td>
-                          <td className="p-2 sm:p-3 hidden md:table-cell">
+                          <td className="p-3 lg:p-4 hidden md:table-cell">
                             <Chip
                               size="sm"
                               color={result.protocol === "torrent" ? "success" : "primary"}
@@ -922,8 +913,8 @@ const Search = () => {
                               {result.protocol}
                             </Chip>
                           </td>
-                          <td className="p-2 sm:p-3 text-sm">{result.ageFormatted}</td>
-                          <td className="p-2 sm:p-3 font-medium">
+                          <td className="p-3 lg:p-4 text-sm">{result.ageFormatted}</td>
+                          <td className="p-3 lg:p-4 font-medium">
                             <div className="flex flex-col gap-1">
                               <span>{result.title}</span>
                               <div className="flex flex-wrap gap-1 md:hidden">
@@ -939,19 +930,19 @@ const Search = () => {
                               </div>
                             </div>
                           </td>
-                          <td className="p-2 sm:p-3">{result.indexer}</td>
-                          <td className="p-2 sm:p-3 text-sm hidden sm:table-cell">{result.sizeFormatted}</td>
-                          <td className="p-2 sm:p-3 text-sm hidden lg:table-cell">{result.grabs.toLocaleString()}</td>
-                          <td className="p-2 sm:p-3 text-sm">
+                          <td className="p-3 lg:p-4">{result.indexer}</td>
+                          <td className="p-3 lg:p-4 text-sm hidden sm:table-cell">{result.sizeFormatted}</td>
+                          <td className="p-3 lg:p-4 text-sm hidden lg:table-cell">{result.grabs.toLocaleString()}</td>
+                          <td className="p-3 lg:p-4 text-sm">
                             {result.seeders !== null && result.seeders !== undefined ? result.seeders.toLocaleString() : "-"}
                           </td>
-                          <td className="p-2 sm:p-3 text-sm">
+                          <td className="p-3 lg:p-4 text-sm">
                             {result.leechers !== null && result.leechers !== undefined ? result.leechers.toLocaleString() : "-"}
                           </td>
-                          <td className="p-2 sm:p-3 text-sm hidden xl:table-cell">
+                          <td className="p-3 lg:p-4 text-sm hidden xl:table-cell">
                             {result.peers || "-"}
                           </td>
-                          <td className="p-2 sm:p-3 hidden md:table-cell">
+                          <td className="p-3 lg:p-4 hidden md:table-cell">
                             <div className="flex flex-wrap gap-1">
                               {result.categories.slice(0, 2).map((catId) => (
                                 <Chip key={catId} size="sm" variant="flat" color="warning">
@@ -965,7 +956,7 @@ const Search = () => {
                               )}
                             </div>
                           </td>
-                          <td className="p-2 sm:p-3 hidden sm:table-cell">
+                          <td className="p-3 lg:p-4 hidden sm:table-cell">
                             <div className="flex gap-2">
                               <Button
                                 size="sm"
@@ -1008,11 +999,39 @@ const Search = () => {
               </CardBody>
             </Card>
 
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <Card className="mt-6">
-                <CardBody>
-                  <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            {/* Bottom Results Per Page & Pagination Controls */}
+            <Card className="mt-6 w-full">
+              <CardBody>
+                <div className="flex flex-col gap-6">
+                  {/* Results Per Page & Info Row */}
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-default-500">Results per page:</span>
+                      <Select
+                        selectedKeys={[resultsPerPage.toString()]}
+                        onSelectionChange={(keys: any) => {
+                          const value = parseInt(Array.from(keys)[0] as string);
+                          setResultsPerPage(value);
+                          setCurrentPage(1);
+                        }}
+                        className="w-24"
+                        size="sm"
+                      >
+                        <SelectItem key="10">10</SelectItem>
+                        <SelectItem key="25">25</SelectItem>
+                        <SelectItem key="50">50</SelectItem>
+                        <SelectItem key="100">100</SelectItem>
+                        <SelectItem key="250">250</SelectItem>
+                        <SelectItem key="500">500</SelectItem>
+                      </Select>
+                    </div>
+                    <div className="text-sm text-default-500">
+                      Showing {((currentPage - 1) * resultsPerPage) + 1} - {Math.min(currentPage * resultsPerPage, total)} of {total} results
+                    </div>
+                  </div>
+
+                  {/* Pagination Controls */}
+                  <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 border-t border-divider">
                     <div className="text-sm text-default-500">
                       Page {currentPage} of {totalPages}
                     </div>
@@ -1021,7 +1040,7 @@ const Search = () => {
                         variant="flat"
                         isIconOnly
                         onPress={() => handlePageChange(1)}
-                        isDisabled={currentPage === 1}
+                        isDisabled={currentPage === 1 || totalPages <= 1}
                         size="sm"
                       >
                         <ChevronsLeft size={16} />
@@ -1030,7 +1049,7 @@ const Search = () => {
                         variant="flat"
                         isIconOnly
                         onPress={() => handlePageChange(currentPage - 1)}
-                        isDisabled={currentPage === 1}
+                        isDisabled={currentPage === 1 || totalPages <= 1}
                         size="sm"
                       >
                         <ChevronLeft size={16} />
@@ -1054,6 +1073,7 @@ const Search = () => {
                               onPress={() => handlePageChange(pageNum)}
                               size="sm"
                               className="min-w-[40px]"
+                              isDisabled={totalPages <= 1}
                             >
                               {pageNum}
                             </Button>
@@ -1065,7 +1085,7 @@ const Search = () => {
                         variant="flat"
                         isIconOnly
                         onPress={() => handlePageChange(currentPage + 1)}
-                        isDisabled={currentPage === totalPages}
+                        isDisabled={currentPage === totalPages || totalPages <= 1}
                         size="sm"
                       >
                         <ChevronRight size={16} />
@@ -1074,16 +1094,16 @@ const Search = () => {
                         variant="flat"
                         isIconOnly
                         onPress={() => handlePageChange(totalPages)}
-                        isDisabled={currentPage === totalPages}
+                        isDisabled={currentPage === totalPages || totalPages <= 1}
                         size="sm"
                       >
                         <ChevronsRight size={16} />
                       </Button>
                     </div>
                   </div>
-                </CardBody>
-              </Card>
-            )}
+                </div>
+              </CardBody>
+            </Card>
 
           </>
         ) : searchQuery ? (

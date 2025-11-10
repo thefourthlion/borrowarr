@@ -1,54 +1,47 @@
-
 "use client";
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { initFirebase } from "@/firebase";
-import { User, getAuth } from "firebase/auth";
-import { useAuthState } from "react-firebase-hooks/auth";
+import { useAuth } from "@/context/AuthContext";
 
 const LOGIN_ROUTE = "/pages/login";
-
-// --------- routes that only authed users can see
 const ACCOUNT_ROUTE = "/pages/account";
 
+// Routes that require authentication
+const protectedRoutes = ["/pages/account", "/pages/monitored", "/pages/indexers", "/pages/settings"];
+
 const AuthRouter = (props: any) => {
-  const app = initFirebase();
-  const auth = getAuth(app);
-  const [user, loading] = useAuthState(auth);
+  const { user, loading } = useAuth();
   const router = useRouter();
   const pathName = usePathname();
 
-  // Pages that require the user to be authenticated
-  const protectedRoutes = ["/pages/account", "/pages/hidden"];
+  useEffect(() => {
+    if (loading) return; // Wait for auth check to complete
 
-  const redirect = (
-    isLoading: boolean,
-    firebaseUser: User | null | undefined,
-  ) => {
-    if (!isLoading) {
-      if (firebaseUser) {
+    if (user) {
         // User is logged in
-        if (pathName === LOGIN_ROUTE) {
-          router.push(ACCOUNT_ROUTE); // Redirect from login to account if logged in
+      if (pathName === LOGIN_ROUTE || pathName === "/pages/register") {
+        router.push(ACCOUNT_ROUTE);
         }
       } else {
         // User is not logged in
-        if (protectedRoutes.includes(pathName)) {
-          router.push(LOGIN_ROUTE); // Redirect to login if trying to access a protected route
-        }
+      if (protectedRoutes.some((route) => pathName.startsWith(route))) {
+        router.push(LOGIN_ROUTE);
       }
     }
-  };
-
-  useEffect(() => {
-    redirect(loading, user);
-  }, [loading, user, pathName]);
+  }, [loading, user, pathName, router]);
 
   if (loading) {
-    return null; // Show a loader or return null while checking auth state
-  } else {
-    return <>{props.children}</>; // Render children when not loading
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-3 border-content3 border-t-secondary rounded-full animate-spin"></div>
+          <p className="text-foreground opacity-70">Loading...</p>
+        </div>
+      </div>
+    );
   }
+
+  return <>{props.children}</>;
 };
 
 export default AuthRouter;

@@ -84,10 +84,29 @@ const Indexers = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    apiKey: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "api_key",
+    },
+    vipExpiration: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "vip_expiration",
+    },
     stripCyrillicLetters: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
+    },
+    userId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      field: "user_id",
+      references: {
+        model: "users",
+        key: "id",
+      },
     },
     searchFreeleechOnly: {
       type: DataTypes.BOOLEAN,

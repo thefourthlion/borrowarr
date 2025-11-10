@@ -11,6 +11,13 @@ const {
   testIndexer,
   getAvailableIndexers,
 } = require("../controllers/Indexers");
+const { authenticateToken } = require("../middleware/auth");
+
+// Available indexers don't need auth (they're just templates)
+router.route("/available").get(getAvailableIndexers);
+
+// All other indexer routes require authentication
+router.use(authenticateToken);
 
 router.route("/create").post(createIndexer);
 router.route("/read").get(readIndexers);
@@ -21,7 +28,6 @@ router.route("/sync").post(syncAppIndexers);
 router.route("/test-all").post(testAllIndexers);
 router.route("/test").post(testIndexer); // Test without ID (for new indexers)
 router.route("/test/:id").post(testIndexer);
-router.route("/available").get(getAvailableIndexers);
 
 module.exports = router;
 

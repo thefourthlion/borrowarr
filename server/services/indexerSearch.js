@@ -6,7 +6,7 @@ const cheerio = require("cheerio");
 const scraperManager = require("../scrapers");
 
 // Parse Torznab/Newznab XML response
-function parseIndexerResponse(xmlData, indexerName, protocol) {
+function parseIndexerResponse(xmlData, indexerName, protocol, indexerPriority = 25) {
   try {
     const parser = new XMLParser({
       ignoreAttributes: false,
@@ -80,6 +80,7 @@ function parseIndexerResponse(xmlData, indexerName, protocol) {
         ageFormatted: ageFormatted,
         title: title,
         indexer: indexerName,
+        indexerPriority: indexerPriority, // Include priority for sorting
         size: size / (1024 * 1024 * 1024), // Convert bytes to GiB for sorting
         sizeFormatted: formatSize(size), // Formatted string for display
         grabs: grabs,
@@ -111,7 +112,7 @@ function formatSize(bytes) {
 }
 
 // Parse The Pirate Bay API (apibay.org) JSON response
-function parseTPBApiResponse(jsonData, indexerName) {
+function parseTPBApiResponse(jsonData, indexerName, indexerPriority = 25) {
   try {
     const results = [];
     
@@ -159,6 +160,7 @@ function parseTPBApiResponse(jsonData, indexerName) {
         
         results.push({
           id: `${indexerName}-${id}-${index}`,
+          indexerPriority: indexerPriority, // Include priority for sorting
           protocol: "torrent",
           age: age,
           ageFormatted: ageFormatted,
@@ -189,7 +191,7 @@ function parseTPBApiResponse(jsonData, indexerName) {
 }
 
 // Scrape The Pirate Bay search results
-function scrapeThePirateBay(html, query, indexerName) {
+function scrapeThePirateBay(html, query, indexerName, indexerPriority = 25) {
   try {
     const $ = cheerio.load(html);
     const results = [];
@@ -305,6 +307,7 @@ function scrapeThePirateBay(html, query, indexerName) {
           ageFormatted: ageFormatted,
           title: title,
           indexer: indexerName,
+          indexerPriority: indexerPriority, // Include priority for sorting
           size: size / (1024 * 1024 * 1024), // Convert bytes to GiB for sorting
           sizeFormatted: formatSize(size),
           grabs: 0, // TPB doesn't show grabs
@@ -407,58 +410,6 @@ async function searchIndexer(indexer, query, categoryIds = [], limit = 100, offs
       console.log(`[${indexer.name}] Skipping: Indexer is disabled`);
       return { results: [], error: "Indexer is disabled" };
     }
-    
-    // Check if we have a custom scraper for this indexer FIRST
-    // Match by baseUrl domain or indexer name
-    try {
-      const availableScrapers = scraperManager.getAvailableIndexers();
-      let matchedScraper = null;
-      
-      // Try to match by base URL domain
-      if (indexer.baseUrl) {
-        try {
-          const indexerDomain = new URL(indexer.baseUrl).hostname.toLowerCase();
-          matchedScraper = availableScrapers.find(scraper => {
-            return scraper.links.some(link => {
-              try {
-                const scraperDomain = new URL(link).hostname.toLowerCase();
-                return indexerDomain.includes(scraperDomain) || scraperDomain.includes(indexerDomain);
-              } catch {
-                return false;
-              }
-            });
-          });
-        } catch (e) {
-          // Invalid URL, skip domain matching
-        }
-      }
-      
-      // Try to match by name if domain matching failed
-      if (!matchedScraper) {
-        const indexerNameLower = indexer.name.toLowerCase();
-        matchedScraper = availableScrapers.find(scraper => 
-          scraper.name.toLowerCase() === indexerNameLower ||
-          indexerNameLower.includes(scraper.name.toLowerCase()) ||
-          scraper.name.toLowerCase().includes(indexerNameLower)
-        );
-      }
-      
-      if (matchedScraper) {
-        console.log(`[${indexer.name}] ✨ Using custom scraper: ${matchedScraper.name}`);
-        const scraperResult = await scraperManager.search(matchedScraper.id, query, { categoryIds });
-        
-        if (scraperResult.success) {
-          console.log(`[${indexer.name}] ✅ Scraper found ${scraperResult.results.length} results`);
-          return { results: scraperResult.results, error: null };
-        } else {
-          console.log(`[${indexer.name}] ⚠️ Scraper failed: ${scraperResult.error}, falling back to API method`);
-          // Fall through to try API method
-        }
-      }
-    } catch (scraperError) {
-      console.log(`[${indexer.name}] ⚠️ Scraper error: ${scraperError.message}, falling back to API method`);
-      // Fall through to try API method
-    }
 
     if (!indexer.baseUrl) {
       console.log(`[${indexer.name}] Skipping: No baseUrl configured`);
@@ -473,8 +424,67 @@ async function searchIndexer(indexer, query, categoryIds = [], limit = 100, offs
     // If so, we can use it as a Torznab/Newznab endpoint
     const isProwlarrProxy = /\/\d+\/?$/.test(baseUrl) && (baseUrl.includes("prowlarr") || baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1"));
     
-    // Check if this is The Pirate Bay (needs special handling)
+    // Check if this is The Pirate Bay (needs special handling - use API, not scraper)
     const isTPB = indexer.name === "The Pirate Bay" || baseUrl.includes("thepiratebay") || baseUrl.includes("tpb");
+    
+    // Check if we have a custom scraper for this indexer (but skip for TPB - use API instead)
+    // Match by baseUrl domain or indexer name
+    if (!isTPB) {
+      try {
+        const availableScrapers = scraperManager.getAvailableIndexers();
+        let matchedScraper = null;
+        
+        // Try to match by base URL domain
+        if (indexer.baseUrl) {
+          try {
+            const indexerDomain = new URL(indexer.baseUrl).hostname.toLowerCase();
+            matchedScraper = availableScrapers.find(scraper => {
+              return scraper.links.some(link => {
+                try {
+                  const scraperDomain = new URL(link).hostname.toLowerCase();
+                  return indexerDomain.includes(scraperDomain) || scraperDomain.includes(indexerDomain);
+                } catch {
+                  return false;
+                }
+              });
+            });
+          } catch (e) {
+            // Invalid URL, skip domain matching
+          }
+        }
+        
+        // Try to match by name if domain matching failed
+        if (!matchedScraper) {
+          const indexerNameLower = indexer.name.toLowerCase();
+          matchedScraper = availableScrapers.find(scraper => 
+            scraper.name.toLowerCase() === indexerNameLower ||
+            indexerNameLower.includes(scraper.name.toLowerCase()) ||
+            scraper.name.toLowerCase().includes(indexerNameLower)
+          );
+        }
+        
+        if (matchedScraper) {
+          console.log(`[${indexer.name}] ✨ Using custom scraper: ${matchedScraper.name}`);
+          const scraperResult = await scraperManager.search(matchedScraper.id, query, { categoryIds });
+          
+          if (scraperResult.success) {
+            console.log(`[${indexer.name}] ✅ Scraper found ${scraperResult.results.length} results`);
+            // Add priority to scraper results
+            const resultsWithPriority = scraperResult.results.map((result) => ({
+              ...result,
+              indexerPriority: indexer.priority || 25,
+            }));
+            return { results: resultsWithPriority, error: null };
+          } else {
+            console.log(`[${indexer.name}] ⚠️ Scraper failed: ${scraperResult.error}, falling back to API method`);
+            // Fall through to try API method
+          }
+        }
+      } catch (scraperError) {
+        console.log(`[${indexer.name}] ⚠️ Scraper error: ${scraperError.message}, falling back to API method`);
+        // Fall through to try API method
+      }
+    }
     
     // If it's a Prowlarr proxy, ensure it has /api path
     if (isProwlarrProxy && !baseUrl.endsWith("/api")) {
@@ -487,11 +497,22 @@ async function searchIndexer(indexer, query, categoryIds = [], limit = 100, offs
     
     if (isTPB) {
       // The Pirate Bay uses apibay.org API for JSON data (more reliable than scraping)
-      // API format: https://apibay.org/q.php?q={query}&cat=0
+      // API format: https://apibay.org/q.php?q={query}&cat={category}
+      // TPB categories: 200=Movies, 500=TV Shows, 0=All
+      // Map Newznab categories to TPB categories
+      let tpbCategory = 0; // Default to all
+      if (categoryIds.length > 0) {
+        // Check if any category is movies (2000) or TV (5000)
+        if (categoryIds.some(cat => cat === 2000 || (cat >= 2000 && cat < 3000))) {
+          tpbCategory = 200; // Movies
+        } else if (categoryIds.some(cat => cat === 5000 || (cat >= 5000 && cat < 6000))) {
+          tpbCategory = 500; // TV Shows
+        }
+      }
       const encodedQuery = encodeURIComponent(query);
-      searchUrl = `https://apibay.org/q.php?q=${encodedQuery}&cat=0`;
+      searchUrl = `https://apibay.org/q.php?q=${encodedQuery}&cat=${tpbCategory}`;
       useTPBApi = true;
-      console.log(`[${indexer.name}] Searching TPB via API: ${searchUrl}`);
+      console.log(`[${indexer.name}] Searching TPB via API: ${searchUrl} (category: ${tpbCategory})`);
     } else {
       // For Cardigann indexers or Prowlarr proxies, determine API path
       if (isProwlarrProxy) {
@@ -506,7 +527,8 @@ async function searchIndexer(indexer, query, categoryIds = [], limit = 100, offs
         apiPath = "/api";
       }
       
-      const apiKey = indexer.password || indexer.username || "";
+      // For NZB/Newznab indexers, prefer apiKey field, fallback to password/username
+      const apiKey = indexer.apiKey || indexer.password || indexer.username || "";
 
       // Build search URL
       const params = new URLSearchParams();
@@ -578,7 +600,7 @@ async function searchIndexer(indexer, query, categoryIds = [], limit = 100, offs
                 limit: limit.toString(),
                 offset: offset.toString(),
                 extended: "1",
-                ...(indexer.password || indexer.username ? { apikey: indexer.password || indexer.username } : {}),
+                ...((indexer.apiKey || indexer.password || indexer.username) ? { apikey: indexer.apiKey || indexer.password || indexer.username } : {}),
               }).toString()}`;
               
               console.log(`[${indexer.name}] Trying alternative path: ${altPath || '(root)'}`);
@@ -641,7 +663,7 @@ async function searchIndexer(indexer, query, categoryIds = [], limit = 100, offs
           return { results: [], error: "Invalid API response format" };
         }
         
-        const apiResults = parseTPBApiResponse(jsonData, indexer.name);
+        const apiResults = parseTPBApiResponse(jsonData, indexer.name, indexer.priority || 25);
         console.log(`[${indexer.name}] Parsed ${apiResults.length} results from API`);
         return { results: apiResults, error: null };
       } catch (err) {
@@ -672,7 +694,7 @@ async function searchIndexer(indexer, query, categoryIds = [], limit = 100, offs
       
       // Try to scrape The Pirate Bay (fallback if API doesn't work)
       if (isTPB) {
-        const scrapedResults = scrapeThePirateBay(response.data, query, indexer.name);
+        const scrapedResults = scrapeThePirateBay(response.data, query, indexer.name, indexer.priority || 25);
         console.log(`[${indexer.name}] Scraped ${scrapedResults.length} results`);
         return { results: scrapedResults, error: null };
       }
@@ -699,7 +721,8 @@ async function searchIndexer(indexer, query, categoryIds = [], limit = 100, offs
     const results = parseIndexerResponse(
       response.data,
       indexer.name,
-      indexer.protocol
+      indexer.protocol,
+      indexer.priority || 25
     );
 
     console.log(`[${indexer.name}] Found ${results.length} results`);
@@ -779,8 +802,16 @@ async function searchIndexers(indexers, query, categoryIds = [], limit = 100, of
   const startTime = Date.now();
   console.log(`\n[SearchIndexers] Starting search for "${query}" across ${indexers.length} indexer(s)`);
   
-  // Sort indexers by priority: verified working ones first
+  // Sort indexers by priority (higher priority first), then by verified status
   const sortedIndexers = [...indexers].sort((a, b) => {
+    // First sort by priority (higher priority = lower number, but we want higher priority first)
+    // Priority 1 is highest, Priority 50 is lowest
+    const priorityA = a.priority || 25;
+    const priorityB = b.priority || 25;
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB; // Lower number = higher priority, so sort ascending
+    }
+    // If priorities are equal, prefer verified indexers
     if (a.verified && !b.verified) return -1;
     if (!a.verified && b.verified) return 1;
     return 0;

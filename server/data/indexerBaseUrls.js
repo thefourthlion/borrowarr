@@ -50,6 +50,7 @@ const indexerBaseUrls = {
     "https://abnzb.com/",
   ],
   "NZBgeek": [
+    "https://api.nzbgeek.info/",
     "https://nzbgeek.info/",
   ],
   "0day.kiev": [

@@ -1,16 +1,4 @@
+// Indexers page styles - minimal overrides, relying on global theme
 .Indexers {
-    .container {
-        max-width: 1400px;
-    }
-    
-    table {
-        th {
-            font-weight: 600;
-            color: var(--nextui-colors-foreground);
-        }
-        
-        td {
-            color: var(--nextui-colors-foreground-600);
-        }
-    }
+  // Empty - all styling handled by Tailwind and global theme
 }

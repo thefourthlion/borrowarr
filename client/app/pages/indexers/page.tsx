@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { Button } from "@nextui-org/button";
-import { Card, CardBody } from "@nextui-org/card";
+import { Card, CardBody, CardHeader } from "@nextui-org/card";
 import { Input } from "@nextui-org/input";
 import {
   Modal,
@@ -19,12 +19,18 @@ import {
   Plus,
   RefreshCw,
   TestTube,
-  CheckSquare,
-  Grid3x3,
-  ArrowUpDown,
+  CheckCircle2,
+  AlertCircle,
+  Settings,
+  Trash2,
+  Search,
+  Shield,
+  Globe,
+  ChevronRight,
   Filter,
   X,
-  Settings,
+  Clock,
+  XCircle,
 } from "lucide-react";
 import axios from "axios";
 import "../../../styles/Indexers.scss";
@@ -45,6 +51,8 @@ interface Indexer {
   seedRatio?: number;
   username?: string;
   password?: string;
+  apiKey?: string;
+  vipExpiration?: string;
   stripCyrillicLetters?: boolean;
   searchFreeleechOnly?: boolean;
   sortRequestedFromSite?: string;
@@ -83,15 +91,14 @@ const Indexers = () => {
   const [syncing, setSyncing] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
   const [testSuccess, setTestSuccess] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [testResults, setTestResults] = useState<Record<number, { success: boolean; error?: string }>>({});
   
-  // Filters for available indexers
+  // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [protocolFilter, setProtocolFilter] = useState<string>("");
-  const [languageFilter, setLanguageFilter] = useState<string>("");
   const [privacyFilter, setPrivacyFilter] = useState<string>("");
   const [verifiedFilter, setVerifiedFilter] = useState<boolean>(false);
-  const [openSelects, setOpenSelects] = useState<Set<string>>(new Set());
-  const [openConfigSelects, setOpenConfigSelects] = useState<Set<string>>(new Set());
   
   // Form state
   const [formData, setFormData] = useState<Partial<Indexer>>({});
@@ -114,36 +121,22 @@ const Indexers = () => {
 
   useEffect(() => {
     if (isAddModalOpen) {
-      // Reset filters when modal opens to show all indexers by default
-      setSearchQuery("");
-      setProtocolFilter("");
-      setLanguageFilter("");
-      setPrivacyFilter("");
-      setVerifiedFilter(false);
-      setOpenSelects(new Set());
-    }
-  }, [isAddModalOpen]);
-
-  useEffect(() => {
-    if (isConfigModalOpen) {
-      // Reset open selects when config modal opens
-      setOpenConfigSelects(new Set());
-    }
-  }, [isConfigModalOpen]);
-
-  useEffect(() => {
-    // Fetch when modal opens or filters change
-    if (isAddModalOpen) {
       fetchAvailableIndexers();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAddModalOpen, searchQuery, protocolFilter, languageFilter, privacyFilter, verifiedFilter]);
+  }, [isAddModalOpen, searchQuery, protocolFilter, privacyFilter, verifiedFilter]);
 
   const fetchIndexers = async () => {
     try {
       setLoading(true);
       const response = await axios.get(`${API_BASE_URL}/api/Indexers/read`);
-      setIndexers(response.data.data || []);
+      const fetchedIndexers = response.data.data || [];
+      setIndexers(fetchedIndexers);
+      
+      // Clear test results after a delay to allow users to see them
+      setTimeout(() => {
+        setTestResults({});
+      }, 10000); // Clear after 10 seconds
     } catch (error) {
       console.error("Error fetching indexers:", error);
     } finally {
@@ -156,15 +149,10 @@ const Indexers = () => {
       const params: any = {};
       if (searchQuery) params.search = searchQuery;
       if (protocolFilter) params.protocol = protocolFilter;
-      if (languageFilter) params.language = languageFilter;
       if (privacyFilter) params.privacy = privacyFilter;
       if (verifiedFilter) params.verified = 'true';
       
-      console.log("Fetching indexers with filters:", params);
       const response = await axios.get(`${API_BASE_URL}/api/Indexers/available`, { params });
-      console.log("Received indexers:", response.data.indexers?.length || 0);
-      console.log("Verified filter active:", verifiedFilter);
-      console.log("Sample indexers:", response.data.indexers?.slice(0, 3).map((i: AvailableIndexer) => ({ name: i.name, verified: i.verified })));
       setAvailableIndexers(response.data.indexers || []);
     } catch (error) {
       console.error("Error fetching available indexers:", error);
@@ -173,6 +161,8 @@ const Indexers = () => {
 
   const handleAddIndexer = (indexer: AvailableIndexer) => {
     setSelectedIndexer(indexer);
+    // For NZB indexers, set indexerType to "Newznab", otherwise "Cardigann"
+    const indexerType = indexer.protocol === "nzb" ? "Newznab" : "Cardigann";
     setFormData({
       name: indexer.name,
       protocol: indexer.protocol,
@@ -184,11 +174,10 @@ const Indexers = () => {
       language: indexer.language,
       description: indexer.description,
       categories: indexer.categories,
-      indexerType: "Cardigann",
+      indexerType: indexerType,
       status: "enabled",
-      baseUrl: indexer.availableBaseUrls && indexer.availableBaseUrls.length > 0 
-        ? indexer.availableBaseUrls[0] 
-        : "",
+      baseUrl: indexer.availableBaseUrls?.[0] || "",
+      availableBaseUrls: indexer.availableBaseUrls || [],
     });
     setTestError(null);
     setTestSuccess(false);
@@ -198,17 +187,14 @@ const Indexers = () => {
 
   const handleEditIndexer = async (indexer: Indexer) => {
     try {
-      // Fetch full indexer data with available base URLs
       const response = await axios.get(`${API_BASE_URL}/api/Indexers/read/${indexer.id}`);
-      const fullIndexer = response.data;
-      setEditingIndexer(fullIndexer);
-      setFormData(fullIndexer);
+      setEditingIndexer(response.data);
+      setFormData(response.data);
       setTestError(null);
       setTestSuccess(false);
       onConfigModalOpen();
     } catch (error) {
       console.error("Error fetching indexer details:", error);
-      // Fallback to using the indexer data we already have
       setEditingIndexer(indexer);
       setFormData(indexer);
       setTestError(null);
@@ -239,8 +225,7 @@ const Indexers = () => {
         setTestSuccess(false);
       }
     } catch (error: any) {
-      const errorMsg = error.response?.data?.error || error.message || "Test failed";
-      setTestError(errorMsg);
+      setTestError(error.response?.data?.error || error.message || "Test failed");
       setTestSuccess(false);
     } finally {
       setTesting(false);
@@ -248,57 +233,29 @@ const Indexers = () => {
   };
 
   const handleSaveIndexer = async () => {
-    // Test before saving
-    if (!testSuccess) {
-      await handleTestIndexerConfig();
-      if (!testSuccess) {
-        return; // Don't save if test fails
-      }
-    }
-    
     try {
-      if (editingIndexer?.id) {
+      if (editingIndexer) {
         await axios.put(`${API_BASE_URL}/api/Indexers/update/${editingIndexer.id}`, formData);
       } else {
         await axios.post(`${API_BASE_URL}/api/Indexers/create`, formData);
       }
-      await fetchIndexers();
+      fetchIndexers();
       onConfigModalClose();
       setEditingIndexer(null);
       setFormData({});
-      setTestError(null);
-      setTestSuccess(false);
     } catch (error) {
       console.error("Error saving indexer:", error);
-      alert("Failed to save indexer");
     }
   };
 
-  const handleTestIndexer = async (id: number) => {
+  const handleDeleteIndexer = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this indexer?")) return;
+    
     try {
-      setTesting(true);
-      const response = await axios.post(`${API_BASE_URL}/api/Indexers/test/${id}`);
-      alert(response.data.success ? "Test successful!" : "Test failed: " + response.data.message);
+      await axios.delete(`${API_BASE_URL}/api/Indexers/delete/${id}`);
+      fetchIndexers();
     } catch (error) {
-      console.error("Error testing indexer:", error);
-      alert("Failed to test indexer");
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  const handleTestAll = async () => {
-    try {
-      setTesting(true);
-      const response = await axios.post(`${API_BASE_URL}/api/Indexers/test-all`);
-      const results = response.data.results || [];
-      const successCount = results.filter((r: any) => r.success).length;
-      alert(`Tested ${results.length} indexers. ${successCount} successful, ${results.length - successCount} failed.`);
-    } catch (error) {
-      console.error("Error testing all indexers:", error);
-      alert("Failed to test indexers");
-    } finally {
-      setTesting(false);
+      console.error("Error deleting indexer:", error);
     }
   };
 
@@ -306,777 +263,796 @@ const Indexers = () => {
     try {
       setSyncing(true);
       await axios.post(`${API_BASE_URL}/api/Indexers/sync`);
-      alert("Indexers synced successfully");
+      fetchIndexers();
     } catch (error) {
       console.error("Error syncing indexers:", error);
-      alert("Failed to sync indexers");
     } finally {
       setSyncing(false);
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this indexer?")) return;
+  const handleTestAll = async () => {
     try {
-      await axios.delete(`${API_BASE_URL}/api/Indexers/delete/${id}`);
-      await fetchIndexers();
+      setTesting(true);
+      setTestResults({});
+      const response = await axios.post(`${API_BASE_URL}/api/Indexers/test-all`);
+      
+      // Refresh indexers to get latest status after testing
+      const refreshResponse = await axios.get(`${API_BASE_URL}/api/Indexers/read`);
+      const updatedIndexers = refreshResponse.data.data || [];
+      setIndexers(updatedIndexers);
+      
+      // Track test results if available in response
+      if (response.data?.results) {
+        const results: Record<number, { success: boolean; error?: string }> = {};
+        response.data.results.forEach((result: any) => {
+          if (result.indexerId || result.id) {
+            const id = result.indexerId || result.id;
+            results[id] = {
+              success: result.success || false,
+              error: result.error || result.message || undefined,
+            };
+          }
+        });
+        setTestResults(results);
+      } else {
+        // If no structured results, infer from updated status
+        const results: Record<number, { success: boolean; error?: string }> = {};
+        updatedIndexers.forEach((idx: Indexer) => {
+          if (idx.id) {
+            results[idx.id] = {
+              success: idx.status !== "error" && idx.enabled,
+              error: idx.status === "error" ? "Connection failed" : undefined,
+            };
+          }
+        });
+        setTestResults(results);
+      }
     } catch (error) {
-      console.error("Error deleting indexer:", error);
-      alert("Failed to delete indexer");
+      console.error("Error testing indexers:", error);
+      // Still fetch to get updated status
+      fetchIndexers();
+    } finally {
+      setTesting(false);
     }
   };
 
-  const getStatusColor = (status?: string, enabled?: boolean, redirected?: boolean) => {
-    if (!enabled) return "default";
-    if (redirected || status === "enabled_redirected") return "primary";
-    if (status === "error") return "danger";
-    return "success";
+  const getStatusIcon = (indexer: Indexer) => {
+    if (!indexer.enabled) {
+      return <XCircle className="w-5 h-5 text-default-400" />;
+    }
+    if (indexer.status === "error") {
+      return <AlertCircle className="w-5 h-5 text-danger" />;
+    }
+    if (indexer.redirected) {
+      return <CheckCircle2 className="w-5 h-5 text-warning" />;
+    }
+    return <CheckCircle2 className="w-5 h-5 text-success" />;
   };
 
-  const getStatusLabel = (status?: string, enabled?: boolean, redirected?: boolean) => {
-    if (!enabled) return "Disabled";
-    if (redirected || status === "enabled_redirected") return "Enabled, Redirected";
-    if (status === "error") return "Error";
-    return "Enabled";
-  };
-
-  const stats = {
-    total: indexers.length,
-    enabled: indexers.filter((i) => i.enabled).length,
-    torrent: indexers.filter((i) => i.protocol === "torrent").length,
-    usenet: indexers.filter((i) => i.protocol === "nzb").length,
+  const clearFilters = () => {
+    setSearchQuery("");
+    setProtocolFilter("");
+    setPrivacyFilter("");
+    setVerifiedFilter(false);
   };
 
   return (
-    <div className="Indexers page min-h-screen bg-background p-6">
-      <div className="container max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Indexers</h1>
-          <div className="flex gap-2">
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <div className="border-b border-secondary/20 sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
+            <div className="min-w-0">
+              <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent truncate">
+                Indexers
+              </h1>
+              <p className="text-xs sm:text-sm text-foreground/60 mt-1">
+                Manage your torrent and NZB indexers
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
             <Button
-              color="primary"
+                color="secondary"
+                className="btn-glow flex-1 xs:flex-none"
+                size="sm"
               startContent={<Plus size={16} />}
               onPress={onAddModalOpen}
             >
-              Add Indexer
+                <span className="hidden xs:inline">Add Indexer</span>
+                <span className="xs:hidden">Add</span>
             </Button>
             <Button
               variant="flat"
+                color="secondary"
+                size="sm"
               startContent={<RefreshCw size={16} className={syncing ? "animate-spin" : ""} />}
               onPress={handleSync}
               isLoading={syncing}
             >
-              Sync App Indexers
+                <span className="hidden sm:inline">Sync</span>
             </Button>
             <Button
               variant="flat"
+                color="secondary"
+                size="sm"
               startContent={<TestTube size={16} />}
               onPress={handleTestAll}
               isLoading={testing}
             >
-              Test All Indexers
+                <span className="hidden sm:inline">Test All</span>
             </Button>
-            <Button variant="flat" startContent={<CheckSquare size={16} />}>
-              Select Indexers
-            </Button>
-            <Button variant="flat" isIconOnly>
-              <Grid3x3 size={16} />
-            </Button>
-            <Button variant="flat" isIconOnly>
-              <ArrowUpDown size={16} />
-            </Button>
-            <Button variant="flat" isIconOnly>
-              <Filter size={16} />
-            </Button>
+            </div>
+          </div>
           </div>
         </div>
 
+      {/* Content */}
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
         {loading ? (
-          <div className="flex justify-center items-center py-12">
-            <Spinner size="lg" />
+          <div className="flex justify-center items-center py-20">
+            <Spinner size="lg" color="secondary" />
           </div>
+        ) : indexers.length === 0 ? (
+          <Card className="card-interactive">
+            <CardBody className="text-center py-12 sm:py-16 px-4">
+              <div className="flex flex-col items-center gap-4 max-w-md mx-auto">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-secondary/10 flex items-center justify-center">
+                  <Shield className="w-6 h-6 sm:w-8 sm:h-8 text-secondary" />
+                </div>
+                <div>
+                  <h3 className="text-lg sm:text-xl font-semibold mb-2">No Indexers Configured</h3>
+                  <p className="text-sm sm:text-base text-foreground/60 mb-4">
+                    Get started by adding your first indexer to begin discovering content.
+                  </p>
+                  <Button
+                    color="secondary"
+                    className="btn-glow"
+                    size="sm"
+                    startContent={<Plus size={16} />}
+                    onPress={onAddModalOpen}
+                  >
+                    Add Your First Indexer
+                  </Button>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
         ) : (
-          <>
-            <Card>
-              <CardBody>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-divider">
-                        <th className="text-left p-3">Indexer Name</th>
-                        <th className="text-left p-3">Protocol</th>
-                        <th className="text-left p-3">Privacy</th>
-                        <th className="text-left p-3">Priority</th>
-                        <th className="text-left p-3">Sync Profile</th>
-                        <th className="text-left p-3">Added</th>
-                        <th className="text-left p-3">Categories</th>
-                        <th className="text-left p-3">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {indexers.length === 0 ? (
-                        <tr>
-                          <td colSpan={8} className="text-center p-8 text-default-500">
-                            No indexers configured. Click "Add Indexer" to get started.
-                          </td>
-                        </tr>
-                      ) : (
-                        indexers.map((indexer) => (
-                          <tr
+          <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 3xl:grid-cols-7 gap-3 sm:gap-4 lg:gap-5">
+            {indexers.map((indexer) => (
+              <Card 
                             key={indexer.id}
-                            className="border-b border-divider hover:bg-content2 transition-colors"
+                className="card-interactive group"
+                isPressable
+                onPress={() => handleEditIndexer(indexer)}
                           >
-                            <td className="p-3">
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className={`w-3 h-3 rounded-full ${
-                                    getStatusColor(
-                                      indexer.status,
-                                      indexer.enabled,
-                                      indexer.redirected
-                                    ) === "success"
-                                      ? "bg-success"
-                                      : getStatusColor(
-                                          indexer.status,
-                                          indexer.enabled,
-                                          indexer.redirected
-                                        ) === "primary"
-                                      ? "bg-primary"
-                                      : getStatusColor(
-                                          indexer.status,
-                                          indexer.enabled,
-                                          indexer.redirected
-                                        ) === "danger"
-                                      ? "bg-danger"
-                                      : "bg-default"
-                                  }`}
-                                />
+                <CardHeader className="flex-col items-start pb-2 gap-2">
+                  <div className="flex items-start gap-2 sm:gap-3 w-full">
+                    {getStatusIcon(indexer)}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-sm sm:text-base lg:text-lg line-clamp-1 group-hover:text-secondary transition-colors">
                                 {indexer.name}
+                      </h3>
+                      <p className="text-[10px] sm:text-xs text-foreground/60 line-clamp-1 mt-0.5">
+                        {indexer.baseUrl || indexer.description || "No description"}
+                      </p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-foreground/40 group-hover:text-secondary group-hover:translate-x-1 transition-all flex-shrink-0" />
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 w-full">
+                    {!indexer.enabled && (
+                      <Chip size="sm" color="default" variant="flat" className="text-[10px] sm:text-xs h-5 sm:h-6">
+                        Disabled
+                      </Chip>
+                    )}
+                    {indexer.redirected && (
+                      <Chip size="sm" color="warning" variant="flat" className="text-[10px] sm:text-xs h-5 sm:h-6">
+                        Redirected
+                      </Chip>
+                    )}
                                 {indexer.verified && (
-                                  <Chip size="sm" color="success" variant="flat">
-                                    Verified
+                      <Chip size="sm" color="success" variant="flat" className="text-[10px] sm:text-xs h-5 sm:h-6">
+                        ✓ Verified
                                   </Chip>
                                 )}
                               </div>
-                            </td>
-                            <td className="p-3">
-                              <Chip
-                                size="sm"
-                                color={indexer.protocol === "torrent" ? "success" : "primary"}
-                                variant="flat"
-                              >
-                                {indexer.protocol}
+                </CardHeader>
+                <CardBody className="pt-0 space-y-2 sm:space-y-3">
+                  {/* Test Results */}
+                  {testResults[indexer.id!] && (
+                    <div className={`flex items-start gap-1.5 sm:gap-2 p-1.5 sm:p-2 rounded-lg border ${
+                      testResults[indexer.id!].success
+                        ? "bg-success/10 border-success/30"
+                        : "bg-danger/10 border-danger/30"
+                    }`}>
+                      {testResults[indexer.id!].success ? (
+                        <>
+                          <CheckCircle2 className="w-3 h-3 sm:w-4 sm:h-4 text-success flex-shrink-0 mt-0.5" />
+                          <p className="text-[10px] sm:text-xs text-success leading-tight font-medium">
+                            Test successful!
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4 text-danger flex-shrink-0 mt-0.5" />
+                          <p className="text-[10px] sm:text-xs text-danger leading-tight">
+                            {testResults[indexer.id!].error || "Test failed"}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Status Message */}
+                  {indexer.status === "error" && !testResults[indexer.id!] && (
+                    <div className="flex items-start gap-1.5 sm:gap-2 p-1.5 sm:p-2 bg-danger/10 border border-danger/20 rounded-lg">
+                      <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4 text-danger flex-shrink-0 mt-0.5" />
+                      <p className="text-[10px] sm:text-xs text-danger leading-tight">
+                        Connection failed - check configuration
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Primary Info Chips */}
+                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                    <Chip size="sm" variant="flat" color="secondary" className="text-[10px] sm:text-xs h-5 sm:h-6">
+                      {indexer.protocol.toUpperCase()}
                               </Chip>
-                            </td>
-                            <td className="p-3">
-                              <Chip
-                                size="sm"
-                                color={indexer.privacy === "Private" ? "primary" : "danger"}
-                                variant="flat"
-                              >
+                    <Chip size="sm" variant="flat" className="text-[10px] sm:text-xs h-5 sm:h-6">
                                 {indexer.privacy}
                               </Chip>
-                            </td>
-                            <td className="p-3">{indexer.priority}</td>
-                            <td className="p-3">{indexer.syncProfile}</td>
-                            <td className="p-3">
-                              {indexer.createdAt
-                                ? new Date(indexer.createdAt).toLocaleDateString("en-US", {
-                                    month: "short",
-                                    day: "numeric",
-                                    year: "numeric",
-                                  })
-                                : "-"}
-                            </td>
-                            <td className="p-3">
-                              <div className="flex flex-wrap gap-1">
-                                {(() => {
-                                  // Get unique categories
-                                  const uniqueCategories = Array.from(new Set(indexer.categories || []));
-                                  const displayCount = 5;
-    return (
-                                    <>
-                                      {uniqueCategories.slice(0, displayCount).map((cat, idx) => (
-                                        <Chip key={idx} size="sm" variant="flat" color="warning">
-                                          {cat}
+                    {indexer.language && (
+                      <Chip size="sm" variant="flat" className="text-[10px] sm:text-xs h-5 sm:h-6">
+                        {indexer.language}
                                         </Chip>
-                                      ))}
-                                      {uniqueCategories.length > displayCount && (
-                                        <Chip size="sm" variant="flat" title={`${uniqueCategories.slice(displayCount).join(", ")}`}>
-                                          +{uniqueCategories.length - displayCount}
+                    )}
+                    {indexer.syncProfile && (
+                      <Chip size="sm" variant="flat" className="text-[10px] sm:text-xs h-5 sm:h-6 hidden md:flex">
+                        {indexer.syncProfile}
                                         </Chip>
                                       )}
-                                      {uniqueCategories.length === 0 && (
-                                        <span className="text-xs text-default-400">No categories</span>
-                                      )}
-                                    </>
-                                  );
-                                })()}
                               </div>
-                            </td>
-                            <td className="p-3">
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="light"
-                                  isIconOnly
-                                  onPress={() => indexer.id && handleEditIndexer(indexer)}
-                                >
-                                  <Settings size={16} />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="light"
-                                  isIconOnly
-                                  onPress={() => indexer.id && handleTestIndexer(indexer.id)}
-                                  isLoading={testing}
-                                >
-                                  <TestTube size={16} />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="light"
-                                  color="danger"
-                                  isIconOnly
-                                  onPress={() => indexer.id && handleDelete(indexer.id)}
-                                >
-                                  <X size={16} />
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </CardBody>
-            </Card>
 
-            <div className="flex justify-between items-center mt-6">
-              <div className="flex gap-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-success" />
-                  <span>Enabled</span>
+                  {/* Categories */}
+                  {indexer.categories && indexer.categories.length > 0 && (
+                    <div className="text-[10px] sm:text-xs text-foreground/60 leading-tight">
+                      <span className="font-medium">Categories:</span> {indexer.categories.slice(0, 2).join(", ")}
+                      {indexer.categories.length > 2 && ` +${indexer.categories.length - 2} more`}
+                              </div>
+                  )}
+
+                  {/* Bottom Row */}
+                  <div className="flex items-center justify-between pt-2 border-t border-secondary/10 gap-2">
+                    <div className="flex flex-col gap-0.5 sm:gap-1 text-[10px] sm:text-xs text-foreground/60 min-w-0 flex-1">
+                      <div className="flex items-center gap-1 truncate">
+                        <Globe className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
+                        <span className="truncate">Priority: {indexer.priority}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-primary" />
-                  <span>Enabled, Redirected</span>
+                      {indexer.verifiedAt && (
+                        <div className="flex items-center gap-1 truncate" title={`Last tested: ${new Date(indexer.verifiedAt).toLocaleString()}`}>
+                          <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
+                          <span className="truncate">Tested {new Date(indexer.verifiedAt).toLocaleDateString()}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-default" />
-                  <span>Disabled</span>
+                      )}
+                      {indexer.createdAt && !indexer.verifiedAt && (
+                        <div className="flex items-center gap-1 truncate" title={`Added: ${new Date(indexer.createdAt).toLocaleString()}`}>
+                          <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
+                          <span className="truncate">Added {new Date(indexer.createdAt).toLocaleDateString()}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-danger" />
-                  <span>Error</span>
+                      )}
                 </div>
+                    <Switch
+                      size="sm"
+                      color="secondary"
+                      isSelected={indexer.enabled}
+                      onValueChange={async (enabled) => {
+                        try {
+                          await axios.put(`${API_BASE_URL}/api/Indexers/update/${indexer.id}`, {
+                            ...indexer,
+                            enabled,
+                          });
+                          fetchIndexers();
+                        } catch (error) {
+                          console.error("Error updating indexer:", error);
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex-shrink-0"
+                    />
               </div>
-              <div className="flex gap-6 text-sm">
-                <div>
-                  <span className="font-semibold">Indexers:</span> {stats.total}
+                </CardBody>
+              </Card>
+            ))}
                 </div>
-                <div>
-                  <span className="font-semibold">Enabled:</span> {stats.enabled}
-                </div>
-                <div>
-                  <span className="font-semibold">Torrent:</span> {stats.torrent}
-                </div>
-                <div>
-                  <span className="font-semibold">Usenet:</span> {stats.usenet}
-                </div>
-              </div>
-            </div>
-          </>
         )}
+                </div>
 
         {/* Add Indexer Modal */}
         <Modal
           isOpen={isAddModalOpen}
-          onClose={() => {
-            if (openSelects.size === 0) {
-              onAddModalClose();
-            }
-          }}
-          size="5xl"
+        onClose={onAddModalClose}
+        size="3xl"
           scrollBehavior="inside"
-          shouldBlockScroll={true}
-          hideCloseButton={false}
-          isDismissable={openSelects.size === 0}
+        classNames={{
+          backdrop: "bg-overlay/50 backdrop-blur-sm",
+          base: "bg-content1 border border-secondary/20 mx-2 sm:mx-4 shadow-xl shadow-secondary/10",
+        }}
         >
           <ModalContent>
-            <ModalHeader>Add Indexer</ModalHeader>
-            <ModalBody>
-              <div className="space-y-4">
+          <ModalHeader className="border-b border-secondary/20 bg-gradient-to-r from-secondary/5 to-transparent px-4 sm:px-6 py-4 sm:py-5">
+            <div className="w-full">
+              <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent">
+                Add Indexer
+              </h2>
+              <p className="text-sm sm:text-base text-foreground/70 font-normal mt-1">
+                Browse and select an indexer to add to your collection
+              </p>
+            </div>
+          </ModalHeader>
+          <ModalBody className="py-5 sm:py-6 px-4 sm:px-6">
+            {/* Search and Filters */}
+            <div className="space-y-4 mb-5">
+              <div className="relative">
                 <Input
-                  placeholder="Search indexers"
+                  placeholder="Search indexers by name, protocol, or description..."
                   value={searchQuery}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-                  startContent={<Filter size={16} />}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  size="md"
+                  startContent={<Search size={18} className="text-secondary" />}
+                  classNames={{
+                    base: "w-full",
+                    inputWrapper: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all duration-200 shadow-sm",
+                    input: "text-sm sm:text-base",
+                  }}
                 />
-                <div className="flex items-center gap-2 mb-2">
-                  <Switch
-                    isSelected={verifiedFilter}
-                    onValueChange={setVerifiedFilter}
+              </div>
+              
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  size="sm"
+                  variant={showFilters ? "solid" : "flat"}
+                  color="secondary"
+                  startContent={<Filter size={16} />}
+                  onPress={() => setShowFilters(!showFilters)}
+                  className={`text-xs sm:text-sm transition-all ${showFilters ? "btn-glow" : ""}`}
                   >
-                    Show Only Verified Working
-                  </Switch>
+                  {showFilters ? "Hide Filters" : "Show Filters"}
+                </Button>
+                {(protocolFilter || privacyFilter || verifiedFilter) && (
+                  <Button
+                    size="sm"
+                    variant="flat"
+                    color="default"
+                    startContent={<X size={14} />}
+                    onPress={clearFilters}
+                    className="text-xs sm:text-sm"
+                  >
+                    Clear All
+                  </Button>
+                )}
                 </div>
-                <div className="grid grid-cols-4 gap-2">
+
+              {showFilters && (
+                <div className="p-4 sm:p-5 bg-content2 rounded-xl border-2 border-secondary/20 shadow-sm space-y-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Filter className="w-4 h-4 text-secondary" />
+                    <h3 className="text-sm font-semibold text-foreground">Filter Options</h3>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <Select
-                    placeholder="Protocol"
-                    selectedKeys={protocolFilter ? new Set([protocolFilter]) : new Set()}
-                    onSelectionChange={(keys) => {
-                      const keyArray = Array.from(keys);
-                      const selected = keyArray.length > 0 ? (keyArray[0] as string) : "";
-                      setProtocolFilter(selected);
-                    }}
-                    selectionMode="single"
-                    onOpenChange={(open) => {
-                      setOpenSelects((prev) => {
-                        const next = new Set(prev);
-                        if (open) {
-                          next.add("protocol");
-                        } else {
-                          next.delete("protocol");
-                        }
-                        return next;
-                      });
+                      label="Protocol Type"
+                      placeholder="All Protocols"
+                      selectedKeys={protocolFilter ? [protocolFilter] : []}
+                      onChange={(e) => setProtocolFilter(e.target.value)}
+                      size="sm"
+                      classNames={{
+                        base: "w-full",
+                        trigger: "bg-content1 border border-secondary/20 hover:border-secondary/40",
+                        label: "text-xs sm:text-sm font-medium text-foreground",
                     }}
                   >
                     <SelectItem key="torrent">Torrent</SelectItem>
                     <SelectItem key="nzb">NZB</SelectItem>
                   </Select>
                   <Select
-                    placeholder="Language"
-                    selectedKeys={languageFilter ? new Set([languageFilter]) : new Set()}
-                    onSelectionChange={(keys) => {
-                      const keyArray = Array.from(keys);
-                      const selected = keyArray.length > 0 ? (keyArray[0] as string) : "";
-                      setLanguageFilter(selected);
-                    }}
-                    selectionMode="single"
-                    onOpenChange={(open) => {
-                      setOpenSelects((prev) => {
-                        const next = new Set(prev);
-                        if (open) {
-                          next.add("language");
-                        } else {
-                          next.delete("language");
-                        }
-                        return next;
-                      });
+                      label="Privacy Level"
+                      placeholder="All Privacy Levels"
+                      selectedKeys={privacyFilter ? [privacyFilter] : []}
+                      onChange={(e) => setPrivacyFilter(e.target.value)}
+                      size="sm"
+                      classNames={{
+                        base: "w-full",
+                        trigger: "bg-content1 border border-secondary/20 hover:border-secondary/40",
+                        label: "text-xs sm:text-sm font-medium text-foreground",
                     }}
                   >
-                    <SelectItem key="en-US">English</SelectItem>
-                    <SelectItem key="uk-UA">Ukrainian</SelectItem>
-                    <SelectItem key="zh-CN">Chinese</SelectItem>
-                    <SelectItem key="vi-VN">Vietnamese</SelectItem>
+                      <SelectItem key="Public">Public</SelectItem>
+                      <SelectItem key="Private">Private</SelectItem>
                   </Select>
-                  <Select
-                    placeholder="Privacy"
-                    selectedKeys={privacyFilter ? new Set([privacyFilter]) : new Set()}
-                    onSelectionChange={(keys) => {
-                      const keyArray = Array.from(keys);
-                      const selected = keyArray.length > 0 ? (keyArray[0] as string) : "";
-                      setPrivacyFilter(selected);
-                    }}
-                    selectionMode="single"
-                    onOpenChange={(open) => {
-                      setOpenSelects((prev) => {
-                        const next = new Set(prev);
-                        if (open) {
-                          next.add("privacy");
-                        } else {
-                          next.delete("privacy");
-                        }
-                        return next;
-                      });
-                    }}
+                    <div className="flex flex-col justify-end">
+                      <label className="text-xs sm:text-sm font-medium text-foreground mb-2">
+                        Verification Status
+                      </label>
+                      <div className="flex items-center gap-3 p-2 bg-content1 rounded-lg border border-secondary/20">
+                        <Switch
+                          size="sm"
+                          color="secondary"
+                          isSelected={verifiedFilter}
+                          onValueChange={setVerifiedFilter}
+                          classNames={{
+                            wrapper: "group-data-[selected=true]:bg-secondary",
+                          }}
+                        >
+                          <span className="text-xs sm:text-sm text-foreground/80">Verified Only</span>
+                        </Switch>
+                </div>
+                </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Indexer List */}
+            <div className="space-y-3 max-h-[60vh] sm:max-h-[500px] overflow-y-auto pr-1">
+              {availableIndexers.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center">
+                      <Search className="w-6 h-6 text-secondary/60" />
+                    </div>
+                    <p className="text-sm text-foreground/60 font-medium">No indexers found</p>
+                    <p className="text-xs text-foreground/50">Try adjusting your search or filters</p>
+                  </div>
+                </div>
+              ) : (
+                availableIndexers.map((indexer, idx) => (
+                  <Card
+                    key={idx}
+                    className="card-interactive group cursor-pointer border-2 border-secondary/10 hover:border-secondary/30 transition-all duration-200"
+                    isPressable
+                    onPress={() => handleAddIndexer(indexer)}
                   >
-                    <SelectItem key="Private">Private</SelectItem>
-                    <SelectItem key="Public">Public</SelectItem>
-                    <SelectItem key="Semi-Private">Semi-Private</SelectItem>
-                  </Select>
-                  <Select placeholder="Categories" isDisabled>
-                    <SelectItem key="all">All</SelectItem>
-                  </Select>
-                </div>
-                <div className="bg-primary/10 p-3 rounded-lg text-sm">
-                  Prowlarr supports many indexers in addition to any indexer that uses the
-                  Newznab/Torznab standard using &apos;Generic Newznab&apos; (for usenet) or
-                  &apos;Generic Torznab&apos; (for torrents). Search & Select your indexer from
-                  below.
-                </div>
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="w-full">
-                    <thead className="bg-content2">
-                      <tr>
-                        <th className="text-left p-3">Protocol</th>
-                        <th className="text-left p-3">Name</th>
-                        <th className="text-left p-3">Language</th>
-                        <th className="text-left p-3">Description</th>
-                        <th className="text-left p-3">Privacy</th>
-                        <th className="text-left p-3">Categories</th>
-                        <th className="text-left p-3">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {availableIndexers.map((indexer, idx) => (
-                        <tr key={idx} className="border-b border-divider hover:bg-content2">
-                          <td className="p-3">
+                    <CardBody className="py-3 sm:py-4 px-4 sm:px-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h4 className="font-semibold text-sm sm:text-base text-foreground group-hover:text-secondary transition-colors truncate">
+                              {indexer.name}
+                            </h4>
+                            {indexer.verified && (
                             <Chip
                               size="sm"
-                              color={indexer.protocol === "torrent" ? "success" : "primary"}
                               variant="flat"
-                            >
-                              {indexer.protocol}
-                            </Chip>
-                          </td>
-                          <td className="p-3">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{indexer.name}</span>
-                              {indexer.verified && (
-                                <Chip size="sm" color="success" variant="flat">
-                                  Verified
+                                color="success" 
+                                className="text-xs h-6 flex-shrink-0 font-medium"
+                              >
+                                ✓ Verified
                                 </Chip>
                               )}
                             </div>
-                          </td>
-                          <td className="p-3">{indexer.language}</td>
-                          <td className="p-3 text-sm text-default-500">
-                            {indexer.description}
-                          </td>
-                          <td className="p-3">
+                          <p className="text-xs sm:text-sm text-foreground/70 leading-relaxed mb-3 line-clamp-2">
+                            {indexer.description || "No description available"}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
                             <Chip
                               size="sm"
-                              color={indexer.privacy === "Private" ? "primary" : "danger"}
                               variant="flat"
+                              color="secondary" 
+                              className="text-xs h-6 font-medium"
+                            >
+                              {indexer.protocol.toUpperCase()}
+                            </Chip>
+                            <Chip 
+                              size="sm" 
+                              variant="flat" 
+                              className="text-xs h-6 font-medium bg-content3"
                             >
                               {indexer.privacy}
                             </Chip>
-                          </td>
-                          <td className="p-3">
-                            <div className="flex flex-wrap gap-1">
-                              {(() => {
-                                // Get unique categories
-                                const uniqueCategories = Array.from(new Set(indexer.categories || []));
-                                const displayCount = 3;
-                                return (
-                                  <>
-                                    {uniqueCategories.slice(0, displayCount).map((cat, i) => (
-                                      <Chip key={i} size="sm" variant="flat" color="warning">
-                                        {cat}
-                                      </Chip>
-                                    ))}
-                                    {uniqueCategories.length > displayCount && (
-                                      <Chip size="sm" variant="flat" title={`${uniqueCategories.slice(displayCount).join(", ")}`}>
-                                        +{uniqueCategories.length - displayCount}
-                                      </Chip>
-                                    )}
-                                    {uniqueCategories.length === 0 && (
-                                      <span className="text-xs text-default-400">No categories</span>
-                                    )}
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          </td>
-                          <td className="p-3">
-                            <Button
+                            <Chip 
                               size="sm"
-                              color="primary"
-                              onPress={() => handleAddIndexer(indexer)}
+                              variant="flat" 
+                              className="text-xs h-6 font-medium bg-content3"
                             >
-                              Add
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                              {indexer.language}
+                            </Chip>
                 </div>
-                <div className="text-sm text-default-500">
-                  {availableIndexers.length} indexer(s) available
                 </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-secondary/10 group-hover:bg-secondary/20 flex items-center justify-center transition-colors">
+                            <ChevronRight className="w-4 h-4 text-secondary group-hover:translate-x-1 transition-transform" />
+                          </div>
+                        </div>
+                      </div>
+                    </CardBody>
+                  </Card>
+                ))
+              )}
               </div>
             </ModalBody>
-            <ModalFooter>
-              <Button variant="light" onPress={onAddModalClose}>
-                Close
-              </Button>
-            </ModalFooter>
           </ModalContent>
         </Modal>
 
-        {/* Configure Indexer Modal */}
+      {/* Config Modal */}
         <Modal
           isOpen={isConfigModalOpen}
           onClose={() => {
-            if (openConfigSelects.size === 0) {
               onConfigModalClose();
               setEditingIndexer(null);
               setFormData({});
               setTestError(null);
               setTestSuccess(false);
-            }
           }}
           size="2xl"
           scrollBehavior="inside"
-          shouldBlockScroll={true}
-          hideCloseButton={false}
-          isDismissable={openConfigSelects.size === 0}
+        classNames={{
+          backdrop: "bg-overlay/50 backdrop-blur-sm",
+          base: "bg-content1 border border-secondary/20 mx-2 sm:mx-4",
+        }}
         >
           <ModalContent>
-            <ModalHeader>
-              {editingIndexer ? `Edit Indexer - ${editingIndexer.name}` : `Add Indexer - ${selectedIndexer?.name || "New"}`}
-            </ModalHeader>
-            <ModalBody>
-              <div className="space-y-4">
-                {/* Test Error/Success Message */}
-                {testError && (
-                  <div className="bg-danger/10 border border-danger rounded-lg p-3">
-                    <p className="text-danger text-sm font-medium">{testError}</p>
-                  </div>
-                )}
-                {testSuccess && !testError && (
-                  <div className="bg-success/10 border border-success rounded-lg p-3">
-                    <p className="text-success text-sm font-medium">Connection successful</p>
-                  </div>
-                )}
-                
-                {/* FlareSolverr Info for Cloudflare-protected sites */}
-                {testError && testError.includes("CloudFlare") && (
-                  <div className="bg-primary/10 border border-primary rounded-lg p-3">
-                    <p className="text-primary text-sm">
-                      This site may use Cloudflare DDoS Protection, therefore BorrowArr requires FlareSolverr or Prowlarr proxy to access it.
+          <ModalHeader className="border-b border-secondary/20 px-4 sm:px-6">
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold">
+                {editingIndexer ? "Edit" : "Add"} Indexer{formData.indexerType ? ` - ${formData.indexerType}` : ""}
+              </h2>
+              <p className="text-xs sm:text-sm text-foreground/60 font-normal truncate">
+                {formData.name || "Configure your indexer"}
                     </p>
                   </div>
-                )}
-                
+          </ModalHeader>
+          <ModalBody className="py-4 sm:py-6 px-4 sm:px-6 space-y-3 sm:space-y-4">
                 <Input
                   label="Name"
                   value={formData.name || ""}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    setFormData({ ...formData, name: e.target.value });
-                    setTestError(null);
-                    setTestSuccess(false);
-                  }}
-                />
-                <div className="flex items-center gap-2">
-                  <Switch
-                    isSelected={formData.enabled}
-                    onValueChange={(val: boolean) => setFormData({ ...formData, enabled: val })}
-                  >
-                    Enable
-                  </Switch>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    isSelected={formData.redirected}
-                    onValueChange={(val: boolean) => setFormData({ ...formData, redirected: val })}
-                  >
-                    Redirect
-                  </Switch>
-                  <p className="text-xs text-default-500">
-                    Redirect incoming download request for indexer and pass the grab directly
-                    instead of proxying the request via Prowlarr
-                  </p>
-                </div>
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              size="sm"
+              classNames={{
+                inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                label: "text-xs sm:text-sm",
+              }}
+            />
+
+            {formData.availableBaseUrls && formData.availableBaseUrls.length > 0 ? (
                 <Select
-                  label="Sync Profile"
-                  selectedKeys={formData.syncProfile ? [formData.syncProfile] : []}
-                  onSelectionChange={(keys: any) =>
-                    setFormData({ ...formData, syncProfile: Array.from(keys)[0] as string })
-                  }
-                  onOpenChange={(open) => {
-                    setOpenConfigSelects((prev) => {
-                      const next = new Set(prev);
-                      if (open) {
-                        next.add("syncProfile");
-                      } else {
-                        next.delete("syncProfile");
-                      }
-                      return next;
-                    });
-                  }}
-                >
-                  <SelectItem key="Standard">Standard</SelectItem>
-                </Select>
-                <p className="text-xs text-default-500 -mt-3">
-                  App profiles are used to control RSS, Automatic Search and Interactive Search
-                  settings on application sync
-                </p>
-                <Select
-                  label="Base Url"
+                label="Base URL"
                   selectedKeys={formData.baseUrl ? [formData.baseUrl] : []}
-                  onSelectionChange={(keys: any) => {
-                    setFormData({ ...formData, baseUrl: Array.from(keys)[0] as string });
-                    setTestError(null);
-                    setTestSuccess(false);
-                  }}
-                  placeholder="Select which base url Prowlarr will use for requests to the site"
-                  onOpenChange={(open) => {
-                    setOpenConfigSelects((prev) => {
-                      const next = new Set(prev);
-                      if (open) {
-                        next.add("baseUrl");
-                      } else {
-                        next.delete("baseUrl");
-                      }
-                      return next;
-                    });
+                onChange={(e) => setFormData({ ...formData, baseUrl: e.target.value })}
+                size="sm"
+                classNames={{
+                  trigger: "bg-content2 border border-secondary/20",
+                  label: "text-xs sm:text-sm",
                   }}
                 >
-                  {(editingIndexer?.availableBaseUrls || selectedIndexer?.availableBaseUrls || []).map((url: string) => (
+                {formData.availableBaseUrls.map((url) => (
                     <SelectItem key={url} value={url}>
                       {url}
                     </SelectItem>
                   ))}
                 </Select>
+            ) : (
                 <Input
-                  label="Seed Ratio"
-                  type="number"
-                  value={formData.seedRatio?.toString() || ""}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setFormData({ ...formData, seedRatio: parseFloat(e.target.value) || undefined })
-                  }
-                  placeholder="Empty uses the download client's default"
-                />
-                <p className="text-xs text-default-500 -mt-3">
-                  The ratio a torrent should reach before stopping, empty uses the download
-                  client&apos;s default. Ratio should be at least 1.0 and follow the indexers
-                  rules
+                label="Base URL"
+                value={formData.baseUrl || ""}
+                onChange={(e) => setFormData({ ...formData, baseUrl: e.target.value })}
+                size="sm"
+                classNames={{
+                  inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                  label: "text-xs sm:text-sm",
+                }}
+              />
+            )}
+
+            {/* Sync Profile - Show for all indexers */}
+            <Select
+              label="Sync Profile"
+              selectedKeys={formData.syncProfile ? [formData.syncProfile] : ["Standard"]}
+              onSelectionChange={(keys) => {
+                const selected = Array.from(keys)[0] as string;
+                setFormData({ ...formData, syncProfile: selected });
+              }}
+              size="sm"
+              description="App profiles are used to control RSS, Automatic Search and Interactive Search settings on application sync"
+              classNames={{
+                trigger: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                label: "text-xs sm:text-sm",
+                description: "text-[10px] sm:text-xs text-foreground/50",
+              }}
+            >
+              <SelectItem key="Standard">Standard</SelectItem>
+              <SelectItem key="Disabled">Disabled</SelectItem>
+            </Select>
+
+            {/* Redirect checkbox - Show for all indexers */}
+            <div className="flex items-center justify-between p-3 sm:p-4 bg-content2 rounded-lg border border-secondary/20">
+              <div className="flex-1">
+                <span className="text-xs sm:text-sm font-medium">Redirect</span>
+                <p className="text-[10px] sm:text-xs text-foreground/50 mt-0.5">
+                  Redirect incoming download request for indexer and pass the grab directly instead of proxying the request
                 </p>
+              </div>
+              <Switch
+                size="sm"
+                color="secondary"
+                isSelected={formData.redirected || false}
+                onValueChange={(redirected) => setFormData({ ...formData, redirected })}
+              />
+            </div>
+
+            {/* NZB-specific fields (API Key, VIP Expiration) */}
+            {formData.protocol === "nzb" && (
+              <>
+                <Input
+                  label="API Key"
+                  type="password"
+                  value={formData.apiKey || ""}
+                  onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+                  size="sm"
+                  description="Site API Key"
+                  placeholder="Enter your API key"
+                  classNames={{
+                    inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                    label: "text-xs sm:text-sm",
+                    description: "text-[10px] sm:text-xs text-foreground/50",
+                  }}
+                />
+                <Input
+                  label="VIP Expiration"
+                  type="text"
+                  value={formData.vipExpiration || ""}
+                  onChange={(e) => setFormData({ ...formData, vipExpiration: e.target.value })}
+                  size="sm"
+                  description="Enter date (yyyy-mm-dd) for VIP Expiration or blank, will notify 1 week from expiration of VIP"
+                  placeholder="yyyy-mm-dd"
+                  classNames={{
+                    inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                    label: "text-xs sm:text-sm",
+                    description: "text-[10px] sm:text-xs text-foreground/50",
+                  }}
+                />
+              </>
+            )}
+
+            {/* Username/Password for Private torrent indexers (not for NZB) */}
+            {formData.privacy === "Private" && formData.protocol !== "nzb" && (
+              <>
                 <Input
                   label="Username"
                   value={formData.username || ""}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, username: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  size="sm"
+                  classNames={{
+                    inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                    label: "text-xs sm:text-sm",
+                  }}
                 />
                 <Input
                   label="Password"
                   type="password"
                   value={formData.password || ""}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    setFormData({ ...formData, password: e.target.value });
-                    setTestError(null);
-                    setTestSuccess(false);
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  size="sm"
+                  classNames={{
+                    inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                    label: "text-xs sm:text-sm",
                   }}
                 />
-                <div className="flex items-center gap-2">
-                  <Switch
-                    isSelected={formData.stripCyrillicLetters}
-                    onValueChange={(val: boolean) =>
-                      setFormData({ ...formData, stripCyrillicLetters: val })
-                    }
-                  >
-                    Strip Cyrillic Letters
-                  </Switch>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    isSelected={formData.searchFreeleechOnly}
-                    onValueChange={(val: boolean) =>
-                      setFormData({ ...formData, searchFreeleechOnly: val })
-                    }
-                  >
-                    Search freeleech only
-                  </Switch>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <Select
-                    label="Sort requested from site"
-                    selectedKeys={formData.sortRequestedFromSite ? [formData.sortRequestedFromSite] : []}
-                    onSelectionChange={(keys: any) =>
-                      setFormData({
-                        ...formData,
-                        sortRequestedFromSite: Array.from(keys)[0] as string,
-                      })
-                    }
-                    onOpenChange={(open) => {
-                      setOpenConfigSelects((prev) => {
-                        const next = new Set(prev);
-                        if (open) {
-                          next.add("sortRequestedFromSite");
-                        } else {
-                          next.delete("sortRequestedFromSite");
-                        }
-                        return next;
-                      });
-                    }}
-                  >
-                    <SelectItem key="created">created</SelectItem>
-                    <SelectItem key="seeders">seeders</SelectItem>
-                    <SelectItem key="size">size</SelectItem>
-                  </Select>
-                  <Select
-                    label="Order requested from site"
-                    selectedKeys={formData.orderRequestedFromSite ? [formData.orderRequestedFromSite] : []}
-                    onSelectionChange={(keys: any) =>
-                      setFormData({
-                        ...formData,
-                        orderRequestedFromSite: Array.from(keys)[0] as "asc" | "desc",
-                      })
-                    }
-                    onOpenChange={(open) => {
-                      setOpenConfigSelects((prev) => {
-                        const next = new Set(prev);
-                        if (open) {
-                          next.add("orderRequestedFromSite");
-                        } else {
-                          next.delete("orderRequestedFromSite");
-                        }
-                        return next;
-                      });
-                    }}
-                  >
-                    <SelectItem key="asc">asc</SelectItem>
-                    <SelectItem key="desc">desc</SelectItem>
-                  </Select>
-                </div>
-                <Input
-                  label="Account Inactivity"
-                  value={formData.accountInactivity || ""}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setFormData({ ...formData, accountInactivity: e.target.value })
-                  }
-                  placeholder="The tracker has a system for deleting inactive accounts..."
+              </>
+            )}
+
+            {/* Tags - Show for all indexers */}
+            <Input
+              label="Tags"
+              value={formData.tags || ""}
+              onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+              size="sm"
+              description="Use tags to specify Indexer Proxies or which apps the indexer is synced to. Tags should be used with caution, they can have unintended effects."
+              placeholder="Enter tags separated by commas"
+              classNames={{
+                inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                label: "text-xs sm:text-sm",
+                description: "text-[10px] sm:text-xs text-foreground/50",
+              }}
+            />
+
+            <Input
+              label="Priority"
+              type="number"
+              value={formData.priority?.toString() || "25"}
+              onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) })}
+              size="sm"
+              classNames={{
+                inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                label: "text-xs sm:text-sm",
+                  }}
                 />
-                <Input
-                  label="Tags"
-                  value={formData.tags || ""}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, tags: e.target.value })}
-                  placeholder="Use tags to specify Indexer Proxies or which apps the indexer is synced to"
-                />
-                <p className="text-xs text-default-500 -mt-3">
-                  Tags should be used with caution, they can have unintended effects. An indexer
-                  with a tag will only sync to apps with the same tag.
-                </p>
+
+            <div className="flex items-center justify-between p-3 sm:p-4 bg-content2 rounded-lg border border-secondary/20">
+              <span className="text-xs sm:text-sm font-medium">Enabled</span>
+                  <Switch
+                size="sm"
+                color="secondary"
+                isSelected={formData.enabled}
+                onValueChange={(enabled) => setFormData({ ...formData, enabled })}
+              />
+                </div>
+
+            {/* Test Status */}
+            {testError && (
+              <div className="p-2 sm:p-3 bg-danger/10 border border-danger rounded-lg flex items-start gap-1.5 sm:gap-2">
+                <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-danger flex-shrink-0 mt-0.5" />
+                <p className="text-xs sm:text-sm text-danger leading-tight">{testError}</p>
+                </div>
+            )}
+            {testSuccess && (
+              <div className="p-2 sm:p-3 bg-success/10 border border-success rounded-lg flex items-start gap-1.5 sm:gap-2">
+                <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-success flex-shrink-0 mt-0.5" />
+                <p className="text-xs sm:text-sm text-success leading-tight">Test successful!</p>
               </div>
-            </ModalBody>
-            <ModalFooter>
-              <Button variant="light" onPress={onConfigModalClose}>
-                Cancel
+            )}
+
+            {/* Test Button */}
+            <Button
+              color="secondary"
+              variant="flat"
+              size="sm"
+              startContent={<TestTube size={16} />}
+              onPress={handleTestIndexerConfig}
+              isLoading={testing}
+              fullWidth
+              className="text-xs sm:text-sm"
+            >
+              Test Connection
+            </Button>
+          </ModalBody>
+          <ModalFooter className="border-t border-secondary/20 px-4 sm:px-6 py-3 sm:py-4">
+            <div className="flex flex-col sm:flex-row justify-between w-full gap-2">
+              {editingIndexer && (
+                <Button
+                  color="danger"
+                  variant="flat"
+                  size="sm"
+                  startContent={<Trash2 size={16} />}
+                  onPress={() => {
+                    if (editingIndexer.id) {
+                      handleDeleteIndexer(editingIndexer.id);
+                      onConfigModalClose();
+                      setEditingIndexer(null);
+                      setFormData({});
+                    }
+                  }}
+                  className="text-xs sm:text-sm w-full sm:w-auto"
+                >
+                  Delete
               </Button>
+              )}
+              <div className="flex gap-2 ml-auto w-full sm:w-auto">
               <Button
-                color="primary"
-                onPress={handleTestIndexerConfig}
-                startContent={<TestTube size={16} />}
-                isLoading={testing}
-              >
-                Test
+                  variant="flat"
+                  size="sm"
+                  onPress={() => {
+                    onConfigModalClose();
+                    setEditingIndexer(null);
+                    setFormData({});
+                  }}
+                  className="text-xs sm:text-sm flex-1 sm:flex-none"
+                >
+                  Cancel
               </Button>
               <Button 
-                color="primary" 
+                  color="secondary"
+                  className="btn-glow text-xs sm:text-sm flex-1 sm:flex-none"
+                  size="sm"
                 onPress={handleSaveIndexer}
-                isDisabled={testError !== null && !testSuccess}
               >
-                Save
+                  Save Indexer
               </Button>
+              </div>
+            </div>
             </ModalFooter>
           </ModalContent>
         </Modal>
-            </div>
         </div>
     );
 };

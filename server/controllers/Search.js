@@ -7,7 +7,10 @@ const cache = new Map();
 const CACHE_TTL = 2 * 60 * 1000; // 2 minutes cache
 
 function getCacheKey(query, indexerIds, categoryIds) {
-  return `search:${query}:${(indexerIds || []).sort().join(',')}:${(categoryIds || []).sort().join(',')}`;
+  // Ensure categoryIds and indexerIds are arrays before calling sort
+  const indexerArray = Array.isArray(indexerIds) ? indexerIds : (indexerIds ? [indexerIds] : []);
+  const categoryArray = Array.isArray(categoryIds) ? categoryIds : (categoryIds ? [categoryIds] : []);
+  return `search:${query}:${indexerArray.sort().join(',')}:${categoryArray.sort().join(',')}`;
 }
 
 function getCached(key) {
@@ -82,10 +85,15 @@ exports.search = async (req, res) => {
       });
     }
 
-    // Get enabled indexers - optimize query to only fetch needed fields
+    // Get enabled indexers - filter by userId if authenticated
+    const whereClause = { enabled: true };
+    if (req.userId) {
+      whereClause.userId = req.userId;
+    }
+
     let indexers = await Indexers.findAll({
-      where: { enabled: true },
-      attributes: ['id', 'name', 'baseUrl', 'username', 'password', 'protocol', 'indexerType', 'enabled', 'categories', 'verified'],
+      where: whereClause,
+      attributes: ['id', 'name', 'baseUrl', 'username', 'password', 'apiKey', 'protocol', 'indexerType', 'enabled', 'categories', 'verified', 'priority'],
       raw: true, // Get plain objects instead of Sequelize instances
     });
 
@@ -170,6 +178,14 @@ function sortResults(results, sortBy, sortOrder) {
   return results.sort((a, b) => {
     let aVal, bVal;
     
+    // Always prioritize by indexer priority first (lower number = higher priority)
+    const priorityA = a.indexerPriority ?? 25;
+    const priorityB = b.indexerPriority ?? 25;
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB; // Lower number = higher priority
+    }
+    
+    // If priorities are equal, sort by the requested field
     switch (sortBy) {
       case "protocol":
         return order * a.protocol.localeCompare(b.protocol);

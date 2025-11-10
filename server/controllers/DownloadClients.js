@@ -16,6 +16,11 @@ async function testDownloadClient(implementation, settings) {
         const DelugeProxy = require('../services/downloadClients/delugeProxy');
         clientProxy = new DelugeProxy(settings);
         break;
+      case 'Sabnzbd':
+        console.log('[testDownloadClient] Creating SabnzbdProxy instance');
+        const SabnzbdProxy = require('../services/downloadClients/sabnzbdProxy');
+        clientProxy = new SabnzbdProxy(settings);
+        break;
       // Add other clients here as we implement them
       default:
         console.log(`[testDownloadClient] Unknown implementation: ${implementation}`);
@@ -71,6 +76,7 @@ exports.createDownloadClient = async (req, res) => {
       settings: settings || {},
       categories: categories || [],
       tags: tags || null,
+      userId: req.userId, // Associate with authenticated user
     });
 
     res.status(201).json(newClient.toJSON());
@@ -83,6 +89,7 @@ exports.createDownloadClient = async (req, res) => {
 exports.readDownloadClients = async (req, res) => {
   try {
     const clients = await DownloadClients.findAll({
+      where: { userId: req.userId }, // Only fetch clients for the authenticated user
       order: [["priority", "ASC"], ["name", "ASC"]],
     });
 
@@ -98,7 +105,9 @@ exports.readDownloadClients = async (req, res) => {
 
 exports.readDownloadClientFromID = async (req, res) => {
   try {
-    const client = await DownloadClients.findByPk(req.params.id);
+    const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
     }
@@ -112,7 +121,9 @@ exports.readDownloadClientFromID = async (req, res) => {
 
 exports.updateDownloadClient = async (req, res) => {
   try {
-    const client = await DownloadClients.findByPk(req.params.id);
+    const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
     }
@@ -148,7 +159,9 @@ exports.updateDownloadClient = async (req, res) => {
 
 exports.deleteDownloadClient = async (req, res) => {
   try {
-    const client = await DownloadClients.findByPk(req.params.id);
+    const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
     }
@@ -168,7 +181,9 @@ exports.testDownloadClient = async (req, res) => {
 
     if (req.params.id) {
       // Test existing client
-      const client = await DownloadClients.findByPk(req.params.id);
+      const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
       if (!client) {
         return res.status(404).json({ success: false, error: "Download client not found" });
       }
@@ -211,6 +226,7 @@ exports.testDownloadClient = async (req, res) => {
 exports.testAllDownloadClients = async (req, res) => {
   try {
     const clients = await DownloadClients.findAll({
+      where: { userId: req.userId }, // Only fetch clients for the authenticated user
       order: [["priority", "ASC"], ["name", "ASC"]],
     });
 
@@ -269,27 +285,74 @@ exports.testAllDownloadClients = async (req, res) => {
 
 exports.grabRelease = async (req, res) => {
   try {
-    const { downloadUrl, clientId } = req.body;
+    const { downloadUrl, clientId, protocol } = req.body;
 
     if (!downloadUrl) {
       return res.status(400).json({ error: "Download URL or magnet link is required" });
     }
 
+    // Determine protocol: use provided protocol, or infer from URL
+    let determinedProtocol = protocol;
+    if (!determinedProtocol) {
+      if (downloadUrl.startsWith("magnet:")) {
+        determinedProtocol = "torrent";
+      } else {
+        // Default to nzb for HTTP/HTTPS URLs if protocol not specified
+        // But check if it's clearly a torrent file
+        if (downloadUrl.includes(".torrent") || downloadUrl.includes("torrent")) {
+          determinedProtocol = "torrent";
+        } else {
+          determinedProtocol = "nzb";
+        }
+      }
+    }
+
+    // Map "nzb" to "usenet" for database lookup
+    const dbProtocol = determinedProtocol === "nzb" ? "usenet" : determinedProtocol;
+
+    console.log(`[grabRelease] Looking for client - Protocol: ${determinedProtocol} (DB: ${dbProtocol}), UserId: ${req.userId}`);
+
     // Get the download client
     let client;
     if (clientId) {
-      client = await DownloadClients.findByPk(clientId);
-    } else {
-      // Get the first enabled client for the protocol
-      const protocol = downloadUrl.startsWith("magnet:") ? "torrent" : "nzb";
       client = await DownloadClients.findOne({
-        where: { enabled: true, protocol },
+        where: { id: clientId, userId: req.userId },
+      });
+      if (client) {
+        console.log(`[grabRelease] Found client by ID: ${client.name} (${client.protocol})`);
+      }
+    } else {
+      // Get the first enabled client for the protocol and user
+      const whereClause = { enabled: true, protocol: dbProtocol, userId: req.userId };
+      console.log(`[grabRelease] Searching for client with:`, whereClause);
+      
+      client = await DownloadClients.findOne({
+        where: whereClause,
         order: [["priority", "ASC"]],
       });
+      
+      if (client) {
+        console.log(`[grabRelease] Found client: ${client.name} (${client.protocol}, priority: ${client.priority})`);
+      } else {
+        // Debug: Check what clients exist for this user
+        const allUserClients = await DownloadClients.findAll({
+          where: { userId: req.userId },
+          attributes: ['id', 'name', 'protocol', 'enabled', 'priority'],
+        });
+        console.log(`[grabRelease] Available clients for user:`, allUserClients.map(c => ({
+          name: c.name,
+          protocol: c.protocol,
+          enabled: c.enabled,
+          priority: c.priority,
+        })));
+      }
     }
 
     if (!client) {
-      return res.status(404).json({ error: "No enabled download client found" });
+      const protocolName = determinedProtocol === "nzb" ? "usenet" : determinedProtocol;
+      return res.status(404).json({ 
+        error: `No enabled ${protocolName} download client found. Please configure a download client in Settings.` 
+      });
     }
 
     const clientData = client.toJSON();
@@ -302,6 +365,10 @@ exports.grabRelease = async (req, res) => {
         const DelugeProxy = require("../services/downloadClients/delugeProxy");
         clientProxy = new DelugeProxy(settings);
         break;
+      case "Sabnzbd":
+        const SabnzbdProxy = require("../services/downloadClients/sabnzbdProxy");
+        clientProxy = new SabnzbdProxy(settings);
+        break;
       // Add other clients here as we implement them
       default:
         return res.status(400).json({ error: `Client ${clientData.implementation} not yet implemented` });
@@ -309,16 +376,51 @@ exports.grabRelease = async (req, res) => {
 
     // Add torrent/NZB to client
     let result;
-    if (downloadUrl.startsWith("magnet:")) {
-      result = await clientProxy.addTorrentFromMagnet(downloadUrl);
-    } else if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
-      // For HTTP URLs, we need to fetch the file first
-      const axios = require("axios");
-      const response = await axios.get(downloadUrl, { responseType: "arraybuffer" });
-      const filename = downloadUrl.split("/").pop() || "torrent.torrent";
-      result = await clientProxy.addTorrentFromFile(filename, response.data);
+    if (clientData.protocol === "usenet") {
+      // For Usenet clients (SABnzbd), handle NZB URLs
+      if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
+        // Try addurl first (works for most NZB indexers)
+        // Only fetch the file if addurl fails or if URL clearly indicates a file download
+        const isDirectFileUrl = downloadUrl.endsWith(".nzb") || downloadUrl.includes("/download/") || downloadUrl.includes("/getnzb");
+        
+        if (isDirectFileUrl) {
+          // Fetch the NZB file and add it using POST (avoids 414 errors)
+          try {
+            const axios = require("axios");
+            const response = await axios.get(downloadUrl, { 
+              responseType: "arraybuffer",
+              timeout: 30000,
+            });
+            const filename = downloadUrl.split("/").pop() || "download.nzb";
+            // Remove query parameters from filename if present
+            const cleanFilename = filename.split("?")[0];
+            result = await clientProxy.addNzbFromFile(cleanFilename, response.data);
+          } catch (fetchError) {
+            // If fetching fails, try addurl as fallback
+            console.log(`[grabRelease] Failed to fetch NZB file, trying addurl: ${fetchError.message}`);
+            result = await clientProxy.addNzbFromUrl(downloadUrl);
+          }
+        } else {
+          // Add NZB from URL (for indexers that provide direct NZB URLs)
+          // This is preferred as it's more efficient
+          result = await clientProxy.addNzbFromUrl(downloadUrl);
+        }
+      } else {
+        return res.status(400).json({ error: "Invalid NZB URL format" });
+      }
     } else {
-      return res.status(400).json({ error: "Invalid download URL format" });
+      // For torrent clients
+      if (downloadUrl.startsWith("magnet:")) {
+        result = await clientProxy.addTorrentFromMagnet(downloadUrl);
+      } else if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
+        // For HTTP URLs, we need to fetch the file first
+        const axios = require("axios");
+        const response = await axios.get(downloadUrl, { responseType: "arraybuffer" });
+        const filename = downloadUrl.split("/").pop() || "torrent.torrent";
+        result = await clientProxy.addTorrentFromFile(filename, response.data);
+      } else {
+        return res.status(400).json({ error: "Invalid download URL format" });
+      }
     }
 
     res.json({
@@ -378,6 +480,11 @@ async function testDownloadClient(implementation, settings) {
         const DelugeProxy = require('../services/downloadClients/delugeProxy');
         clientProxy = new DelugeProxy(settings);
         break;
+      case 'Sabnzbd':
+        console.log('[testDownloadClient] Creating SabnzbdProxy instance');
+        const SabnzbdProxy = require('../services/downloadClients/sabnzbdProxy');
+        clientProxy = new SabnzbdProxy(settings);
+        break;
       // Add other clients here as we implement them
       default:
         console.log(`[testDownloadClient] Unknown implementation: ${implementation}`);
@@ -433,6 +540,7 @@ exports.createDownloadClient = async (req, res) => {
       settings: settings || {},
       categories: categories || [],
       tags: tags || null,
+      userId: req.userId, // Associate with authenticated user
     });
 
     res.status(201).json(newClient.toJSON());
@@ -445,6 +553,7 @@ exports.createDownloadClient = async (req, res) => {
 exports.readDownloadClients = async (req, res) => {
   try {
     const clients = await DownloadClients.findAll({
+      where: { userId: req.userId }, // Only fetch clients for the authenticated user
       order: [["priority", "ASC"], ["name", "ASC"]],
     });
 
@@ -460,7 +569,9 @@ exports.readDownloadClients = async (req, res) => {
 
 exports.readDownloadClientFromID = async (req, res) => {
   try {
-    const client = await DownloadClients.findByPk(req.params.id);
+    const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
     }
@@ -474,7 +585,9 @@ exports.readDownloadClientFromID = async (req, res) => {
 
 exports.updateDownloadClient = async (req, res) => {
   try {
-    const client = await DownloadClients.findByPk(req.params.id);
+    const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
     }
@@ -510,7 +623,9 @@ exports.updateDownloadClient = async (req, res) => {
 
 exports.deleteDownloadClient = async (req, res) => {
   try {
-    const client = await DownloadClients.findByPk(req.params.id);
+    const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
     }
@@ -530,7 +645,9 @@ exports.testDownloadClient = async (req, res) => {
 
     if (req.params.id) {
       // Test existing client
-      const client = await DownloadClients.findByPk(req.params.id);
+      const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
       if (!client) {
         return res.status(404).json({ success: false, error: "Download client not found" });
       }
@@ -573,6 +690,7 @@ exports.testDownloadClient = async (req, res) => {
 exports.testAllDownloadClients = async (req, res) => {
   try {
     const clients = await DownloadClients.findAll({
+      where: { userId: req.userId }, // Only fetch clients for the authenticated user
       order: [["priority", "ASC"], ["name", "ASC"]],
     });
 
@@ -631,27 +749,74 @@ exports.testAllDownloadClients = async (req, res) => {
 
 exports.grabRelease = async (req, res) => {
   try {
-    const { downloadUrl, clientId } = req.body;
+    const { downloadUrl, clientId, protocol } = req.body;
 
     if (!downloadUrl) {
       return res.status(400).json({ error: "Download URL or magnet link is required" });
     }
 
+    // Determine protocol: use provided protocol, or infer from URL
+    let determinedProtocol = protocol;
+    if (!determinedProtocol) {
+      if (downloadUrl.startsWith("magnet:")) {
+        determinedProtocol = "torrent";
+      } else {
+        // Default to nzb for HTTP/HTTPS URLs if protocol not specified
+        // But check if it's clearly a torrent file
+        if (downloadUrl.includes(".torrent") || downloadUrl.includes("torrent")) {
+          determinedProtocol = "torrent";
+        } else {
+          determinedProtocol = "nzb";
+        }
+      }
+    }
+
+    // Map "nzb" to "usenet" for database lookup
+    const dbProtocol = determinedProtocol === "nzb" ? "usenet" : determinedProtocol;
+
+    console.log(`[grabRelease] Looking for client - Protocol: ${determinedProtocol} (DB: ${dbProtocol}), UserId: ${req.userId}`);
+
     // Get the download client
     let client;
     if (clientId) {
-      client = await DownloadClients.findByPk(clientId);
-    } else {
-      // Get the first enabled client for the protocol
-      const protocol = downloadUrl.startsWith("magnet:") ? "torrent" : "nzb";
       client = await DownloadClients.findOne({
-        where: { enabled: true, protocol },
+        where: { id: clientId, userId: req.userId },
+      });
+      if (client) {
+        console.log(`[grabRelease] Found client by ID: ${client.name} (${client.protocol})`);
+      }
+    } else {
+      // Get the first enabled client for the protocol and user
+      const whereClause = { enabled: true, protocol: dbProtocol, userId: req.userId };
+      console.log(`[grabRelease] Searching for client with:`, whereClause);
+      
+      client = await DownloadClients.findOne({
+        where: whereClause,
         order: [["priority", "ASC"]],
       });
+      
+      if (client) {
+        console.log(`[grabRelease] Found client: ${client.name} (${client.protocol}, priority: ${client.priority})`);
+      } else {
+        // Debug: Check what clients exist for this user
+        const allUserClients = await DownloadClients.findAll({
+          where: { userId: req.userId },
+          attributes: ['id', 'name', 'protocol', 'enabled', 'priority'],
+        });
+        console.log(`[grabRelease] Available clients for user:`, allUserClients.map(c => ({
+          name: c.name,
+          protocol: c.protocol,
+          enabled: c.enabled,
+          priority: c.priority,
+        })));
+      }
     }
 
     if (!client) {
-      return res.status(404).json({ error: "No enabled download client found" });
+      const protocolName = determinedProtocol === "nzb" ? "usenet" : determinedProtocol;
+      return res.status(404).json({ 
+        error: `No enabled ${protocolName} download client found. Please configure a download client in Settings.` 
+      });
     }
 
     const clientData = client.toJSON();
@@ -664,6 +829,10 @@ exports.grabRelease = async (req, res) => {
         const DelugeProxy = require("../services/downloadClients/delugeProxy");
         clientProxy = new DelugeProxy(settings);
         break;
+      case "Sabnzbd":
+        const SabnzbdProxy = require("../services/downloadClients/sabnzbdProxy");
+        clientProxy = new SabnzbdProxy(settings);
+        break;
       // Add other clients here as we implement them
       default:
         return res.status(400).json({ error: `Client ${clientData.implementation} not yet implemented` });
@@ -671,16 +840,51 @@ exports.grabRelease = async (req, res) => {
 
     // Add torrent/NZB to client
     let result;
-    if (downloadUrl.startsWith("magnet:")) {
-      result = await clientProxy.addTorrentFromMagnet(downloadUrl);
-    } else if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
-      // For HTTP URLs, we need to fetch the file first
-      const axios = require("axios");
-      const response = await axios.get(downloadUrl, { responseType: "arraybuffer" });
-      const filename = downloadUrl.split("/").pop() || "torrent.torrent";
-      result = await clientProxy.addTorrentFromFile(filename, response.data);
+    if (clientData.protocol === "usenet") {
+      // For Usenet clients (SABnzbd), handle NZB URLs
+      if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
+        // Try addurl first (works for most NZB indexers)
+        // Only fetch the file if addurl fails or if URL clearly indicates a file download
+        const isDirectFileUrl = downloadUrl.endsWith(".nzb") || downloadUrl.includes("/download/") || downloadUrl.includes("/getnzb");
+        
+        if (isDirectFileUrl) {
+          // Fetch the NZB file and add it using POST (avoids 414 errors)
+          try {
+            const axios = require("axios");
+            const response = await axios.get(downloadUrl, { 
+              responseType: "arraybuffer",
+              timeout: 30000,
+            });
+            const filename = downloadUrl.split("/").pop() || "download.nzb";
+            // Remove query parameters from filename if present
+            const cleanFilename = filename.split("?")[0];
+            result = await clientProxy.addNzbFromFile(cleanFilename, response.data);
+          } catch (fetchError) {
+            // If fetching fails, try addurl as fallback
+            console.log(`[grabRelease] Failed to fetch NZB file, trying addurl: ${fetchError.message}`);
+            result = await clientProxy.addNzbFromUrl(downloadUrl);
+          }
+        } else {
+          // Add NZB from URL (for indexers that provide direct NZB URLs)
+          // This is preferred as it's more efficient
+          result = await clientProxy.addNzbFromUrl(downloadUrl);
+        }
+      } else {
+        return res.status(400).json({ error: "Invalid NZB URL format" });
+      }
     } else {
-      return res.status(400).json({ error: "Invalid download URL format" });
+      // For torrent clients
+      if (downloadUrl.startsWith("magnet:")) {
+        result = await clientProxy.addTorrentFromMagnet(downloadUrl);
+      } else if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
+        // For HTTP URLs, we need to fetch the file first
+        const axios = require("axios");
+        const response = await axios.get(downloadUrl, { responseType: "arraybuffer" });
+        const filename = downloadUrl.split("/").pop() || "torrent.torrent";
+        result = await clientProxy.addTorrentFromFile(filename, response.data);
+      } else {
+        return res.status(400).json({ error: "Invalid download URL format" });
+      }
     }
 
     res.json({
@@ -740,6 +944,11 @@ async function testDownloadClient(implementation, settings) {
         const DelugeProxy = require('../services/downloadClients/delugeProxy');
         clientProxy = new DelugeProxy(settings);
         break;
+      case 'Sabnzbd':
+        console.log('[testDownloadClient] Creating SabnzbdProxy instance');
+        const SabnzbdProxy = require('../services/downloadClients/sabnzbdProxy');
+        clientProxy = new SabnzbdProxy(settings);
+        break;
       // Add other clients here as we implement them
       default:
         console.log(`[testDownloadClient] Unknown implementation: ${implementation}`);
@@ -795,6 +1004,7 @@ exports.createDownloadClient = async (req, res) => {
       settings: settings || {},
       categories: categories || [],
       tags: tags || null,
+      userId: req.userId, // Associate with authenticated user
     });
 
     res.status(201).json(newClient.toJSON());
@@ -807,6 +1017,7 @@ exports.createDownloadClient = async (req, res) => {
 exports.readDownloadClients = async (req, res) => {
   try {
     const clients = await DownloadClients.findAll({
+      where: { userId: req.userId }, // Only fetch clients for the authenticated user
       order: [["priority", "ASC"], ["name", "ASC"]],
     });
 
@@ -822,7 +1033,9 @@ exports.readDownloadClients = async (req, res) => {
 
 exports.readDownloadClientFromID = async (req, res) => {
   try {
-    const client = await DownloadClients.findByPk(req.params.id);
+    const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
     }
@@ -836,7 +1049,9 @@ exports.readDownloadClientFromID = async (req, res) => {
 
 exports.updateDownloadClient = async (req, res) => {
   try {
-    const client = await DownloadClients.findByPk(req.params.id);
+    const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
     }
@@ -872,7 +1087,9 @@ exports.updateDownloadClient = async (req, res) => {
 
 exports.deleteDownloadClient = async (req, res) => {
   try {
-    const client = await DownloadClients.findByPk(req.params.id);
+    const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
     }
@@ -892,7 +1109,9 @@ exports.testDownloadClient = async (req, res) => {
 
     if (req.params.id) {
       // Test existing client
-      const client = await DownloadClients.findByPk(req.params.id);
+      const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
       if (!client) {
         return res.status(404).json({ success: false, error: "Download client not found" });
       }
@@ -935,6 +1154,7 @@ exports.testDownloadClient = async (req, res) => {
 exports.testAllDownloadClients = async (req, res) => {
   try {
     const clients = await DownloadClients.findAll({
+      where: { userId: req.userId }, // Only fetch clients for the authenticated user
       order: [["priority", "ASC"], ["name", "ASC"]],
     });
 
@@ -993,27 +1213,74 @@ exports.testAllDownloadClients = async (req, res) => {
 
 exports.grabRelease = async (req, res) => {
   try {
-    const { downloadUrl, clientId } = req.body;
+    const { downloadUrl, clientId, protocol } = req.body;
 
     if (!downloadUrl) {
       return res.status(400).json({ error: "Download URL or magnet link is required" });
     }
 
+    // Determine protocol: use provided protocol, or infer from URL
+    let determinedProtocol = protocol;
+    if (!determinedProtocol) {
+      if (downloadUrl.startsWith("magnet:")) {
+        determinedProtocol = "torrent";
+      } else {
+        // Default to nzb for HTTP/HTTPS URLs if protocol not specified
+        // But check if it's clearly a torrent file
+        if (downloadUrl.includes(".torrent") || downloadUrl.includes("torrent")) {
+          determinedProtocol = "torrent";
+        } else {
+          determinedProtocol = "nzb";
+        }
+      }
+    }
+
+    // Map "nzb" to "usenet" for database lookup
+    const dbProtocol = determinedProtocol === "nzb" ? "usenet" : determinedProtocol;
+
+    console.log(`[grabRelease] Looking for client - Protocol: ${determinedProtocol} (DB: ${dbProtocol}), UserId: ${req.userId}`);
+
     // Get the download client
     let client;
     if (clientId) {
-      client = await DownloadClients.findByPk(clientId);
-    } else {
-      // Get the first enabled client for the protocol
-      const protocol = downloadUrl.startsWith("magnet:") ? "torrent" : "nzb";
       client = await DownloadClients.findOne({
-        where: { enabled: true, protocol },
+        where: { id: clientId, userId: req.userId },
+      });
+      if (client) {
+        console.log(`[grabRelease] Found client by ID: ${client.name} (${client.protocol})`);
+      }
+    } else {
+      // Get the first enabled client for the protocol and user
+      const whereClause = { enabled: true, protocol: dbProtocol, userId: req.userId };
+      console.log(`[grabRelease] Searching for client with:`, whereClause);
+      
+      client = await DownloadClients.findOne({
+        where: whereClause,
         order: [["priority", "ASC"]],
       });
+      
+      if (client) {
+        console.log(`[grabRelease] Found client: ${client.name} (${client.protocol}, priority: ${client.priority})`);
+      } else {
+        // Debug: Check what clients exist for this user
+        const allUserClients = await DownloadClients.findAll({
+          where: { userId: req.userId },
+          attributes: ['id', 'name', 'protocol', 'enabled', 'priority'],
+        });
+        console.log(`[grabRelease] Available clients for user:`, allUserClients.map(c => ({
+          name: c.name,
+          protocol: c.protocol,
+          enabled: c.enabled,
+          priority: c.priority,
+        })));
+      }
     }
 
     if (!client) {
-      return res.status(404).json({ error: "No enabled download client found" });
+      const protocolName = determinedProtocol === "nzb" ? "usenet" : determinedProtocol;
+      return res.status(404).json({ 
+        error: `No enabled ${protocolName} download client found. Please configure a download client in Settings.` 
+      });
     }
 
     const clientData = client.toJSON();
@@ -1026,6 +1293,10 @@ exports.grabRelease = async (req, res) => {
         const DelugeProxy = require("../services/downloadClients/delugeProxy");
         clientProxy = new DelugeProxy(settings);
         break;
+      case "Sabnzbd":
+        const SabnzbdProxy = require("../services/downloadClients/sabnzbdProxy");
+        clientProxy = new SabnzbdProxy(settings);
+        break;
       // Add other clients here as we implement them
       default:
         return res.status(400).json({ error: `Client ${clientData.implementation} not yet implemented` });
@@ -1033,16 +1304,51 @@ exports.grabRelease = async (req, res) => {
 
     // Add torrent/NZB to client
     let result;
-    if (downloadUrl.startsWith("magnet:")) {
-      result = await clientProxy.addTorrentFromMagnet(downloadUrl);
-    } else if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
-      // For HTTP URLs, we need to fetch the file first
-      const axios = require("axios");
-      const response = await axios.get(downloadUrl, { responseType: "arraybuffer" });
-      const filename = downloadUrl.split("/").pop() || "torrent.torrent";
-      result = await clientProxy.addTorrentFromFile(filename, response.data);
+    if (clientData.protocol === "usenet") {
+      // For Usenet clients (SABnzbd), handle NZB URLs
+      if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
+        // Try addurl first (works for most NZB indexers)
+        // Only fetch the file if addurl fails or if URL clearly indicates a file download
+        const isDirectFileUrl = downloadUrl.endsWith(".nzb") || downloadUrl.includes("/download/") || downloadUrl.includes("/getnzb");
+        
+        if (isDirectFileUrl) {
+          // Fetch the NZB file and add it using POST (avoids 414 errors)
+          try {
+            const axios = require("axios");
+            const response = await axios.get(downloadUrl, { 
+              responseType: "arraybuffer",
+              timeout: 30000,
+            });
+            const filename = downloadUrl.split("/").pop() || "download.nzb";
+            // Remove query parameters from filename if present
+            const cleanFilename = filename.split("?")[0];
+            result = await clientProxy.addNzbFromFile(cleanFilename, response.data);
+          } catch (fetchError) {
+            // If fetching fails, try addurl as fallback
+            console.log(`[grabRelease] Failed to fetch NZB file, trying addurl: ${fetchError.message}`);
+            result = await clientProxy.addNzbFromUrl(downloadUrl);
+          }
+        } else {
+          // Add NZB from URL (for indexers that provide direct NZB URLs)
+          // This is preferred as it's more efficient
+          result = await clientProxy.addNzbFromUrl(downloadUrl);
+        }
+      } else {
+        return res.status(400).json({ error: "Invalid NZB URL format" });
+      }
     } else {
-      return res.status(400).json({ error: "Invalid download URL format" });
+      // For torrent clients
+      if (downloadUrl.startsWith("magnet:")) {
+        result = await clientProxy.addTorrentFromMagnet(downloadUrl);
+      } else if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
+        // For HTTP URLs, we need to fetch the file first
+        const axios = require("axios");
+        const response = await axios.get(downloadUrl, { responseType: "arraybuffer" });
+        const filename = downloadUrl.split("/").pop() || "torrent.torrent";
+        result = await clientProxy.addTorrentFromFile(filename, response.data);
+      } else {
+        return res.status(400).json({ error: "Invalid download URL format" });
+      }
     }
 
     res.json({
@@ -1102,6 +1408,11 @@ async function testDownloadClient(implementation, settings) {
         const DelugeProxy = require('../services/downloadClients/delugeProxy');
         clientProxy = new DelugeProxy(settings);
         break;
+      case 'Sabnzbd':
+        console.log('[testDownloadClient] Creating SabnzbdProxy instance');
+        const SabnzbdProxy = require('../services/downloadClients/sabnzbdProxy');
+        clientProxy = new SabnzbdProxy(settings);
+        break;
       // Add other clients here as we implement them
       default:
         console.log(`[testDownloadClient] Unknown implementation: ${implementation}`);
@@ -1157,6 +1468,7 @@ exports.createDownloadClient = async (req, res) => {
       settings: settings || {},
       categories: categories || [],
       tags: tags || null,
+      userId: req.userId, // Associate with authenticated user
     });
 
     res.status(201).json(newClient.toJSON());
@@ -1169,6 +1481,7 @@ exports.createDownloadClient = async (req, res) => {
 exports.readDownloadClients = async (req, res) => {
   try {
     const clients = await DownloadClients.findAll({
+      where: { userId: req.userId }, // Only fetch clients for the authenticated user
       order: [["priority", "ASC"], ["name", "ASC"]],
     });
 
@@ -1184,7 +1497,9 @@ exports.readDownloadClients = async (req, res) => {
 
 exports.readDownloadClientFromID = async (req, res) => {
   try {
-    const client = await DownloadClients.findByPk(req.params.id);
+    const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
     }
@@ -1198,7 +1513,9 @@ exports.readDownloadClientFromID = async (req, res) => {
 
 exports.updateDownloadClient = async (req, res) => {
   try {
-    const client = await DownloadClients.findByPk(req.params.id);
+    const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
     }
@@ -1234,7 +1551,9 @@ exports.updateDownloadClient = async (req, res) => {
 
 exports.deleteDownloadClient = async (req, res) => {
   try {
-    const client = await DownloadClients.findByPk(req.params.id);
+    const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
     }
@@ -1254,7 +1573,9 @@ exports.testDownloadClient = async (req, res) => {
 
     if (req.params.id) {
       // Test existing client
-      const client = await DownloadClients.findByPk(req.params.id);
+      const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
       if (!client) {
         return res.status(404).json({ success: false, error: "Download client not found" });
       }
@@ -1297,6 +1618,7 @@ exports.testDownloadClient = async (req, res) => {
 exports.testAllDownloadClients = async (req, res) => {
   try {
     const clients = await DownloadClients.findAll({
+      where: { userId: req.userId }, // Only fetch clients for the authenticated user
       order: [["priority", "ASC"], ["name", "ASC"]],
     });
 
@@ -1355,27 +1677,74 @@ exports.testAllDownloadClients = async (req, res) => {
 
 exports.grabRelease = async (req, res) => {
   try {
-    const { downloadUrl, clientId } = req.body;
+    const { downloadUrl, clientId, protocol } = req.body;
 
     if (!downloadUrl) {
       return res.status(400).json({ error: "Download URL or magnet link is required" });
     }
 
+    // Determine protocol: use provided protocol, or infer from URL
+    let determinedProtocol = protocol;
+    if (!determinedProtocol) {
+      if (downloadUrl.startsWith("magnet:")) {
+        determinedProtocol = "torrent";
+      } else {
+        // Default to nzb for HTTP/HTTPS URLs if protocol not specified
+        // But check if it's clearly a torrent file
+        if (downloadUrl.includes(".torrent") || downloadUrl.includes("torrent")) {
+          determinedProtocol = "torrent";
+        } else {
+          determinedProtocol = "nzb";
+        }
+      }
+    }
+
+    // Map "nzb" to "usenet" for database lookup
+    const dbProtocol = determinedProtocol === "nzb" ? "usenet" : determinedProtocol;
+
+    console.log(`[grabRelease] Looking for client - Protocol: ${determinedProtocol} (DB: ${dbProtocol}), UserId: ${req.userId}`);
+
     // Get the download client
     let client;
     if (clientId) {
-      client = await DownloadClients.findByPk(clientId);
-    } else {
-      // Get the first enabled client for the protocol
-      const protocol = downloadUrl.startsWith("magnet:") ? "torrent" : "nzb";
       client = await DownloadClients.findOne({
-        where: { enabled: true, protocol },
+        where: { id: clientId, userId: req.userId },
+      });
+      if (client) {
+        console.log(`[grabRelease] Found client by ID: ${client.name} (${client.protocol})`);
+      }
+    } else {
+      // Get the first enabled client for the protocol and user
+      const whereClause = { enabled: true, protocol: dbProtocol, userId: req.userId };
+      console.log(`[grabRelease] Searching for client with:`, whereClause);
+      
+      client = await DownloadClients.findOne({
+        where: whereClause,
         order: [["priority", "ASC"]],
       });
+      
+      if (client) {
+        console.log(`[grabRelease] Found client: ${client.name} (${client.protocol}, priority: ${client.priority})`);
+      } else {
+        // Debug: Check what clients exist for this user
+        const allUserClients = await DownloadClients.findAll({
+          where: { userId: req.userId },
+          attributes: ['id', 'name', 'protocol', 'enabled', 'priority'],
+        });
+        console.log(`[grabRelease] Available clients for user:`, allUserClients.map(c => ({
+          name: c.name,
+          protocol: c.protocol,
+          enabled: c.enabled,
+          priority: c.priority,
+        })));
+      }
     }
 
     if (!client) {
-      return res.status(404).json({ error: "No enabled download client found" });
+      const protocolName = determinedProtocol === "nzb" ? "usenet" : determinedProtocol;
+      return res.status(404).json({ 
+        error: `No enabled ${protocolName} download client found. Please configure a download client in Settings.` 
+      });
     }
 
     const clientData = client.toJSON();
@@ -1388,6 +1757,10 @@ exports.grabRelease = async (req, res) => {
         const DelugeProxy = require("../services/downloadClients/delugeProxy");
         clientProxy = new DelugeProxy(settings);
         break;
+      case "Sabnzbd":
+        const SabnzbdProxy = require("../services/downloadClients/sabnzbdProxy");
+        clientProxy = new SabnzbdProxy(settings);
+        break;
       // Add other clients here as we implement them
       default:
         return res.status(400).json({ error: `Client ${clientData.implementation} not yet implemented` });
@@ -1395,16 +1768,51 @@ exports.grabRelease = async (req, res) => {
 
     // Add torrent/NZB to client
     let result;
-    if (downloadUrl.startsWith("magnet:")) {
-      result = await clientProxy.addTorrentFromMagnet(downloadUrl);
-    } else if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
-      // For HTTP URLs, we need to fetch the file first
-      const axios = require("axios");
-      const response = await axios.get(downloadUrl, { responseType: "arraybuffer" });
-      const filename = downloadUrl.split("/").pop() || "torrent.torrent";
-      result = await clientProxy.addTorrentFromFile(filename, response.data);
+    if (clientData.protocol === "usenet") {
+      // For Usenet clients (SABnzbd), handle NZB URLs
+      if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
+        // Try addurl first (works for most NZB indexers)
+        // Only fetch the file if addurl fails or if URL clearly indicates a file download
+        const isDirectFileUrl = downloadUrl.endsWith(".nzb") || downloadUrl.includes("/download/") || downloadUrl.includes("/getnzb");
+        
+        if (isDirectFileUrl) {
+          // Fetch the NZB file and add it using POST (avoids 414 errors)
+          try {
+            const axios = require("axios");
+            const response = await axios.get(downloadUrl, { 
+              responseType: "arraybuffer",
+              timeout: 30000,
+            });
+            const filename = downloadUrl.split("/").pop() || "download.nzb";
+            // Remove query parameters from filename if present
+            const cleanFilename = filename.split("?")[0];
+            result = await clientProxy.addNzbFromFile(cleanFilename, response.data);
+          } catch (fetchError) {
+            // If fetching fails, try addurl as fallback
+            console.log(`[grabRelease] Failed to fetch NZB file, trying addurl: ${fetchError.message}`);
+            result = await clientProxy.addNzbFromUrl(downloadUrl);
+          }
+        } else {
+          // Add NZB from URL (for indexers that provide direct NZB URLs)
+          // This is preferred as it's more efficient
+          result = await clientProxy.addNzbFromUrl(downloadUrl);
+        }
+      } else {
+        return res.status(400).json({ error: "Invalid NZB URL format" });
+      }
     } else {
-      return res.status(400).json({ error: "Invalid download URL format" });
+      // For torrent clients
+      if (downloadUrl.startsWith("magnet:")) {
+        result = await clientProxy.addTorrentFromMagnet(downloadUrl);
+      } else if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
+        // For HTTP URLs, we need to fetch the file first
+        const axios = require("axios");
+        const response = await axios.get(downloadUrl, { responseType: "arraybuffer" });
+        const filename = downloadUrl.split("/").pop() || "torrent.torrent";
+        result = await clientProxy.addTorrentFromFile(filename, response.data);
+      } else {
+        return res.status(400).json({ error: "Invalid download URL format" });
+      }
     }
 
     res.json({
@@ -1464,6 +1872,11 @@ async function testDownloadClient(implementation, settings) {
         const DelugeProxy = require('../services/downloadClients/delugeProxy');
         clientProxy = new DelugeProxy(settings);
         break;
+      case 'Sabnzbd':
+        console.log('[testDownloadClient] Creating SabnzbdProxy instance');
+        const SabnzbdProxy = require('../services/downloadClients/sabnzbdProxy');
+        clientProxy = new SabnzbdProxy(settings);
+        break;
       // Add other clients here as we implement them
       default:
         console.log(`[testDownloadClient] Unknown implementation: ${implementation}`);
@@ -1519,6 +1932,7 @@ exports.createDownloadClient = async (req, res) => {
       settings: settings || {},
       categories: categories || [],
       tags: tags || null,
+      userId: req.userId, // Associate with authenticated user
     });
 
     res.status(201).json(newClient.toJSON());
@@ -1531,6 +1945,7 @@ exports.createDownloadClient = async (req, res) => {
 exports.readDownloadClients = async (req, res) => {
   try {
     const clients = await DownloadClients.findAll({
+      where: { userId: req.userId }, // Only fetch clients for the authenticated user
       order: [["priority", "ASC"], ["name", "ASC"]],
     });
 
@@ -1546,7 +1961,9 @@ exports.readDownloadClients = async (req, res) => {
 
 exports.readDownloadClientFromID = async (req, res) => {
   try {
-    const client = await DownloadClients.findByPk(req.params.id);
+    const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
     }
@@ -1560,7 +1977,9 @@ exports.readDownloadClientFromID = async (req, res) => {
 
 exports.updateDownloadClient = async (req, res) => {
   try {
-    const client = await DownloadClients.findByPk(req.params.id);
+    const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
     }
@@ -1596,7 +2015,9 @@ exports.updateDownloadClient = async (req, res) => {
 
 exports.deleteDownloadClient = async (req, res) => {
   try {
-    const client = await DownloadClients.findByPk(req.params.id);
+    const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
     }
@@ -1616,7 +2037,9 @@ exports.testDownloadClient = async (req, res) => {
 
     if (req.params.id) {
       // Test existing client
-      const client = await DownloadClients.findByPk(req.params.id);
+      const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
       if (!client) {
         return res.status(404).json({ success: false, error: "Download client not found" });
       }
@@ -1659,6 +2082,7 @@ exports.testDownloadClient = async (req, res) => {
 exports.testAllDownloadClients = async (req, res) => {
   try {
     const clients = await DownloadClients.findAll({
+      where: { userId: req.userId }, // Only fetch clients for the authenticated user
       order: [["priority", "ASC"], ["name", "ASC"]],
     });
 
@@ -1717,27 +2141,74 @@ exports.testAllDownloadClients = async (req, res) => {
 
 exports.grabRelease = async (req, res) => {
   try {
-    const { downloadUrl, clientId } = req.body;
+    const { downloadUrl, clientId, protocol } = req.body;
 
     if (!downloadUrl) {
       return res.status(400).json({ error: "Download URL or magnet link is required" });
     }
 
+    // Determine protocol: use provided protocol, or infer from URL
+    let determinedProtocol = protocol;
+    if (!determinedProtocol) {
+      if (downloadUrl.startsWith("magnet:")) {
+        determinedProtocol = "torrent";
+      } else {
+        // Default to nzb for HTTP/HTTPS URLs if protocol not specified
+        // But check if it's clearly a torrent file
+        if (downloadUrl.includes(".torrent") || downloadUrl.includes("torrent")) {
+          determinedProtocol = "torrent";
+        } else {
+          determinedProtocol = "nzb";
+        }
+      }
+    }
+
+    // Map "nzb" to "usenet" for database lookup
+    const dbProtocol = determinedProtocol === "nzb" ? "usenet" : determinedProtocol;
+
+    console.log(`[grabRelease] Looking for client - Protocol: ${determinedProtocol} (DB: ${dbProtocol}), UserId: ${req.userId}`);
+
     // Get the download client
     let client;
     if (clientId) {
-      client = await DownloadClients.findByPk(clientId);
-    } else {
-      // Get the first enabled client for the protocol
-      const protocol = downloadUrl.startsWith("magnet:") ? "torrent" : "nzb";
       client = await DownloadClients.findOne({
-        where: { enabled: true, protocol },
+        where: { id: clientId, userId: req.userId },
+      });
+      if (client) {
+        console.log(`[grabRelease] Found client by ID: ${client.name} (${client.protocol})`);
+      }
+    } else {
+      // Get the first enabled client for the protocol and user
+      const whereClause = { enabled: true, protocol: dbProtocol, userId: req.userId };
+      console.log(`[grabRelease] Searching for client with:`, whereClause);
+      
+      client = await DownloadClients.findOne({
+        where: whereClause,
         order: [["priority", "ASC"]],
       });
+      
+      if (client) {
+        console.log(`[grabRelease] Found client: ${client.name} (${client.protocol}, priority: ${client.priority})`);
+      } else {
+        // Debug: Check what clients exist for this user
+        const allUserClients = await DownloadClients.findAll({
+          where: { userId: req.userId },
+          attributes: ['id', 'name', 'protocol', 'enabled', 'priority'],
+        });
+        console.log(`[grabRelease] Available clients for user:`, allUserClients.map(c => ({
+          name: c.name,
+          protocol: c.protocol,
+          enabled: c.enabled,
+          priority: c.priority,
+        })));
+      }
     }
 
     if (!client) {
-      return res.status(404).json({ error: "No enabled download client found" });
+      const protocolName = determinedProtocol === "nzb" ? "usenet" : determinedProtocol;
+      return res.status(404).json({ 
+        error: `No enabled ${protocolName} download client found. Please configure a download client in Settings.` 
+      });
     }
 
     const clientData = client.toJSON();
@@ -1750,6 +2221,10 @@ exports.grabRelease = async (req, res) => {
         const DelugeProxy = require("../services/downloadClients/delugeProxy");
         clientProxy = new DelugeProxy(settings);
         break;
+      case "Sabnzbd":
+        const SabnzbdProxy = require("../services/downloadClients/sabnzbdProxy");
+        clientProxy = new SabnzbdProxy(settings);
+        break;
       // Add other clients here as we implement them
       default:
         return res.status(400).json({ error: `Client ${clientData.implementation} not yet implemented` });
@@ -1757,16 +2232,51 @@ exports.grabRelease = async (req, res) => {
 
     // Add torrent/NZB to client
     let result;
-    if (downloadUrl.startsWith("magnet:")) {
-      result = await clientProxy.addTorrentFromMagnet(downloadUrl);
-    } else if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
-      // For HTTP URLs, we need to fetch the file first
-      const axios = require("axios");
-      const response = await axios.get(downloadUrl, { responseType: "arraybuffer" });
-      const filename = downloadUrl.split("/").pop() || "torrent.torrent";
-      result = await clientProxy.addTorrentFromFile(filename, response.data);
+    if (clientData.protocol === "usenet") {
+      // For Usenet clients (SABnzbd), handle NZB URLs
+      if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
+        // Try addurl first (works for most NZB indexers)
+        // Only fetch the file if addurl fails or if URL clearly indicates a file download
+        const isDirectFileUrl = downloadUrl.endsWith(".nzb") || downloadUrl.includes("/download/") || downloadUrl.includes("/getnzb");
+        
+        if (isDirectFileUrl) {
+          // Fetch the NZB file and add it using POST (avoids 414 errors)
+          try {
+            const axios = require("axios");
+            const response = await axios.get(downloadUrl, { 
+              responseType: "arraybuffer",
+              timeout: 30000,
+            });
+            const filename = downloadUrl.split("/").pop() || "download.nzb";
+            // Remove query parameters from filename if present
+            const cleanFilename = filename.split("?")[0];
+            result = await clientProxy.addNzbFromFile(cleanFilename, response.data);
+          } catch (fetchError) {
+            // If fetching fails, try addurl as fallback
+            console.log(`[grabRelease] Failed to fetch NZB file, trying addurl: ${fetchError.message}`);
+            result = await clientProxy.addNzbFromUrl(downloadUrl);
+          }
+        } else {
+          // Add NZB from URL (for indexers that provide direct NZB URLs)
+          // This is preferred as it's more efficient
+          result = await clientProxy.addNzbFromUrl(downloadUrl);
+        }
+      } else {
+        return res.status(400).json({ error: "Invalid NZB URL format" });
+      }
     } else {
-      return res.status(400).json({ error: "Invalid download URL format" });
+      // For torrent clients
+      if (downloadUrl.startsWith("magnet:")) {
+        result = await clientProxy.addTorrentFromMagnet(downloadUrl);
+      } else if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
+        // For HTTP URLs, we need to fetch the file first
+        const axios = require("axios");
+        const response = await axios.get(downloadUrl, { responseType: "arraybuffer" });
+        const filename = downloadUrl.split("/").pop() || "torrent.torrent";
+        result = await clientProxy.addTorrentFromFile(filename, response.data);
+      } else {
+        return res.status(400).json({ error: "Invalid download URL format" });
+      }
     }
 
     res.json({
@@ -1826,6 +2336,11 @@ async function testDownloadClient(implementation, settings) {
         const DelugeProxy = require('../services/downloadClients/delugeProxy');
         clientProxy = new DelugeProxy(settings);
         break;
+      case 'Sabnzbd':
+        console.log('[testDownloadClient] Creating SabnzbdProxy instance');
+        const SabnzbdProxy = require('../services/downloadClients/sabnzbdProxy');
+        clientProxy = new SabnzbdProxy(settings);
+        break;
       // Add other clients here as we implement them
       default:
         console.log(`[testDownloadClient] Unknown implementation: ${implementation}`);
@@ -1881,6 +2396,7 @@ exports.createDownloadClient = async (req, res) => {
       settings: settings || {},
       categories: categories || [],
       tags: tags || null,
+      userId: req.userId, // Associate with authenticated user
     });
 
     res.status(201).json(newClient.toJSON());
@@ -1893,6 +2409,7 @@ exports.createDownloadClient = async (req, res) => {
 exports.readDownloadClients = async (req, res) => {
   try {
     const clients = await DownloadClients.findAll({
+      where: { userId: req.userId }, // Only fetch clients for the authenticated user
       order: [["priority", "ASC"], ["name", "ASC"]],
     });
 
@@ -1908,7 +2425,9 @@ exports.readDownloadClients = async (req, res) => {
 
 exports.readDownloadClientFromID = async (req, res) => {
   try {
-    const client = await DownloadClients.findByPk(req.params.id);
+    const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
     }
@@ -1922,7 +2441,9 @@ exports.readDownloadClientFromID = async (req, res) => {
 
 exports.updateDownloadClient = async (req, res) => {
   try {
-    const client = await DownloadClients.findByPk(req.params.id);
+    const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
     }
@@ -1958,7 +2479,9 @@ exports.updateDownloadClient = async (req, res) => {
 
 exports.deleteDownloadClient = async (req, res) => {
   try {
-    const client = await DownloadClients.findByPk(req.params.id);
+    const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
     }
@@ -1978,7 +2501,9 @@ exports.testDownloadClient = async (req, res) => {
 
     if (req.params.id) {
       // Test existing client
-      const client = await DownloadClients.findByPk(req.params.id);
+      const client = await DownloadClients.findOne({
+      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this client
+    });
       if (!client) {
         return res.status(404).json({ success: false, error: "Download client not found" });
       }
@@ -2021,6 +2546,7 @@ exports.testDownloadClient = async (req, res) => {
 exports.testAllDownloadClients = async (req, res) => {
   try {
     const clients = await DownloadClients.findAll({
+      where: { userId: req.userId }, // Only fetch clients for the authenticated user
       order: [["priority", "ASC"], ["name", "ASC"]],
     });
 
@@ -2079,27 +2605,74 @@ exports.testAllDownloadClients = async (req, res) => {
 
 exports.grabRelease = async (req, res) => {
   try {
-    const { downloadUrl, clientId } = req.body;
+    const { downloadUrl, clientId, protocol } = req.body;
 
     if (!downloadUrl) {
       return res.status(400).json({ error: "Download URL or magnet link is required" });
     }
 
+    // Determine protocol: use provided protocol, or infer from URL
+    let determinedProtocol = protocol;
+    if (!determinedProtocol) {
+      if (downloadUrl.startsWith("magnet:")) {
+        determinedProtocol = "torrent";
+      } else {
+        // Default to nzb for HTTP/HTTPS URLs if protocol not specified
+        // But check if it's clearly a torrent file
+        if (downloadUrl.includes(".torrent") || downloadUrl.includes("torrent")) {
+          determinedProtocol = "torrent";
+        } else {
+          determinedProtocol = "nzb";
+        }
+      }
+    }
+
+    // Map "nzb" to "usenet" for database lookup
+    const dbProtocol = determinedProtocol === "nzb" ? "usenet" : determinedProtocol;
+
+    console.log(`[grabRelease] Looking for client - Protocol: ${determinedProtocol} (DB: ${dbProtocol}), UserId: ${req.userId}`);
+
     // Get the download client
     let client;
     if (clientId) {
-      client = await DownloadClients.findByPk(clientId);
-    } else {
-      // Get the first enabled client for the protocol
-      const protocol = downloadUrl.startsWith("magnet:") ? "torrent" : "nzb";
       client = await DownloadClients.findOne({
-        where: { enabled: true, protocol },
+        where: { id: clientId, userId: req.userId },
+      });
+      if (client) {
+        console.log(`[grabRelease] Found client by ID: ${client.name} (${client.protocol})`);
+      }
+    } else {
+      // Get the first enabled client for the protocol and user
+      const whereClause = { enabled: true, protocol: dbProtocol, userId: req.userId };
+      console.log(`[grabRelease] Searching for client with:`, whereClause);
+      
+      client = await DownloadClients.findOne({
+        where: whereClause,
         order: [["priority", "ASC"]],
       });
+      
+      if (client) {
+        console.log(`[grabRelease] Found client: ${client.name} (${client.protocol}, priority: ${client.priority})`);
+      } else {
+        // Debug: Check what clients exist for this user
+        const allUserClients = await DownloadClients.findAll({
+          where: { userId: req.userId },
+          attributes: ['id', 'name', 'protocol', 'enabled', 'priority'],
+        });
+        console.log(`[grabRelease] Available clients for user:`, allUserClients.map(c => ({
+          name: c.name,
+          protocol: c.protocol,
+          enabled: c.enabled,
+          priority: c.priority,
+        })));
+      }
     }
 
     if (!client) {
-      return res.status(404).json({ error: "No enabled download client found" });
+      const protocolName = determinedProtocol === "nzb" ? "usenet" : determinedProtocol;
+      return res.status(404).json({ 
+        error: `No enabled ${protocolName} download client found. Please configure a download client in Settings.` 
+      });
     }
 
     const clientData = client.toJSON();
@@ -2112,6 +2685,10 @@ exports.grabRelease = async (req, res) => {
         const DelugeProxy = require("../services/downloadClients/delugeProxy");
         clientProxy = new DelugeProxy(settings);
         break;
+      case "Sabnzbd":
+        const SabnzbdProxy = require("../services/downloadClients/sabnzbdProxy");
+        clientProxy = new SabnzbdProxy(settings);
+        break;
       // Add other clients here as we implement them
       default:
         return res.status(400).json({ error: `Client ${clientData.implementation} not yet implemented` });
@@ -2119,16 +2696,51 @@ exports.grabRelease = async (req, res) => {
 
     // Add torrent/NZB to client
     let result;
-    if (downloadUrl.startsWith("magnet:")) {
-      result = await clientProxy.addTorrentFromMagnet(downloadUrl);
-    } else if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
-      // For HTTP URLs, we need to fetch the file first
-      const axios = require("axios");
-      const response = await axios.get(downloadUrl, { responseType: "arraybuffer" });
-      const filename = downloadUrl.split("/").pop() || "torrent.torrent";
-      result = await clientProxy.addTorrentFromFile(filename, response.data);
+    if (clientData.protocol === "usenet") {
+      // For Usenet clients (SABnzbd), handle NZB URLs
+      if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
+        // Try addurl first (works for most NZB indexers)
+        // Only fetch the file if addurl fails or if URL clearly indicates a file download
+        const isDirectFileUrl = downloadUrl.endsWith(".nzb") || downloadUrl.includes("/download/") || downloadUrl.includes("/getnzb");
+        
+        if (isDirectFileUrl) {
+          // Fetch the NZB file and add it using POST (avoids 414 errors)
+          try {
+            const axios = require("axios");
+            const response = await axios.get(downloadUrl, { 
+              responseType: "arraybuffer",
+              timeout: 30000,
+            });
+            const filename = downloadUrl.split("/").pop() || "download.nzb";
+            // Remove query parameters from filename if present
+            const cleanFilename = filename.split("?")[0];
+            result = await clientProxy.addNzbFromFile(cleanFilename, response.data);
+          } catch (fetchError) {
+            // If fetching fails, try addurl as fallback
+            console.log(`[grabRelease] Failed to fetch NZB file, trying addurl: ${fetchError.message}`);
+            result = await clientProxy.addNzbFromUrl(downloadUrl);
+          }
+        } else {
+          // Add NZB from URL (for indexers that provide direct NZB URLs)
+          // This is preferred as it's more efficient
+          result = await clientProxy.addNzbFromUrl(downloadUrl);
+        }
+      } else {
+        return res.status(400).json({ error: "Invalid NZB URL format" });
+      }
     } else {
-      return res.status(400).json({ error: "Invalid download URL format" });
+      // For torrent clients
+      if (downloadUrl.startsWith("magnet:")) {
+        result = await clientProxy.addTorrentFromMagnet(downloadUrl);
+      } else if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
+        // For HTTP URLs, we need to fetch the file first
+        const axios = require("axios");
+        const response = await axios.get(downloadUrl, { responseType: "arraybuffer" });
+        const filename = downloadUrl.split("/").pop() || "torrent.torrent";
+        result = await clientProxy.addTorrentFromFile(filename, response.data);
+      } else {
+        return res.status(400).json({ error: "Invalid download URL format" });
+      }
     }
 
     res.json({

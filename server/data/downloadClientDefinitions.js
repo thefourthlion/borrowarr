@@ -12,7 +12,7 @@ const downloadClientDefinitions = {
       protocol: "usenet",
       description: "Synology Download Station",
       fields: [
-        { name: "host", label: "Host", type: "textbox", defaultValue: "localhost" },
+        { name: "host", label: "Host (IP or Domain)", type: "textbox", defaultValue: "localhost", description: "Enter the IP address (e.g., 192.168.1.100) or domain name (e.g., deluge.example.com)" },
         { name: "port", label: "Port", type: "number", defaultValue: 5000 },
         { name: "useSsl", label: "Use SSL", type: "checkbox", defaultValue: false },
         { name: "username", label: "Username", type: "textbox" },
@@ -28,7 +28,7 @@ const downloadClientDefinitions = {
       protocol: "usenet",
       description: "NZBGet is a binary downloader for Usenet",
       fields: [
-        { name: "host", label: "Host", type: "textbox", defaultValue: "localhost" },
+        { name: "host", label: "Host (IP or Domain)", type: "textbox", defaultValue: "localhost", description: "Enter the IP address (e.g., 192.168.1.100) or domain name (e.g., deluge.example.com)" },
         { name: "port", label: "Port", type: "number", defaultValue: 6789 },
         { name: "useSsl", label: "Use SSL", type: "checkbox", defaultValue: false },
         { name: "username", label: "Username", type: "textbox", defaultValue: "nzbget" },
@@ -44,7 +44,7 @@ const downloadClientDefinitions = {
       protocol: "usenet",
       description: "NZBVortex is a Usenet downloader for macOS",
       fields: [
-        { name: "host", label: "Host", type: "textbox", defaultValue: "localhost" },
+        { name: "host", label: "Host (IP or Domain)", type: "textbox", defaultValue: "localhost", description: "Enter the IP address (e.g., 192.168.1.100) or domain name (e.g., deluge.example.com)" },
         { name: "port", label: "Port", type: "number", defaultValue: 4321 },
         { name: "useSsl", label: "Use SSL", type: "checkbox", defaultValue: false },
         { name: "apiKey", label: "API Key", type: "password" },
@@ -69,7 +69,7 @@ const downloadClientDefinitions = {
       protocol: "usenet",
       description: "SABnzbd is a binary newsreader",
       fields: [
-        { name: "host", label: "Host", type: "textbox", defaultValue: "localhost" },
+        { name: "host", label: "Host (IP or Domain)", type: "textbox", defaultValue: "localhost", description: "Enter the IP address (e.g., 192.168.1.100) or domain name (e.g., deluge.example.com)" },
         { name: "port", label: "Port", type: "number", defaultValue: 8080 },
         { name: "useSsl", label: "Use SSL", type: "checkbox", defaultValue: false },
         { name: "apiKey", label: "API Key", type: "password" },
@@ -99,7 +99,7 @@ const downloadClientDefinitions = {
       protocol: "torrent",
       description: "Aria2 is a lightweight multi-protocol download utility",
       fields: [
-        { name: "host", label: "Host", type: "textbox", defaultValue: "localhost" },
+        { name: "host", label: "Host (IP or Domain)", type: "textbox", defaultValue: "localhost", description: "Enter the IP address (e.g., 192.168.1.100) or domain name (e.g., deluge.example.com)" },
         { name: "port", label: "Port", type: "number", defaultValue: 6800 },
         { name: "useSsl", label: "Use SSL", type: "checkbox", defaultValue: false },
         { name: "rpcPath", label: "RPC Path", type: "textbox", defaultValue: "/jsonrpc" },
@@ -115,7 +115,7 @@ const downloadClientDefinitions = {
       protocol: "torrent",
       description: "Deluge is a lightweight, cross-platform BitTorrent client",
       fields: [
-        { name: "host", label: "Host", type: "textbox", defaultValue: "localhost" },
+        { name: "host", label: "Host (IP or Domain)", type: "textbox", defaultValue: "localhost", description: "Enter the IP address (e.g., 192.168.1.100) or domain name (e.g., deluge.example.com)" },
         { name: "port", label: "Port", type: "number", defaultValue: 8112 },
         { name: "useSsl", label: "Use SSL", type: "checkbox", defaultValue: false },
         { name: "urlBase", label: "URL Base", type: "textbox", advanced: true },
@@ -131,7 +131,7 @@ const downloadClientDefinitions = {
       protocol: "torrent",
       description: "Synology Download Station",
       fields: [
-        { name: "host", label: "Host", type: "textbox", defaultValue: "localhost" },
+        { name: "host", label: "Host (IP or Domain)", type: "textbox", defaultValue: "localhost", description: "Enter the IP address (e.g., 192.168.1.100) or domain name (e.g., deluge.example.com)" },
         { name: "port", label: "Port", type: "number", defaultValue: 5000 },
         { name: "useSsl", label: "Use SSL", type: "checkbox", defaultValue: false },
         { name: "username", label: "Username", type: "textbox" },
@@ -147,7 +147,7 @@ const downloadClientDefinitions = {
       protocol: "torrent",
       description: "Flood is a modern web UI for rTorrent, Transmission and qBittorrent",
       fields: [
-        { name: "host", label: "Host", type: "textbox", defaultValue: "localhost" },
+        { name: "host", label: "Host (IP or Domain)", type: "textbox", defaultValue: "localhost", description: "Enter the IP address (e.g., 192.168.1.100) or domain name (e.g., deluge.example.com)" },
         { name: "port", label: "Port", type: "number", defaultValue: 3000 },
         { name: "useSsl", label: "Use SSL", type: "checkbox", defaultValue: false },
         { name: "username", label: "Username", type: "textbox" },
@@ -163,7 +163,7 @@ const downloadClientDefinitions = {
       protocol: "torrent",
       description: "Freebox Download client",
       fields: [
-        { name: "host", label: "Host", type: "textbox", defaultValue: "mafreebox.freebox.fr" },
+        { name: "host", label: "Host (IP or Domain)", type: "textbox", defaultValue: "mafreebox.freebox.fr", description: "Enter the IP address (e.g., 192.168.1.100) or domain name (e.g., mafreebox.freebox.fr)" },
         { name: "port", label: "Port", type: "number", defaultValue: 443 },
         { name: "appId", label: "App ID", type: "textbox" },
         { name: "appToken", label: "App Token", type: "password" },
@@ -178,7 +178,7 @@ const downloadClientDefinitions = {
       protocol: "torrent",
       description: "Hadouken is a C# based torrent client",
       fields: [
-        { name: "host", label: "Host", type: "textbox", defaultValue: "localhost" },
+        { name: "host", label: "Host (IP or Domain)", type: "textbox", defaultValue: "localhost", description: "Enter the IP address (e.g., 192.168.1.100) or domain name (e.g., deluge.example.com)" },
         { name: "port", label: "Port", type: "number", defaultValue: 7070 },
         { name: "useSsl", label: "Use SSL", type: "checkbox", defaultValue: false },
         { name: "apiKey", label: "API Key", type: "password" },
@@ -193,7 +193,7 @@ const downloadClientDefinitions = {
       protocol: "torrent",
       description: "qBittorrent is a cross-platform BitTorrent client",
       fields: [
-        { name: "host", label: "Host", type: "textbox", defaultValue: "localhost" },
+        { name: "host", label: "Host (IP or Domain)", type: "textbox", defaultValue: "localhost", description: "Enter the IP address (e.g., 192.168.1.100) or domain name (e.g., deluge.example.com)" },
         { name: "port", label: "Port", type: "number", defaultValue: 8080 },
         { name: "useSsl", label: "Use SSL", type: "checkbox", defaultValue: false },
         { name: "username", label: "Username", type: "textbox", defaultValue: "admin" },
@@ -209,7 +209,7 @@ const downloadClientDefinitions = {
       protocol: "torrent",
       description: "rTorrent is a command-line BitTorrent client",
       fields: [
-        { name: "host", label: "Host", type: "textbox", defaultValue: "localhost" },
+        { name: "host", label: "Host (IP or Domain)", type: "textbox", defaultValue: "localhost", description: "Enter the IP address (e.g., 192.168.1.100) or domain name (e.g., deluge.example.com)" },
         { name: "port", label: "Port", type: "number", defaultValue: 5000 },
         { name: "useSsl", label: "Use SSL", type: "checkbox", defaultValue: false },
         { name: "urlBase", label: "URL Base", type: "textbox", defaultValue: "/RPC2", advanced: true },
@@ -236,7 +236,7 @@ const downloadClientDefinitions = {
       protocol: "torrent",
       description: "Transmission is a BitTorrent client",
       fields: [
-        { name: "host", label: "Host", type: "textbox", defaultValue: "localhost" },
+        { name: "host", label: "Host (IP or Domain)", type: "textbox", defaultValue: "localhost", description: "Enter the IP address (e.g., 192.168.1.100) or domain name (e.g., deluge.example.com)" },
         { name: "port", label: "Port", type: "number", defaultValue: 9091 },
         { name: "useSsl", label: "Use SSL", type: "checkbox", defaultValue: false },
         { name: "urlBase", label: "URL Base", type: "textbox", advanced: true },
@@ -253,7 +253,7 @@ const downloadClientDefinitions = {
       protocol: "torrent",
       description: "uTorrent is a BitTorrent client",
       fields: [
-        { name: "host", label: "Host", type: "textbox", defaultValue: "localhost" },
+        { name: "host", label: "Host (IP or Domain)", type: "textbox", defaultValue: "localhost", description: "Enter the IP address (e.g., 192.168.1.100) or domain name (e.g., deluge.example.com)" },
         { name: "port", label: "Port", type: "number", defaultValue: 8080 },
         { name: "useSsl", label: "Use SSL", type: "checkbox", defaultValue: false },
         { name: "username", label: "Username", type: "textbox", defaultValue: "admin" },
@@ -269,7 +269,7 @@ const downloadClientDefinitions = {
       protocol: "torrent",
       description: "Vuze is a BitTorrent client",
       fields: [
-        { name: "host", label: "Host", type: "textbox", defaultValue: "localhost" },
+        { name: "host", label: "Host (IP or Domain)", type: "textbox", defaultValue: "localhost", description: "Enter the IP address (e.g., 192.168.1.100) or domain name (e.g., deluge.example.com)" },
         { name: "port", label: "Port", type: "number", defaultValue: 6881 },
         { name: "useSsl", label: "Use SSL", type: "checkbox", defaultValue: false },
         { name: "username", label: "Username", type: "textbox" },

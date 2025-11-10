@@ -65,6 +65,12 @@ class Scraper {
       return await this.apiScraper.search(query, options);
     }
     
+    // Check if this is a JSON response type
+    const searchConfig = this.definition.search;
+    const isJSONResponse = searchConfig.paths && searchConfig.paths[0] && 
+                          searchConfig.paths[0].response && 
+                          searchConfig.paths[0].response.type === 'json';
+    
     // Otherwise, use HTML scraping
     try {
       const searchURL = this.buildSearchURL(query, options.categoryId);
@@ -79,7 +85,7 @@ class Scraper {
         response = await axios.get(searchURL, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept': isJSONResponse ? 'application/json' : 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
           },
           timeout: 30000, // Increased timeout for Cloudflare sites
@@ -87,6 +93,11 @@ class Scraper {
         });
         
         html = response.data;
+        
+        // If JSON response, parse it directly
+        if (isJSONResponse || (typeof response.data === 'object' && response.data !== null)) {
+          return this.parseJSONResponse(response.data, query);
+        }
         
         // Check if Cloudflare blocked us
         if (cloudflareHandler.isCloudflareBlocked(html)) {
@@ -150,6 +161,134 @@ class Scraper {
         error: error.message,
       };
     }
+  }
+
+  /**
+   * Parse JSON response (for indexers like The Pirate Bay that use JSON APIs)
+   */
+  parseJSONResponse(jsonData, query) {
+    try {
+      const rowsConfig = this.definition.search.rows;
+      const fieldsConfig = this.definition.search.fields;
+      
+      // Get the array of results - selector "$" means the root array
+      let resultsArray = jsonData;
+      if (Array.isArray(jsonData)) {
+        resultsArray = jsonData;
+      } else if (jsonData && typeof jsonData === 'object') {
+        // Try to find an array in the response
+        resultsArray = Object.values(jsonData).find(val => Array.isArray(val)) || [];
+      }
+      
+      if (!Array.isArray(resultsArray) || resultsArray.length === 0) {
+        console.warn(`   ⚠️  No results found in JSON response`);
+        return {
+          success: true,
+          results: [],
+          indexer: this.definition.name,
+          indexerId: this.definition.id,
+        };
+      }
+      
+      console.log(`   📊 Found ${resultsArray.length} results in JSON`);
+      
+      // Extract data from each result
+      const results = [];
+      for (let i = 0; i < resultsArray.length; i++) {
+        const item = resultsArray[i];
+        try {
+          const result = this.extractJSONRow(item, fieldsConfig);
+          if (result) {
+            results.push(result);
+          }
+        } catch (error) {
+          console.error(`   ❌ Error extracting JSON row ${i}:`, error.message);
+        }
+      }
+      
+      console.log(`   ✅ Successfully parsed ${results.length} results from ${this.definition.name}`);
+      
+      return {
+        success: true,
+        results,
+        indexer: this.definition.name,
+        indexerId: this.definition.id,
+      };
+    } catch (error) {
+      console.error(`   ❌ Error parsing JSON response:`, error.message);
+      return {
+        success: false,
+        results: [],
+        indexer: this.definition.name,
+        indexerId: this.definition.id,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Extract data from a single JSON row
+   */
+  extractJSONRow(item, fieldsConfig) {
+    const data = {};
+    
+    // Extract each field using JSON path notation (simple dot notation)
+    for (const [fieldName, fieldConfig] of Object.entries(fieldsConfig)) {
+      let value = null;
+      
+      if (typeof fieldConfig === 'string') {
+        // Simple selector like "name" or "id"
+        value = this.getJSONValue(item, fieldConfig);
+      } else if (fieldConfig.selector) {
+        value = this.getJSONValue(item, fieldConfig.selector);
+      } else if (fieldConfig.text) {
+        // Static text value
+        value = fieldConfig.text;
+      }
+      
+      // Apply filters if specified
+      if (value !== null && fieldConfig.filters) {
+        value = this.filterEngine.applyFilters(value, fieldConfig.filters);
+      }
+      
+      data[fieldName] = value;
+    }
+    
+    // Post-process the data
+    return this.formatResult(data);
+  }
+
+  /**
+   * Get value from JSON object using dot notation path
+   */
+  getJSONValue(obj, path) {
+    if (!path || !obj) return null;
+    
+    // Handle simple field names
+    if (path.indexOf('.') === -1 && path.indexOf('[') === -1) {
+      return obj[path] !== undefined ? obj[path] : null;
+    }
+    
+    // Handle dot notation paths like "data.movies" or "..title" (parent)
+    const parts = path.split('.');
+    let current = obj;
+    
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i].trim();
+      if (part === '..') {
+        // Parent selector - not applicable in flat JSON
+        continue;
+      } else if (part === '' && i === 0) {
+        // Root selector
+        continue;
+      } else if (current && typeof current === 'object') {
+        current = current[part];
+      } else {
+        return null;
+      }
+    }
+    
+    return current !== undefined ? current : null;
   }
 
   /**

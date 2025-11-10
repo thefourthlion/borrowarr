@@ -215,7 +215,7 @@ search:
       response:
         type: json
   rows:
-    selector: ${{ if .Config.uploader }}:has(username:contains({{ .Config.uploader }})){{ else }}{{ end }}
+    selector: $
     count:
       selector: $[0].id
   fields:

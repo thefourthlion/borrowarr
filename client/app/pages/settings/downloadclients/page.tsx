@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { Button } from "@nextui-org/button";
-import { Card, CardBody } from "@nextui-org/card";
+import { Card, CardBody, CardHeader } from "@nextui-org/card";
 import { Input } from "@nextui-org/input";
 import {
   Modal,
@@ -22,6 +22,13 @@ import {
   X,
   Settings,
   Info,
+  Download,
+  CheckCircle2,
+  AlertCircle,
+  ChevronRight,
+  Trash2,
+  Clock,
+  XCircle,
 } from "lucide-react";
 import axios from "axios";
 import "../../../../styles/DownloadClients.scss";
@@ -70,14 +77,8 @@ const DownloadClients = () => {
   const [testSuccess, setTestSuccess] = useState(false);
   const [openSelects, setOpenSelects] = useState<Set<string>>(new Set());
   const [testingAll, setTestingAll] = useState(false);
-  const [testAllResults, setTestAllResults] = useState<Array<{
-    id: number;
-    name: string;
-    implementation: string;
-    success: boolean;
-    error: string | null;
-    message: string | null;
-  }> | null>(null);
+  const [testResults, setTestResults] = useState<Record<number, { success: boolean; error?: string }>>({});
+  const [showAdvanced, setShowAdvanced] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState<Partial<DownloadClient>>({
@@ -125,22 +126,19 @@ const DownloadClients = () => {
   const fetchAvailableClients = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/DownloadClients/available`);
-      console.log("Available clients response:", response.data);
       setAvailableClients({
         usenet: response.data.usenet || [],
         torrent: response.data.torrent || [],
       });
-      console.log("Set available clients - torrent:", response.data.torrent?.length || 0);
     } catch (error) {
       console.error("Error fetching available download clients:", error);
     }
   };
 
   const handleAddClient = (client: AvailableDownloadClient) => {
-    console.log("handleAddClient called with:", client);
     setSelectedClient(client);
+    setShowAdvanced(false);
     
-    // Initialize form data with defaults
     const defaultSettings: Record<string, any> = {};
     client.fields.forEach((field) => {
       if (field.defaultValue !== undefined) {
@@ -160,7 +158,6 @@ const DownloadClients = () => {
     
     setTestError(null);
     setTestSuccess(false);
-    console.log("Closing add modal and opening config modal");
     onAddModalClose();
     onConfigModalOpen();
   };
@@ -170,11 +167,10 @@ const DownloadClients = () => {
     setFormData(client);
     setTestError(null);
     setTestSuccess(false);
+    setShowAdvanced(false);
     
-    // Fetch available clients to get the definition for editing
     await fetchAvailableClients();
     
-    // Find the client definition
     const allClients = [...availableClients.usenet, ...availableClients.torrent];
     const clientDef = allClients.find(c => c.implementation === client.implementation);
     if (clientDef) {
@@ -225,14 +221,6 @@ const DownloadClients = () => {
   };
 
   const handleSaveClient = async () => {
-    // Test before saving
-    if (!testSuccess) {
-      await handleTestClient();
-      if (!testSuccess) {
-        return; // Don't save if test fails
-      }
-    }
-
     try {
       if (editingClient?.id) {
         await axios.put(`${API_BASE_URL}/api/DownloadClients/update/${editingClient.id}`, formData);
@@ -247,7 +235,6 @@ const DownloadClients = () => {
       setTestSuccess(false);
     } catch (error) {
       console.error("Error saving download client:", error);
-      alert("Failed to save download client");
     }
   };
 
@@ -258,102 +245,97 @@ const DownloadClients = () => {
       await fetchClients();
     } catch (error) {
       console.error("Error deleting download client:", error);
-      alert("Failed to delete download client");
     }
   };
 
   const handleTestAllClients = async () => {
-    if (clients.length === 0) {
-      alert("No download clients configured");
-      return;
-    }
+    if (clients.length === 0) return;
 
     try {
       setTestingAll(true);
-      setTestAllResults(null);
+      setTestResults({});
 
       const response = await axios.post(`${API_BASE_URL}/api/DownloadClients/test-all`);
 
-      if (response.data.success) {
-        setTestAllResults(response.data.results || []);
-      } else {
-        alert(`Failed to test clients: ${response.data.error || "Unknown error"}`);
+      if (response.data.success && response.data.results) {
+        const results: Record<number, { success: boolean; error?: string }> = {};
+        response.data.results.forEach((result: any) => {
+          if (result.id) {
+            results[result.id] = {
+              success: result.success || false,
+              error: result.error || undefined,
+            };
+          }
+        });
+        setTestResults(results);
       }
+      
+      await fetchClients();
     } catch (error: any) {
       console.error("Error testing all clients:", error);
-      alert(`Failed to test clients: ${error.response?.data?.error || error.message || "Unknown error"}`);
     } finally {
       setTestingAll(false);
     }
+  };
+
+  const getStatusIcon = (client: DownloadClient) => {
+    if (!client.enabled) {
+      return <XCircle className="w-5 h-5 text-default-400" />;
+    }
+    if (testResults[client.id!] && !testResults[client.id!].success) {
+      return <AlertCircle className="w-5 h-5 text-danger" />;
+    }
+    return <CheckCircle2 className="w-5 h-5 text-success" />;
   };
 
   const renderField = (field: any, definition: AvailableDownloadClient) => {
     const value = formData.settings?.[field.name] ?? field.defaultValue ?? "";
 
     switch (field.type) {
+      case "text":
       case "textbox":
-      case "number":
-        return (
-          <Input
-            key={field.name}
-            label={field.label}
-            type={field.type === "number" ? "number" : "text"}
-            value={value}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-              setFormData({
-                ...formData,
-                settings: {
-                  ...formData.settings,
-                  [field.name]: field.type === "number" ? parseInt(e.target.value) || 0 : e.target.value,
-                },
-              });
-              setTestError(null);
-              setTestSuccess(false);
-            }}
-          />
-        );
-
       case "password":
         return (
           <Input
             key={field.name}
             label={field.label}
-            type="password"
-            value={value}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-              setFormData({
-                ...formData,
-                settings: {
-                  ...formData.settings,
-                  [field.name]: e.target.value,
-                },
-              });
+            type={field.type === "password" ? "password" : "text"}
+            value={String(value)}
+            description={field.description}
+            onChange={(e) => {
+              const newSettings = { ...formData.settings, [field.name]: e.target.value };
+              setFormData({ ...formData, settings: newSettings });
               setTestError(null);
               setTestSuccess(false);
+            }}
+            size="sm"
+            classNames={{
+              inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+              label: "text-xs sm:text-sm",
+              description: "text-[10px] sm:text-xs text-foreground/50",
             }}
           />
         );
 
-      case "checkbox":
+      case "number":
         return (
-          <div key={field.name} className="flex items-center gap-2">
-            <Switch
-              isSelected={value}
-              onValueChange={(val: boolean) => {
-                setFormData({
-                  ...formData,
-                  settings: {
-                    ...formData.settings,
-                    [field.name]: val,
-                  },
-                });
-                setTestError(null);
-                setTestSuccess(false);
+          <Input
+            key={field.name}
+            label={field.label}
+            type="number"
+            value={String(value)}
+            onChange={(e) => {
+              const newSettings = { ...formData.settings, [field.name]: parseInt(e.target.value) || 0 };
+              setFormData({ ...formData, settings: newSettings });
+              setTestError(null);
+              setTestSuccess(false);
+            }}
+            size="sm"
+            classNames={{
+              inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+              label: "text-xs sm:text-sm",
               }}
-            >
-              {field.label}
-            </Switch>
-          </div>
+            />
         );
 
       case "select":
@@ -362,28 +344,17 @@ const DownloadClients = () => {
             key={field.name}
             label={field.label}
             selectedKeys={value ? [String(value)] : []}
-            onSelectionChange={(keys: any) => {
-              const selected = Array.from(keys)[0];
-              setFormData({
-                ...formData,
-                settings: {
-                  ...formData.settings,
-                  [field.name]: selected,
-                },
-              });
+            onSelectionChange={(keys) => {
+              const selected = Array.from(keys)[0] as string;
+              const newSettings = { ...formData.settings, [field.name]: selected };
+              setFormData({ ...formData, settings: newSettings });
               setTestError(null);
               setTestSuccess(false);
             }}
-            onOpenChange={(open) => {
-              setOpenSelects((prev) => {
-                const next = new Set(prev);
-                if (open) {
-                  next.add(field.name);
-                } else {
-                  next.delete(field.name);
-                }
-                return next;
-              });
+            size="sm"
+            classNames={{
+              trigger: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+              label: "text-xs sm:text-sm",
             }}
           >
             {field.options?.map((option: any) => (
@@ -394,264 +365,265 @@ const DownloadClients = () => {
           </Select>
         );
 
+      case "checkbox":
+        return (
+          <div key={field.name} className="flex items-center justify-between p-2 rounded-lg bg-content2 border border-secondary/20">
+            <div className="flex-1">
+              <label className="text-xs sm:text-sm font-medium text-foreground">
+                {field.label}
+              </label>
+              {field.description && (
+                <p className="text-[10px] sm:text-xs text-foreground/50 mt-0.5">
+                  {field.description}
+                </p>
+              )}
+            </div>
+            <Switch
+              size="sm"
+              color="secondary"
+              isSelected={Boolean(value)}
+              onValueChange={(checked) => {
+                const newSettings = { ...formData.settings, [field.name]: checked };
+                setFormData({ ...formData, settings: newSettings });
+                setTestError(null);
+                setTestSuccess(false);
+              }}
+            />
+          </div>
+        );
+
       default:
         return null;
     }
   };
 
-  const stats = {
-    total: clients.length,
-    enabled: clients.filter((c) => c.enabled).length,
-    torrent: clients.filter((c) => c.protocol === "torrent").length,
-    usenet: clients.filter((c) => c.protocol === "usenet").length,
-  };
-
   return (
-    <div className="DownloadClients page min-h-screen bg-background p-6">
-      <div className="container max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Download Clients</h1>
-          <div className="flex gap-2">
+    <div className="min-h-screen bg-background">
+        {/* Header */}
+      <div className="border-b border-secondary/20 sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
+            <div className="min-w-0">
+              <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent truncate">
+                Download Clients
+              </h1>
+              <p className="text-xs sm:text-sm text-foreground/60 mt-1">
+                Manage your torrent and usenet download clients
+              </p>
+          </div>
+            <div className="flex flex-wrap gap-2">
             <Button
-              color="primary"
-              startContent={<Plus size={16} />}
+                color="secondary"
+                className="btn-glow flex-1 xs:flex-none"
+                size="sm"
+                startContent={<Plus size={16} />}
               onPress={onAddModalOpen}
             >
-              Add Download Client
+                <span className="hidden xs:inline">Add Client</span>
+                <span className="xs:hidden">Add</span>
             </Button>
             <Button
-              variant="flat"
-              startContent={<TestTube size={16} />}
+                variant="flat"
+                color="secondary"
+                size="sm"
+                startContent={<TestTube size={16} />}
               onPress={handleTestAllClients}
               isLoading={testingAll}
-              isDisabled={clients.length === 0 || testingAll}
+                isDisabled={clients.length === 0}
             >
-              Test All Clients
+                <span className="hidden sm:inline">Test All</span>
             </Button>
           </div>
         </div>
-
-        <div className="bg-primary/10 p-4 rounded-lg mb-6">
-          <p className="text-sm">
-            If you intend to do searches directly within BorrowArr, you need to add Download Clients.
-            Otherwise, you do not need to add them here. For searches from your Apps, the download
-            clients configured there are used instead.
-          </p>
-          <p className="text-sm mt-2">
-            Download clients are for BorrowArr in-app searches only and do not sync to apps. There
-            are no plans to add any such functionality.
-          </p>
         </div>
+                  </div>
 
+      {/* Content */}
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
         {loading ? (
-          <div className="flex justify-center items-center py-12">
-            <Spinner size="lg" />
+          <div className="flex justify-center items-center py-20">
+            <Spinner size="lg" color="secondary" />
+            </div>
+        ) : clients.length === 0 ? (
+          <Card className="card-interactive">
+            <CardBody className="text-center py-12 sm:py-16 px-4">
+              <div className="flex flex-col items-center gap-4 max-w-md mx-auto">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-secondary/10 flex items-center justify-center">
+                  <Download className="w-6 h-6 sm:w-8 sm:h-8 text-secondary" />
           </div>
-        ) : (
-          <>
-            <Card>
-              <CardBody>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {clients.length === 0 ? (
-                    <div className="col-span-full text-center p-8 text-default-500">
-                      No download clients configured. Click "Add Download Client" to get started.
-                    </div>
-                  ) : (
-                    clients.map((client) => (
-                      <Card key={client.id} className="hover:bg-content2 transition-colors">
-                        <CardBody>
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <h3 className="font-semibold">{client.name}</h3>
-                              <Chip
-                                size="sm"
-                                color={client.protocol === "torrent" ? "success" : "primary"}
-                                variant="flat"
-                                className="mt-1"
-                              >
-                                {client.protocol}
-                              </Chip>
-                            </div>
-                            <Chip
-                              size="sm"
-                              color={client.enabled ? "success" : "default"}
-                              variant="flat"
-                            >
-                              {client.enabled ? "Enabled" : "Disabled"}
-                            </Chip>
-                          </div>
-                          <div className="flex gap-2 mt-4">
-                            <Button
-                              size="sm"
-                              variant="light"
-                              isIconOnly
-                              onPress={() => handleEditClient(client)}
-                            >
-                              <Settings size={16} />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="light"
-                              color="danger"
-                              isIconOnly
-                              onPress={() => client.id && handleDelete(client.id)}
-                            >
-                              <X size={16} />
-                            </Button>
-                          </div>
-                        </CardBody>
-                      </Card>
-                    ))
-                  )}
-                  {clients.length > 0 && (
-                    <Card
-                      className="hover:bg-content2 transition-colors cursor-pointer border-2 border-dashed"
+                <div>
+                  <h3 className="text-lg sm:text-xl font-semibold mb-2">No Download Clients Configured</h3>
+                  <p className="text-sm sm:text-base text-foreground/60 mb-4">
+                    Get started by adding your first download client to begin downloading content.
+                    </p>
+                    <Button
+                    color="secondary"
+                    className="btn-glow"
+                    size="sm"
+                    startContent={<Plus size={16} />}
                       onPress={onAddModalOpen}
                     >
-                      <CardBody className="flex items-center justify-center min-h-[120px]">
-                        <Plus size={48} className="text-default-400" />
-                      </CardBody>
-                    </Card>
-                  )}
-                </div>
-              </CardBody>
-            </Card>
-
-            <div className="flex justify-between items-center mt-6">
-              <div className="flex gap-6 text-sm">
-                <div>
-                  <span className="font-semibold">Clients:</span> {stats.total}
-                </div>
-                <div>
-                  <span className="font-semibold">Enabled:</span> {stats.enabled}
-                </div>
-                <div>
-                  <span className="font-semibold">Torrent:</span> {stats.torrent}
-                </div>
-                <div>
-                  <span className="font-semibold">Usenet:</span> {stats.usenet}
-                </div>
-              </div>
-            </div>
-
-            {/* Test All Results */}
-            {testAllResults && (
-              <Card className="mt-6">
-                <CardBody>
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold">Test Results</h3>
-                    <Button
-                      size="sm"
-                      variant="light"
-                      isIconOnly
-                      onPress={() => setTestAllResults(null)}
-                    >
-                      <X size={16} />
+                    Add Your First Client
                     </Button>
-                  </div>
-                  <div className="space-y-2">
-                    {testAllResults.map((result) => (
-                      <div
-                        key={result.id}
-                        className={`flex items-center justify-between p-3 rounded-lg ${
-                          result.success
-                            ? "bg-success/10 border border-success/20"
-                            : "bg-danger/10 border border-danger/20"
-                        }`}
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{result.name}</span>
-                            <Chip
-                              size="sm"
-                              color={result.success ? "success" : "danger"}
-                              variant="flat"
-                            >
-                              {result.success ? "Success" : "Failed"}
-                            </Chip>
-                          </div>
-                          {result.message && (
-                            <p className="text-xs text-default-500 mt-1">{result.message}</p>
-                          )}
-                          {result.error && (
-                            <p className="text-xs text-danger mt-1">{result.error}</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-4 pt-4 border-t">
-                    <div className="flex gap-6 text-sm">
-                      <div>
-                        <span className="font-semibold">Total:</span> {testAllResults.length}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-success">Successful:</span>{" "}
-                        {testAllResults.filter((r) => r.success).length}
-                      </div>
-                      <div>
-                        <span className="font-semibold text-danger">Failed:</span>{" "}
-                        {testAllResults.filter((r) => !r.success).length}
-                      </div>
-                    </div>
+                </div>
                   </div>
                 </CardBody>
               </Card>
+                  ) : (
+          <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 3xl:grid-cols-7 gap-3 sm:gap-4 lg:gap-5">
+                {clients.map((client) => (
+                  <Card 
+                    key={client.id} 
+                className="card-interactive group"
+                isPressable
+                onPress={() => handleEditClient(client)}
+                  >
+                <CardHeader className="flex-col items-start pb-2 gap-2">
+                  <div className="flex items-start gap-2 sm:gap-3 w-full">
+                    {getStatusIcon(client)}
+                          <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-sm sm:text-base lg:text-lg line-clamp-1 group-hover:text-secondary transition-colors">
+                        {client.name}
+                      </h3>
+                      <p className="text-[10px] sm:text-xs text-foreground/60 line-clamp-1 mt-0.5">
+                        {client.implementation}
+                      </p>
+                          </div>
+                    <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-foreground/40 group-hover:text-secondary group-hover:translate-x-1 transition-all flex-shrink-0" />
+                        </div>
+                  <div className="flex flex-wrap gap-1.5 w-full">
+                    {!client.enabled && (
+                      <Chip size="sm" color="default" variant="flat" className="text-[10px] sm:text-xs h-5 sm:h-6">
+                        Disabled
+                      </Chip>
+                    )}
+                              <Chip
+                      size="sm" 
+                                variant="flat"
+                            color={client.protocol === "torrent" ? "success" : "primary"}
+                      className="text-[10px] sm:text-xs h-5 sm:h-6"
+                              >
+                      {client.protocol.toUpperCase()}
+                              </Chip>
+                          </div>
+                </CardHeader>
+                <CardBody className="pt-0 space-y-2 sm:space-y-3">
+                  {/* Test Results */}
+                  {testResults[client.id!] && (
+                    <div className={`flex items-start gap-1.5 sm:gap-2 p-1.5 sm:p-2 rounded-lg border ${
+                      testResults[client.id!].success
+                        ? "bg-success/10 border-success/30"
+                        : "bg-danger/10 border-danger/30"
+                    }`}>
+                      {testResults[client.id!].success ? (
+                        <>
+                          <CheckCircle2 className="w-3 h-3 sm:w-4 sm:h-4 text-success flex-shrink-0 mt-0.5" />
+                          <p className="text-[10px] sm:text-xs text-success leading-tight font-medium">
+                            Test successful!
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4 text-danger flex-shrink-0 mt-0.5" />
+                          <p className="text-[10px] sm:text-xs text-danger leading-tight">
+                            {testResults[client.id!].error || "Test failed"}
+                          </p>
+                        </>
+                      )}
+                </div>
             )}
-          </>
-        )}
+
+                  {/* Bottom Row */}
+                  <div className="flex items-center justify-between pt-2 border-t border-secondary/10 gap-2">
+                    <div className="flex flex-col gap-0.5 sm:gap-1 text-[10px] sm:text-xs text-foreground/60 min-w-0 flex-1">
+                      <div className="flex items-center gap-1 truncate">
+                        <Settings className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
+                        <span className="truncate">Priority: {client.priority}</span>
+                  </div>
+                      {client.createdAt && (
+                        <div className="flex items-center gap-1 truncate" title={`Added: ${new Date(client.createdAt).toLocaleString()}`}>
+                          <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
+                          <span className="truncate">Added {new Date(client.createdAt).toLocaleDateString()}</span>
+                  </div>
+                              )}
+                            </div>
+                    <Switch
+                              size="sm"
+                      color="secondary"
+                      isSelected={client.enabled}
+                      onValueChange={async (enabled) => {
+                        try {
+                          await axios.put(`${API_BASE_URL}/api/DownloadClients/update/${client.id}`, {
+                            ...client,
+                            enabled,
+                          });
+                          fetchClients();
+                        } catch (error) {
+                          console.error("Error updating client:", error);
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex-shrink-0"
+                    />
+                      </div>
+                        </CardBody>
+                      </Card>
+                    ))}
+                  </div>
+            )}
+      </div>
 
         {/* Add Download Client Modal */}
         <Modal
           isOpen={isAddModalOpen}
           onClose={onAddModalClose}
-          size="5xl"
+        size="3xl"
           scrollBehavior="inside"
-          shouldBlockScroll={true}
+          classNames={{
+          backdrop: "bg-overlay/50 backdrop-blur-sm",
+          base: "bg-content1 border border-secondary/20 mx-2 sm:mx-4 shadow-xl shadow-secondary/10",
+          }}
         >
           <ModalContent>
-            <ModalHeader>Add Download Client</ModalHeader>
-            <ModalBody>
-              <div className="bg-primary/10 p-4 rounded-lg mb-4">
-                <p className="text-sm">
-                  Adding a download client allows BorrowArr to send releases direct from the UI
-                  while doing a manual search. BorrowArr supports any of the download clients
-                  listed below. For more information on the individual download clients, click on
-                  the info buttons.
-                </p>
+          <ModalHeader className="border-b border-secondary/20 bg-gradient-to-r from-secondary/5 to-transparent px-4 sm:px-6 py-4 sm:py-5">
+            <div className="w-full">
+              <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent">
+                Add Download Client
+              </h2>
+              <p className="text-sm sm:text-base text-foreground/70 font-normal mt-1">
+                Choose a download client to configure
+              </p>
               </div>
-
-              <div className="space-y-6">
+          </ModalHeader>
+          <ModalBody className="py-5 sm:py-6 px-4 sm:px-6">
+            <div className="space-y-6">
                 <div>
-                  <h3 className="text-lg font-semibold mb-3">Usenet</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="p-2 rounded-lg bg-primary/10">
+                      <Download size={20} className="text-primary" />
+                    </div>
+                  <h3 className="text-lg font-semibold text-foreground">Usenet Clients</h3>
+                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {availableClients.usenet.map((client) => (
                       <Card
                         key={client.implementation}
-                        className="hover:bg-content2 transition-colors cursor-pointer"
+                      className="card-interactive group cursor-pointer border-2 border-secondary/10 hover:border-secondary/30 transition-all duration-200"
                         isPressable
-                        onPress={() => {
-                          console.log("Usenet card clicked:", client.name);
-                          handleAddClient(client);
-                        }}
+                      onPress={() => handleAddClient(client)}
                       >
-                        <CardBody>
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <h4 className="font-medium">{client.name}</h4>
-                              <p className="text-xs text-default-500 mt-1">
-                                {client.description}
+                      <CardBody className="py-3 sm:py-4 px-4 sm:px-5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-semibold text-sm sm:text-base text-foreground group-hover:text-secondary transition-colors mb-2">
+                              {client.name}
+                            </h4>
+                            <p className="text-xs sm:text-sm text-foreground/70 leading-relaxed line-clamp-2">
+                              {client.description || "No description available"}
                               </p>
                             </div>
-                            <div
-                              className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-default-100 cursor-pointer"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                console.log("Info icon clicked:", client.name);
-                                handleAddClient(client);
-                              }}
-                            >
-                              <Info size={16} />
+                          <div className="w-8 h-8 rounded-full bg-secondary/10 group-hover:bg-secondary/20 flex items-center justify-center transition-colors flex-shrink-0">
+                            <ChevronRight className="w-4 h-4 text-secondary group-hover:translate-x-1 transition-transform" />
                             </div>
                           </div>
                         </CardBody>
@@ -660,36 +632,33 @@ const DownloadClients = () => {
                   </div>
                 </div>
 
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-semibold mb-3">Torrents</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="border-t border-secondary/20 pt-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="p-2 rounded-lg bg-success/10">
+                      <Download size={20} className="text-success" />
+                    </div>
+                  <h3 className="text-lg font-semibold text-foreground">Torrent Clients</h3>
+                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {availableClients.torrent.map((client) => (
                       <Card
                         key={client.implementation}
-                        className="hover:bg-content2 transition-colors cursor-pointer"
+                      className="card-interactive group cursor-pointer border-2 border-secondary/10 hover:border-secondary/30 transition-all duration-200"
                         isPressable
-                        onPress={() => {
-                          console.log("Torrent card clicked:", client.name);
-                          handleAddClient(client);
-                        }}
+                      onPress={() => handleAddClient(client)}
                       >
-                        <CardBody>
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <h4 className="font-medium">{client.name}</h4>
-                              <p className="text-xs text-default-500 mt-1">
-                                {client.description}
+                      <CardBody className="py-3 sm:py-4 px-4 sm:px-5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-semibold text-sm sm:text-base text-foreground group-hover:text-secondary transition-colors mb-2">
+                              {client.name}
+                            </h4>
+                            <p className="text-xs sm:text-sm text-foreground/70 leading-relaxed line-clamp-2">
+                              {client.description || "No description available"}
                               </p>
                             </div>
-                            <div
-                              className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-default-100 cursor-pointer"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                console.log("Info icon clicked:", client.name);
-                                handleAddClient(client);
-                              }}
-                            >
-                              <Info size={16} />
+                          <div className="w-8 h-8 rounded-full bg-secondary/10 group-hover:bg-secondary/20 flex items-center justify-center transition-colors flex-shrink-0">
+                            <ChevronRight className="w-4 h-4 text-secondary group-hover:translate-x-1 transition-transform" />
                             </div>
                           </div>
                         </CardBody>
@@ -699,11 +668,6 @@ const DownloadClients = () => {
                 </div>
               </div>
             </ModalBody>
-            <ModalFooter>
-              <Button variant="light" onPress={onAddModalClose}>
-                Close
-              </Button>
-            </ModalFooter>
           </ModalContent>
         </Modal>
 
@@ -717,57 +681,75 @@ const DownloadClients = () => {
               setFormData({ enabled: true, priority: 1, settings: {}, categories: [] });
               setTestError(null);
               setTestSuccess(false);
+              setShowAdvanced(false);
             }
           }}
-          size="2xl"
+        size="2xl"
           scrollBehavior="inside"
-          shouldBlockScroll={true}
           isDismissable={openSelects.size === 0}
+          classNames={{
+          backdrop: "bg-overlay/50 backdrop-blur-sm",
+          base: "bg-content1 border border-secondary/20 mx-2 sm:mx-4",
+          }}
         >
           <ModalContent>
-            <ModalHeader>
-              {editingClient
-                ? `Edit Download Client - ${editingClient.name}`
-                : `Add Download Client - ${selectedClient?.name || "New"}`}
+          <ModalHeader className="border-b border-secondary/20 px-4 sm:px-6">
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold">
+                {editingClient ? "Edit" : "Configure"} Client
+              </h2>
+              <p className="text-xs sm:text-sm text-foreground/60 font-normal truncate">
+                {formData.name}
+              </p>
+            </div>
             </ModalHeader>
-            <ModalBody>
-              <div className="space-y-4">
-                {/* Test Error/Success Message */}
+          <ModalBody className="py-4 sm:py-6 px-4 sm:px-6 space-y-3 sm:space-y-4">
+            {/* Test Status */}
                 {testError && (
-                  <div className="bg-danger/10 border border-danger rounded-lg p-3">
-                    <p className="text-danger text-sm font-medium">{testError}</p>
+              <div className="p-2 sm:p-3 bg-danger/10 border border-danger rounded-lg flex items-start gap-1.5 sm:gap-2">
+                <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-danger flex-shrink-0 mt-0.5" />
+                <p className="text-xs sm:text-sm text-danger leading-tight">{testError}</p>
                   </div>
                 )}
-                {testSuccess && !testError && (
-                  <div className="bg-success/10 border border-success rounded-lg p-3">
-                    <p className="text-success text-sm font-medium">Connection successful</p>
+            {testSuccess && (
+              <div className="p-2 sm:p-3 bg-success/10 border border-success rounded-lg flex items-start gap-1.5 sm:gap-2">
+                <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-success flex-shrink-0 mt-0.5" />
+                <p className="text-xs sm:text-sm text-success leading-tight">Test successful!</p>
                   </div>
-                )}
+            )}
 
                 <Input
                   label="Name"
+                      placeholder="Enter a name for this client"
                   value={formData.name || ""}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                     setFormData({ ...formData, name: e.target.value });
                     setTestError(null);
                     setTestSuccess(false);
                   }}
+              size="sm"
+              classNames={{
+                inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                label: "text-xs sm:text-sm",
+              }}
                 />
 
-                <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between p-3 sm:p-4 bg-content2 rounded-lg border border-secondary/20">
+              <span className="text-xs sm:text-sm font-medium">Enabled</span>
                   <Switch
+                size="sm"
+                color="secondary"
                     isSelected={formData.enabled}
                     onValueChange={(val: boolean) =>
                       setFormData({ ...formData, enabled: val })
                     }
-                  >
-                    Enable
-                  </Switch>
+                      />
                 </div>
 
                 <Input
                   label="Priority"
                   type="number"
+                      placeholder="1"
                   value={formData.priority?.toString() || "1"}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setFormData({
@@ -775,53 +757,98 @@ const DownloadClients = () => {
                       priority: parseInt(e.target.value) || 1,
                     })
                   }
-                  description="Priority to use when grabbing items (1-50)"
-                />
+                      description="Priority when grabbing items (1-50, lower is higher priority)"
+              size="sm"
+              classNames={{
+                inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                label: "text-xs sm:text-sm",
+              }}
+            />
 
                 {selectedClient && (
-                  <>
-                    <div className="border-t pt-4">
-                      <h4 className="font-semibold mb-3">Settings</h4>
-                      <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4 pt-2 border-t border-secondary/20">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm sm:text-base font-semibold">Connection Settings</h3>
+                  {selectedClient.fields.some((f) => f.advanced) && (
+                    <Button
+                      size="sm"
+                      variant="light"
+                      onPress={() => setShowAdvanced(!showAdvanced)}
+                      className="text-xs"
+                    >
+                      {showAdvanced ? "Hide" : "Show"} Advanced
+                    </Button>
+                  )}
+                </div>
+                <div className="space-y-3 sm:space-y-4">
                         {selectedClient.fields
-                          .filter((f) => !f.advanced)
+                          .filter((f) => showAdvanced || !f.advanced)
                           .map((field) => renderField(field, selectedClient))}
                       </div>
                     </div>
+            )}
 
-                    <div className="border-t pt-4">
-                      <h4 className="font-semibold mb-3">Mapped Categories</h4>
-                      <p className="text-sm text-default-500">
-                        Category mappings will be added in a future update.
-                      </p>
-                    </div>
-                  </>
-                )}
-              </div>
+            {/* Test Button */}
+            <Button
+              color="secondary"
+              variant="flat"
+              size="sm"
+              startContent={<TestTube size={16} />}
+              onPress={handleTestClient}
+              isLoading={testing}
+              fullWidth
+              className="text-xs sm:text-sm"
+            >
+              Test Connection
+            </Button>
             </ModalBody>
-            <ModalFooter>
-              <Button variant="light" onPress={onConfigModalClose}>
-                Cancel
-              </Button>
-              <Button
-                color="primary"
-                onPress={handleTestClient}
-                startContent={<TestTube size={16} />}
-                isLoading={testing}
+          <ModalFooter className="border-t border-secondary/20 px-4 sm:px-6 py-3 sm:py-4">
+            <div className="flex flex-col sm:flex-row justify-between w-full gap-2">
+              {editingClient && (
+              <Button 
+                  color="danger"
+                  variant="flat"
+                  size="sm"
+                  startContent={<Trash2 size={16} />}
+                  onPress={() => {
+                    if (editingClient.id) {
+                      handleDelete(editingClient.id);
+                      onConfigModalClose();
+                      setEditingClient(null);
+                      setFormData({ enabled: true, priority: 1, settings: {}, categories: [] });
+                    }
+                  }}
+                  className="text-xs sm:text-sm w-full sm:w-auto"
               >
-                Test
+                  Delete
+              </Button>
+              )}
+              <div className="flex gap-2 ml-auto w-full sm:w-auto">
+              <Button
+                  variant="flat"
+                  size="sm"
+                  onPress={() => {
+                    onConfigModalClose();
+                    setEditingClient(null);
+                    setFormData({ enabled: true, priority: 1, settings: {}, categories: [] });
+                  }}
+                  className="text-xs sm:text-sm flex-1 sm:flex-none"
+              >
+                  Cancel
               </Button>
               <Button
-                color="primary"
+                  color="secondary"
+                  className="btn-glow text-xs sm:text-sm flex-1 sm:flex-none"
+                  size="sm"
                 onPress={handleSaveClient}
-                isDisabled={testError !== null && !testSuccess}
               >
-                Save
+                Save Client
               </Button>
+              </div>
+            </div>
             </ModalFooter>
           </ModalContent>
         </Modal>
-      </div>
     </div>
   );
 };

@@ -54,6 +54,7 @@ app.use("/api/DownloadClients", require("./routes/DownloadClients"));
 app.use("/api/TMDB", require("./routes/tmdb"));
 app.use("/api/MonitoredMovies", require("./routes/monitoredMovies"));
 app.use("/api/MonitoredSeries", require("./routes/monitoredSeries"));
+app.use("/api/Cardigann", require("./routes/Cardigann"));
 
 app.listen(PORT, () => {
   console.log("✅ Listening on port " + PORT);

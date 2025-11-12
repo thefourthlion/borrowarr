@@ -396,19 +396,19 @@ const Search = () => {
             <table className="w-full min-w-[600px]">
                     <thead>
                       <tr className="border-b border-divider">
-                  <th className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold">Title</th>
-                  <th className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold hidden sm:table-cell">Indexer</th>
-                  <th className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold hidden md:table-cell">Size</th>
-                  <th className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold">Seeders</th>
-                  <th className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold hidden lg:table-cell">Leechers</th>
-                  <th className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold hidden md:table-cell">Age</th>
-                  <th className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold">Actions</th>
+                  <th key="title" className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold">Title</th>
+                  <th key="indexer" className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold hidden sm:table-cell">Indexer</th>
+                  <th key="size" className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold hidden md:table-cell">Size</th>
+                  <th key="seeders" className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold">Seeders</th>
+                  <th key="leechers" className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold hidden lg:table-cell">Leechers</th>
+                  <th key="age" className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold hidden md:table-cell">Age</th>
+                  <th key="actions" className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                {results.map((result) => (
+                {results.map((result, index) => (
                         <tr
-                          key={result.id}
+                          key={`${result.id}-${index}`}
                           className="border-b border-divider hover:bg-content2 transition-colors"
                         >
                     <td className="p-3 sm:p-4 font-medium">

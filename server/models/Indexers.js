@@ -170,6 +170,32 @@ const Indexers = sequelize.define(
       type: DataTypes.DATE,
       allowNull: true,
     },
+    cardigannId: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: "cardigann_id",
+    },
+    cardigannSettings: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: "cardigann_settings",
+      get() {
+        const value = this.getDataValue("cardigannSettings");
+        if (!value || value === "") return {};
+        try {
+          return JSON.parse(value);
+        } catch (e) {
+          return {};
+        }
+      },
+      set(value) {
+        if (value && typeof value === 'object') {
+          this.setDataValue("cardigannSettings", JSON.stringify(value));
+        } else {
+          this.setDataValue("cardigannSettings", null);
+        }
+      },
+    },
   },
   {
     tableName: "indexers",

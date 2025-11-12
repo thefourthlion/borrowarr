@@ -5,12 +5,14 @@
 
 const axios = require('axios');
 const CardigannTemplateEngine = require('./templateEngine');
+const CardigannFilterEngine = require('./filterEngine');
 const CardigannParser = require('./parser');
 
 class CardigannScraper {
   constructor(definition) {
     this.definition = definition;
     this.templateEngine = new CardigannTemplateEngine();
+    this.filterEngine = new CardigannFilterEngine();
     this.parser = new CardigannParser(definition);
     this.baseUrl = definition.links[0]; // Primary link
     this.settings = {};
@@ -83,6 +85,21 @@ class CardigannScraper {
       // Make HTTP request
       const response = await axios(requestConfig);
 
+      // Check for redirects (like Prowlarr lines 42-54)
+      if (response.request && response.request.res && response.request.res.responseUrl) {
+        const redirectUrl = response.request.res.responseUrl;
+        const originalUrl = requestConfig.url;
+        
+        if (redirectUrl !== originalUrl && redirectUrl.toLowerCase().includes('login')) {
+          throw new Error('Redirected to login page - session may have expired');
+        }
+      }
+
+      // Check response status (Prowlarr lines 56-59)
+      if (response.status < 200 || response.status >= 300) {
+        throw new Error(`Unexpected response status ${response.status} from indexer`);
+      }
+
       // Check response type (JSON or HTML)
       const isJSON = pathConfig.response?.type === 'json' || 
                      (typeof response.data === 'object' && response.data !== null);
@@ -132,36 +149,8 @@ class CardigannScraper {
       return query;
     }
 
-    let result = query;
-
-    for (const filter of filtersConfig) {
-      if (filter.name === 're_replace') {
-        const [pattern, replacement] = filter.args || [];
-        try {
-          // Handle (?i) case-insensitive flag
-          let flags = 'g';
-          let cleanPattern = pattern;
-          
-          if (pattern.startsWith('(?i)')) {
-            flags = 'gi';
-            cleanPattern = pattern.substring(4);
-          }
-          
-          const regex = new RegExp(cleanPattern, flags);
-          result = result.replace(regex, replacement || '');
-        } catch (e) {
-          console.error('Keywords filter error:', e.message);
-        }
-      } else if (filter.name === 'replace') {
-        const [search, replacement] = filter.args || [];
-        const escaped = (search || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        result = result.replace(new RegExp(escaped, 'g'), replacement || '');
-      } else if (filter.name === 'trim') {
-        result = result.trim();
-      }
-    }
-
-    return result;
+    // Use the FilterEngine for consistency (includes CJK fix)
+    return this.filterEngine.applyFilters(query, filtersConfig);
   }
 
   /**

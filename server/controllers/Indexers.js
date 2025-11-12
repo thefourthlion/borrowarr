@@ -228,7 +228,106 @@ exports.testIndexer = async (req, res) => {
       return res.status(400).json({ success: false, error: "No indexer data provided" });
     }
     
-    // Check if we have a custom scraper for this indexer FIRST
+    // Check if this is a Cardigann indexer
+    if (indexer.indexerType === 'Cardigann') {
+      console.log(`[Test] Using Cardigann for: ${indexer.name}`);
+      
+      const path = require('path');
+      const { CardigannEngine } = require('../cardigann');
+      const definitionsPath = path.join(__dirname, '../cardigann-indexer-yamls');
+      const cardigann = new CardigannEngine(definitionsPath);
+      
+      // Find matching Cardigann definition
+      const allCardigannIndexers = cardigann.getAllIndexers();
+      let cardigannId = null;
+      
+      // Try exact name match
+      const nameMatch = allCardigannIndexers.find(ci => 
+        ci.name.toLowerCase() === indexer.name.toLowerCase()
+      );
+      
+      if (nameMatch) {
+        cardigannId = nameMatch.id;
+      } else if (indexer.baseUrl) {
+        // Try URL match
+        try {
+          const indexerDomain = new URL(indexer.baseUrl).hostname.toLowerCase();
+          const urlMatch = allCardigannIndexers.find(ci => {
+            return ci.links.some(link => {
+              try {
+                const linkDomain = new URL(link).hostname.toLowerCase();
+                return indexerDomain.includes(linkDomain) || linkDomain.includes(indexerDomain);
+              } catch {
+                return false;
+              }
+            });
+          });
+          if (urlMatch) {
+            cardigannId = urlMatch.id;
+          }
+        } catch (e) {
+          // Invalid URL
+        }
+      }
+      
+      if (cardigannId) {
+        try {
+          const scraper = cardigann.getScraper(cardigannId);
+          const testResult = await scraper.test();
+          
+          if (testResult.success) {
+            // Mark as verified
+            if (req.params.id) {
+              await Indexers.update(
+                { verified: true, verifiedAt: new Date() },
+                { where: { id: req.params.id } }
+              );
+            }
+            
+            if (indexer.name) {
+              await AvailableIndexers.update(
+                { verified: true, verifiedAt: new Date() },
+                { where: { name: indexer.name } }
+              ).catch(() => {});
+            }
+            
+            return res.json({
+              success: true,
+              message: `Connection successful (${testResult.resultCount} results)`,
+              verified: true,
+            });
+          } else {
+            // Mark as unverified
+            if (req.params.id) {
+              await Indexers.update(
+                { verified: false, verifiedAt: null },
+                { where: { id: req.params.id } }
+              );
+            }
+            
+            return res.json({
+              success: false,
+              error: testResult.message || 'Test failed',
+              verified: false,
+            });
+          }
+        } catch (error) {
+          return res.json({
+            success: false,
+            error: error.message,
+            verified: false,
+          });
+        }
+      } else {
+        return res.json({
+          success: false,
+          error: `Cardigann definition not found for ${indexer.name}`,
+          verified: false,
+        });
+      }
+    }
+    
+    // Check if we have a custom scraper for this indexer
     const scraperManager = require("../scrapers");
     const availableScrapers = scraperManager.getAvailableIndexers();
     let matchedScraper = null;

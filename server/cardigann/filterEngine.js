@@ -116,9 +116,38 @@ class CardigannFilterEngine {
       // Remove unsupported regex groups like (?:...) to make them simpler
       // JavaScript doesn't need them the same way
       cleanPattern = cleanPattern.replace(/\(\?:/g, '(');
-      
+
+      // Handle Unicode property escapes (e.g., \p{IsCJKUnifiedIdeographs})
+      // Convert Go-style Unicode escapes to JavaScript equivalents
+      if (cleanPattern.includes('\\p{')) {
+        // Check if this is a CJK-only filter (pattern with CJK + \W)
+        if (cleanPattern.includes('IsCJKUnifiedIdeographs') && cleanPattern.includes('\\W')) {
+          // This filter is meant for CJK text only
+          // Check if value contains any CJK characters
+          const hasCJK = /[\u4E00-\u9FFF\u3400-\u4DBF]/.test(value);
+          if (!hasCJK) {
+            // Skip this filter for non-CJK text
+            return value;
+          }
+        }
+        
+        // Convert common Unicode property classes to character ranges
+        // CJK Unified Ideographs (Chinese, Japanese, Korean characters)
+        cleanPattern = cleanPattern.replace(/\\p\{IsCJKUnifiedIdeographs\}/gi, '[\\u4E00-\\u9FFF\\u3400-\\u4DBF]');
+        // Add 'u' flag for Unicode support
+        if (!flags.includes('u')) flags += 'u';
+      }
+
       const regex = new RegExp(cleanPattern, flags);
-      return value.replace(regex, String(replacement || ''));
+      const result = value.replace(regex, String(replacement || ''));
+      
+      // Safety check: if replacement destroyed the entire string (left only dots/spaces), return original
+      if (result.replace(/[.\s]/g, '').length === 0 && value.trim().length > 0) {
+        console.warn(`[Filter] re_replace filter destroyed query "${value}" -> "${result}", returning original`);
+        return value;
+      }
+      
+      return result;
     } catch (error) {
       console.error(`Regex error in re_replace (pattern: ${pattern}):`, error.message);
       // Return original value on error

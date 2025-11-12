@@ -27,6 +27,12 @@ class CardigannParser {
    * Parse HTML response
    */
   parseHTML(html, baseUrl, config = {}) {
+    // Apply preprocessing filters (like Prowlarr lines 240-245)
+    const preprocessingFilters = this.definition.search?.preprocessingfilters;
+    if (preprocessingFilters && preprocessingFilters.length > 0) {
+      html = this.filterEngine.applyFilters(html, preprocessingFilters);
+    }
+
     this.loadHTML(html);
     
     const rowsConfig = this.definition.search.rows;
@@ -71,12 +77,40 @@ class CardigannParser {
       return [];
     }
     
+    // Handle row merging for "after" config (like Prowlarr lines 258-279)
+    const rowsArray = rows.toArray();
+    const after = rowsConfig.after || 0;
+    
+    if (after > 0) {
+      for (let i = 0; i < rowsArray.length; i++) {
+        const currentRow = this.$(rowsArray[i]);
+        
+        // Merge the next 'after' rows into this one
+        for (let j = 1; j <= after && (i + j) < rowsArray.length; j++) {
+          const mergeRow = this.$(rowsArray[i + j]);
+          currentRow.append(mergeRow.children());
+        }
+        
+        // Remove merged rows
+        for (let j = 1; j <= after && (i + j) < rowsArray.length; j++) {
+          this.$(rowsArray[i + j]).remove();
+        }
+      }
+    }
+    
     const results = [];
+    const variables = {}; // Track variables like Prowlarr (line 63)
     
     rows.each((index, rowElement) => {
       try {
         const row = this.$(rowElement);
-        const result = this.parseRow(row, fieldsConfig, baseUrl, config);
+        const result = this.parseRow(row, fieldsConfig, baseUrl, config, variables);
+        
+        // Apply row filters (like Prowlarr lines 340-346)
+        if (this.shouldSkipRow(result, rowsConfig.filters, variables)) {
+          return; // Skip this row
+        }
+        
         if (result) {
           results.push(result);
         }
@@ -89,22 +123,114 @@ class CardigannParser {
   }
 
   /**
-   * Parse a single row
+   * Parse a single row (with field modifiers like Prowlarr lines 290-338)
    */
-  parseRow(row, fieldsConfig, baseUrl, config = {}) {
+  parseRow(row, fieldsConfig, baseUrl, config = {}, variables = {}) {
     const data = {};
     
-    for (const [fieldName, fieldConfig] of Object.entries(fieldsConfig)) {
+    for (let [fullFieldName, fieldConfig] of Object.entries(fieldsConfig)) {
       try {
-        const value = this.extractField(row, fieldConfig, baseUrl, config);
-        data[fieldName] = value;
+        // Parse field name and modifiers (like Prowlarr lines 290-296)
+        const fieldParts = fullFieldName.split('|');
+        const fieldName = fieldParts[0];
+        const fieldModifiers = fieldParts.slice(1);
+        
+        // Check if field is optional
+        const isOptional = fieldModifiers.includes('optional') || fieldConfig.optional;
+        
+        // Track variable key for use in templates
+        const variablesKey = `.Result.${fieldName}`;
+        
+        try {
+          let value = this.extractField(row, fieldConfig, baseUrl, config);
+          
+          // If optional and empty, use default value (like Prowlarr lines 306-316)
+          if (isOptional && !value) {
+            const defaultValue = fieldConfig.default || '';
+            // Process template in default value
+            const processedDefault = this.processTemplateInValue(defaultValue, config, variables);
+            value = processedDefault || null;
+            
+            if (!value) {
+              variables[variablesKey] = null;
+              continue; // Skip this field
+            }
+          }
+          
+          // Apply field modifiers
+          if (fieldModifiers.includes('append') && data[fieldName]) {
+            data[fieldName] += value;
+          } else {
+            data[fieldName] = value;
+          }
+          
+          // Store in variables for later use
+          variables[variablesKey] = value;
+          
+        } catch (error) {
+          // If optional, continue without error (like Prowlarr lines 321-331)
+          if (isOptional) {
+            variables[variablesKey] = null;
+            continue;
+          }
+          
+          // For non-optional fields, log but continue
+          variables[variablesKey] = null;
+          data[fieldName] = null;
+        }
       } catch (error) {
-        console.error(`Error extracting field ${fieldName}:`, error.message);
+        // Skip fields that fail extraction entirely
         data[fieldName] = null;
       }
     }
     
     return data;
+  }
+  
+  /**
+   * Process template syntax in values
+   */
+  processTemplateInValue(value, config = {}, variables = {}) {
+    if (typeof value !== 'string') return value;
+    
+    // Replace {{ .Config.X }} with config values
+    value = value.replace(/\{\{\s*\.Config\.(\w+)\s*\}\}/g, (match, key) => {
+      return config[key] || '';
+    });
+    
+    // Replace {{ .Result.X }} with previously extracted values
+    value = value.replace(/\{\{\s*\.Result\.(\w+)\s*\}\}/g, (match, key) => {
+      return variables[`.Result.${key}`] || '';
+    });
+    
+    return value;
+  }
+  
+  /**
+   * Check if row should be skipped based on filters (like Prowlarr lines 699-723)
+   */
+  shouldSkipRow(data, filters, variables) {
+    if (!filters || filters.length === 0) {
+      return false;
+    }
+    
+    for (const filter of filters) {
+      if (typeof filter === 'object' && filter.name) {
+        switch (filter.name) {
+          case 'andmatch':
+            // Handled by upper layer (search controller)
+            break;
+          case 'strdump':
+            // Debug filter - log the row
+            console.log('[Row Debug]', JSON.stringify(data));
+            break;
+          default:
+            console.warn(`Unsupported row filter: ${filter.name}`);
+        }
+      }
+    }
+    
+    return false;
   }
 
   /**
@@ -126,6 +252,27 @@ class CardigannParser {
         value = value.replace(/\{\{\s*\.Config\.(\w+)\s*\}\}/g, (match, configKey) => {
           return config[configKey] || '';
         });
+      }
+    }
+    // Handle case selector (Prowlarr lines 164-184) - try multiple selectors
+    else if (fieldConfig.case) {
+      for (const [caseSelector, caseValue] of Object.entries(fieldConfig.case)) {
+        const caseElement = row.find(caseSelector);
+        if (caseElement.length > 0) {
+          // Found a match, use this value
+          value = caseValue;
+          // Process template in case value
+          if (typeof value === 'string') {
+            value = value.replace(/\{\{\s*\.Config\.(\w+)\s*\}\}/g, (match, configKey) => {
+              return config[configKey] || '';
+            });
+          }
+          break;
+        }
+      }
+      
+      if (value === null && !fieldConfig.optional) {
+        throw new Error(`None of the case selectors matched`);
       }
     }
     // Handle selector
@@ -183,12 +330,21 @@ class CardigannParser {
   /**
    * Parse JSON response
    */
-  parseJSON(jsonData, baseUrl) {
+  parseJSON(jsonData, baseUrl, config = {}) {
     const rowsConfig = this.definition.search.rows;
     const fieldsConfig = this.definition.search.fields;
     
+    // Process template in rowsConfig.selector if needed
+    let selector = rowsConfig.selector || rowsConfig;
+    if (typeof selector === 'string' && selector.includes('{{')) {
+      // Template processing for selector (e.g., filtering by uploader)
+      const TemplateEngine = require('./templateEngine');
+      const templateEngine = new TemplateEngine();
+      selector = templateEngine.process(selector, { Config: config });
+    }
+    
     // Extract rows from JSON
-    let rows = this.extractJSONRows(jsonData, rowsConfig);
+    let rows = this.extractJSONRows(jsonData, { ...rowsConfig, selector });
     
     if (!Array.isArray(rows) || rows.length === 0) {
       return [];
@@ -366,37 +522,54 @@ class CardigannParser {
   }
 
   /**
-   * Format extracted data into standard result format
+   * Format extracted data into standard result format (following Prowlarr lines 442-697)
    */
   formatResult(data, indexerInfo) {
     // Skip if missing required fields
     if (!data.title) {
       return null;
     }
-    
+
+    // Construct magnet link from infohash if available (Prowlarr lines 418-422)
+    // Only for non-private indexers
+    if (!data.download && !data.magnet && data.infohash && indexerInfo.type !== 'private') {
+      const trackers = [
+        'udp://tracker.coppersurfer.tk:6969/announce',
+        'udp://tracker.open-internet.nl:6969/announce',
+        'udp://tracker.leechers-paradise.org:6969/announce'
+      ];
+      const trackerParams = trackers.map(t => `&tr=${encodeURIComponent(t)}`).join('');
+      data.magnet = `magnet:?xt=urn:btih:${data.infohash}&dn=${encodeURIComponent(data.title)}${trackerParams}`;
+    }
+
     if (!data.download && !data.magnet) {
       return null;
     }
-    
+
     // Parse size
     let sizeBytes = 0;
     if (data.size) {
       sizeBytes = this.parseSize(data.size);
     }
-    
-    // Parse numbers
-    const seeders = this.parseNumber(data.seeders);
-    const leechers = this.parseNumber(data.leechers);
+
+    // Parse numbers with sanitization (Prowlarr lines 564-591)
+    // Cap seeders/leechers at 5M to fix data quality issues
+    let seeders = this.parseNumber(data.seeders);
+    let leechers = this.parseNumber(data.leechers);
     const grabs = this.parseNumber(data.grabs);
     
+    // Sanitize unrealistic values (Prowlarr fix for issue #6558)
+    if (seeders > 5000000) seeders = 0;
+    if (leechers > 5000000) leechers = 0;
+
     // Get download URL (prefer magnet over download link)
     const downloadUrl = data.magnet || data.download || '';
     const detailsUrl = data.details || '';
-    
+
     // Calculate age from date
     let age = 0;
     let publishDate = data.date || new Date().toISOString();
-    
+
     if (data.date) {
       try {
         const dateObj = new Date(data.date);
@@ -408,7 +581,10 @@ class CardigannParser {
         // Ignore date errors
       }
     }
-    
+
+    // Check for Internal flag (Prowlarr lines 431-434)
+    const isInternal = data.description && data.description.trim().startsWith('Internal');
+
     return {
       title: data.title,
       size: sizeBytes,
@@ -423,6 +599,8 @@ class CardigannParser {
       description: data.description || data.category || '',
       category: data.category || '',
       categories: this.mapCategories(data.category, indexerInfo.caps),
+      isInternal: isInternal,
+      infohash: data.infohash || null,
     };
   }
 

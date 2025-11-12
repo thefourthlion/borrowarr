@@ -212,10 +212,7 @@ const getStats = async (req, res) => {
   try {
     const stats = cardigann.loader.getStats();
 
-    res.json({
-      success: true,
-      stats,
-    });
+    res.json(stats);
   } catch (error) {
     console.error('Error getting stats:', error);
     res.status(500).json({

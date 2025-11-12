@@ -187,7 +187,7 @@ class CardigannTemplateEngine {
   }
 
   /**
-   * Process variable substitutions
+   * Process variable substitutions (Prowlarr lines 582-605)
    */
   processVariables(template, vars) {
     let result = template;
@@ -195,13 +195,36 @@ class CardigannTemplateEngine {
     // Process join function: {{ join .Categories "," }}
     result = this.processJoinFunction(result, vars);
 
+    // Process re_replace in templates: {{ re_replace .Query.Keywords "[^a-zA-Z0-9]+" "%" }}
+    result = this.processReReplaceInTemplate(result, vars);
+
     // {{ .Variable }} or {{ .Config.key }}
     const varRegex = /\{\{\s*\.([A-Za-z_][A-Za-z0-9_.]*)\s*\}\}/g;
     result = result.replace(varRegex, (match, varPath) => {
-      return this.resolveVariable(`.${varPath}`, vars) || '';
+      const value = this.resolveVariable(`.${varPath}`, vars);
+      // Convert non-string values to strings (Prowlarr line 594)
+      return value != null ? String(value) : '';
     });
 
     return result;
+  }
+  
+  /**
+   * Process re_replace in templates (Prowlarr lines 369-392)
+   */
+  processReReplaceInTemplate(template, vars) {
+    const reReplaceRegex = /\{\{\s*re_replace\s+(\..+?)\s+"([^"]*)"\s+"([^"]*)"\s*\}\}/g;
+    
+    return template.replace(reReplaceRegex, (match, variable, pattern, replacement) => {
+      try {
+        const input = String(this.resolveVariable(variable, vars) || '');
+        const regex = new RegExp(pattern, 'g');
+        return regex.replace(input, replacement);
+      } catch (error) {
+        console.warn(`[Template] re_replace error: ${error.message}`);
+        return '';
+      }
+    });
   }
 
   /**
@@ -265,7 +288,12 @@ class CardigannTemplateEngine {
       path = path.replace(encodeURIComponent(searchQuery), encodeURIComponent(searchQuery));
     }
 
-    // Combine base URL and path
+    // If path is already an absolute URL (starts with http:// or https://), return it as-is
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+
+    // Combine base URL and path for relative paths
     const url = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
     const finalPath = path.startsWith('/') ? path : '/' + path;
 

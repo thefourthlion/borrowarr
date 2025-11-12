@@ -6,6 +6,12 @@
 const tmdbService = require('../services/tmdbService');
 const { searchIndexers } = require('../services/indexerSearch');
 const Indexers = require('../models/Indexers');
+const path = require('path');
+const { CardigannEngine } = require('../cardigann');
+
+// Initialize Cardigann engine
+const definitionsPath = path.join(__dirname, '../cardigann-indexer-yamls');
+const cardigann = new CardigannEngine(definitionsPath);
 
 // Cache genre lists
 let movieGenresCache = null;
@@ -661,7 +667,7 @@ exports.searchTorrentsForMovie = async (req, res) => {
 
     let indexers = await Indexers.findAll({
       where: whereClause,
-      attributes: ['id', 'name', 'baseUrl', 'username', 'password', 'apiKey', 'protocol', 'indexerType', 'enabled', 'categories', 'verified', 'priority'],
+      attributes: ['id', 'name', 'baseUrl', 'username', 'password', 'apiKey', 'protocol', 'indexerType', 'enabled', 'categories', 'verified', 'priority', 'cardigannId'],
       raw: true,
     });
 
@@ -685,21 +691,93 @@ exports.searchTorrentsForMovie = async (req, res) => {
       ? req.query.categoryIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id))
       : [2000]; // Default to movies category
 
-    // Search all indexers
-    const { results: allResults, indexerSummaries } = await searchIndexers(
-      indexers,
-      searchQuery,
-      categoryIds,
-      100, // limit
-      0    // offset
-    );
+    // Separate Cardigann and API indexers
+    const cardigannIndexers = indexers.filter(idx => idx.indexerType === 'Cardigann');
+    const apiIndexers = indexers.filter(idx => idx.indexerType !== 'Cardigann');
 
-    // Sort by seeders (descending)
+    const searchPromises = [];
+
+    // Search Cardigann indexers
+    for (const indexer of cardigannIndexers) {
+      // Use cardigannId from database if available, otherwise try baseUrl
+      let cardigannId = indexer.cardigannId || indexer.cardigann_id;
+      
+      if (!cardigannId && indexer.baseUrl && indexer.baseUrl.includes('cardigann-indexer-yamls')) {
+        try {
+          const url = new URL(indexer.baseUrl);
+          const parts = url.pathname.split('/');
+          const yamlFile = parts[parts.length - 1];
+          cardigannId = yamlFile.replace('.yml', '');
+        } catch (e) {
+          // Invalid URL
+        }
+      }
+
+      if (cardigannId) {
+        console.log(`[TMDB Movie] Using Cardigann scraper for ${indexer.name} (${cardigannId})`);
+        searchPromises.push(
+          cardigann.search(cardigannId, searchQuery, { categoryId: categoryIds[0] })
+            .then(results => {
+              const result = Array.isArray(results) ? results[0] : results;
+              if (result && result.success && result.results) {
+                // Add indexer info to results and ensure unique IDs
+                return result.results.map((r, idx) => ({
+                  ...r,
+                  id: `${indexer.id}-${r.id || idx}`, // Ensure unique ID across indexers
+                  indexer: indexer.name, // Add indexer name for display
+                  indexerId: indexer.id,
+                  indexerPriority: indexer.priority || 25
+                }));
+              }
+              return [];
+            })
+            .catch(err => {
+              console.error(`[TMDB Movie] Cardigann error for ${indexer.name}:`, err.message);
+              return [];
+            })
+        );
+      } else {
+        console.warn(`[TMDB Movie] Skipping ${indexer.name} - no cardigann_id found`);
+      }
+    }
+
+    // Search API indexers using existing system
+    if (apiIndexers.length > 0) {
+      searchPromises.push(
+        searchIndexers(apiIndexers, searchQuery, categoryIds, 100, 0)
+          .then(({ results }) => results)
+          .catch(err => {
+            console.error('[TMDB Movie] API indexers error:', err.message);
+            return [];
+          })
+      );
+    }
+
+    // Wait for all searches to complete
+    const searchResults = await Promise.all(searchPromises);
+    const allResults = searchResults.flat();
+
+    // Sort by priority first (lower number = higher priority), then by seeders (descending)
     const sortedResults = allResults.sort((a, b) => {
+      // First compare by indexer priority (lower number = higher priority)
+      const priorityA = a.indexerPriority ?? 25;
+      const priorityB = b.indexerPriority ?? 25;
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB; // Lower number = higher priority (1 is highest)
+      }
+      
+      // If priorities are equal, sort by seeders (descending)
       const aSeeders = a.seeders !== null && a.seeders !== undefined ? a.seeders : 0;
       const bSeeders = b.seeders !== null && b.seeders !== undefined ? b.seeders : 0;
       return bSeeders - aSeeders;
     });
+
+    // Create indexer summaries
+    const indexerSummaries = indexers.map(idx => ({
+      id: idx.id,
+      name: idx.name,
+      resultCount: allResults.filter(r => r.indexerId === idx.id || r.indexer === idx.name).length
+    }));
 
     res.json({
       success: true,
@@ -898,7 +976,7 @@ exports.searchTorrentsForTVEpisode = async (req, res) => {
 
     let indexers = await Indexers.findAll({
       where: whereClause,
-      attributes: ['id', 'name', 'baseUrl', 'username', 'password', 'apiKey', 'protocol', 'indexerType', 'enabled', 'categories', 'verified', 'priority'],
+      attributes: ['id', 'name', 'baseUrl', 'username', 'password', 'apiKey', 'protocol', 'indexerType', 'enabled', 'categories', 'verified', 'priority', 'cardigannId'],
       raw: true,
     });
 
@@ -922,21 +1000,93 @@ exports.searchTorrentsForTVEpisode = async (req, res) => {
       ? req.query.categoryIds.split(',').map(id => parseInt(id)).filter(id => !isNaN(id))
       : [5000]; // Default to TV shows category
 
-    // Search all indexers
-    const { results: allResults, indexerSummaries } = await searchIndexers(
-      indexers,
-      searchQuery,
-      categoryIds,
-      100, // limit
-      0    // offset
-    );
+    // Separate Cardigann and API indexers
+    const cardigannIndexers = indexers.filter(idx => idx.indexerType === 'Cardigann');
+    const apiIndexers = indexers.filter(idx => idx.indexerType !== 'Cardigann');
 
-    // Sort by seeders (descending)
+    const searchPromises = [];
+
+    // Search Cardigann indexers
+    for (const indexer of cardigannIndexers) {
+      // Use cardigannId from database if available, otherwise try baseUrl
+      let cardigannId = indexer.cardigannId || indexer.cardigann_id;
+      
+      if (!cardigannId && indexer.baseUrl && indexer.baseUrl.includes('cardigann-indexer-yamls')) {
+        try {
+          const url = new URL(indexer.baseUrl);
+          const parts = url.pathname.split('/');
+          const yamlFile = parts[parts.length - 1];
+          cardigannId = yamlFile.replace('.yml', '');
+        } catch (e) {
+          // Invalid URL
+        }
+      }
+
+      if (cardigannId) {
+        console.log(`[TMDB TV] Using Cardigann scraper for ${indexer.name} (${cardigannId})`);
+        searchPromises.push(
+          cardigann.search(cardigannId, searchQuery, { categoryId: categoryIds[0] })
+            .then(results => {
+              const result = Array.isArray(results) ? results[0] : results;
+              if (result && result.success && result.results) {
+                // Add indexer info to results and ensure unique IDs
+                return result.results.map((r, idx) => ({
+                  ...r,
+                  id: `${indexer.id}-${r.id || idx}`, // Ensure unique ID across indexers
+                  indexer: indexer.name, // Add indexer name for display
+                  indexerId: indexer.id,
+                  indexerPriority: indexer.priority || 25
+                }));
+              }
+              return [];
+            })
+            .catch(err => {
+              console.error(`[TMDB TV] Cardigann error for ${indexer.name}:`, err.message);
+              return [];
+            })
+        );
+      } else {
+        console.warn(`[TMDB TV] Skipping ${indexer.name} - no cardigann_id found`);
+      }
+    }
+
+    // Search API indexers using existing system
+    if (apiIndexers.length > 0) {
+      searchPromises.push(
+        searchIndexers(apiIndexers, searchQuery, categoryIds, 100, 0)
+          .then(({ results }) => results)
+          .catch(err => {
+            console.error('[TMDB TV] API indexers error:', err.message);
+            return [];
+          })
+      );
+    }
+
+    // Wait for all searches to complete
+    const searchResults = await Promise.all(searchPromises);
+    const allResults = searchResults.flat();
+
+    // Sort by priority first (lower number = higher priority), then by seeders (descending)
     const sortedResults = allResults.sort((a, b) => {
+      // First compare by indexer priority (lower number = higher priority)
+      const priorityA = a.indexerPriority ?? 25;
+      const priorityB = b.indexerPriority ?? 25;
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB; // Lower number = higher priority (1 is highest)
+      }
+      
+      // If priorities are equal, sort by seeders (descending)
       const aSeeders = a.seeders !== null && a.seeders !== undefined ? a.seeders : 0;
       const bSeeders = b.seeders !== null && b.seeders !== undefined ? b.seeders : 0;
       return bSeeders - aSeeders;
     });
+
+    // Create indexer summaries
+    const indexerSummaries = indexers.map(idx => ({
+      id: idx.id,
+      name: idx.name,
+      resultCount: allResults.filter(r => r.indexerId === idx.id || r.indexer === idx.name).length
+    }));
 
     res.json({
       success: true,

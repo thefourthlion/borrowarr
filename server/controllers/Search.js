@@ -1,6 +1,12 @@
 const Indexers = require("../models/Indexers");
 const Categories = require("../models/Categories");
 const { searchIndexers } = require("../services/indexerSearch");
+const path = require("path");
+const { CardigannEngine } = require("../cardigann");
+
+// Initialize Cardigann engine
+const definitionsPath = path.join(__dirname, '../cardigann-indexer-yamls');
+const cardigann = new CardigannEngine(definitionsPath);
 
 // In-memory cache with TTL
 const cache = new Map();
@@ -118,17 +124,105 @@ exports.search = async (req, res) => {
 
     console.log(`[Search] Query: "${query}", Indexers: ${indexers.length}, Categories: ${parsedCategoryIds.length}`);
 
-    // Search all indexers in parallel with timeout
+    // Separate indexers by type
+    const cardigannIndexers = indexers.filter(idx => idx.indexerType === 'Cardigann');
+    const apiIndexers = indexers.filter(idx => idx.indexerType !== 'Cardigann');
+
+    console.log(`[Search] Cardigann: ${cardigannIndexers.length}, API: ${apiIndexers.length}`);
+
+    // Search all indexers in parallel
     const searchStartTime = Date.now();
-    const { results: allResults, indexerSummaries } = await searchIndexers(
-      indexers,
-      query,
-      parsedCategoryIds,
-      parseInt(limit),
-      parseInt(offset)
-    );
+    const searchPromises = [];
+
+    // Search Cardigann indexers
+    if (cardigannIndexers.length > 0) {
+      const cardigannIds = cardigannIndexers.map(idx => idx.name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+      
+      for (const indexer of cardigannIndexers) {
+        // Try to match by name or baseUrl to find Cardigann ID
+        let cardigannId = null;
+        const allCardigannIndexers = cardigann.getAllIndexers();
+        
+        // Try exact name match first
+        const nameMatch = allCardigannIndexers.find(ci => 
+          ci.name.toLowerCase() === indexer.name.toLowerCase()
+        );
+        
+        if (nameMatch) {
+          cardigannId = nameMatch.id;
+        } else if (indexer.baseUrl) {
+          // Try URL match
+          try {
+            const indexerDomain = new URL(indexer.baseUrl).hostname.toLowerCase();
+            const urlMatch = allCardigannIndexers.find(ci => {
+              return ci.links.some(link => {
+                try {
+                  const linkDomain = new URL(link).hostname.toLowerCase();
+                  return indexerDomain.includes(linkDomain) || linkDomain.includes(indexerDomain);
+                } catch {
+                  return false;
+                }
+              });
+            });
+            if (urlMatch) {
+              cardigannId = urlMatch.id;
+            }
+          } catch (e) {
+            // Invalid URL
+          }
+        }
+
+        if (cardigannId) {
+          console.log(`[Search] Using Cardigann scraper for ${indexer.name} (${cardigannId})`);
+          searchPromises.push(
+            cardigann.search(cardigannId, query, { categoryId: parsedCategoryIds[0] })
+              .then(results => {
+                const result = Array.isArray(results) ? results[0] : results;
+                if (result && result.success && result.results) {
+                  // Add indexer info to results and ensure unique IDs
+                  return result.results.map((r, idx) => ({
+                    ...r,
+                    id: `${indexer.id}-${r.id || idx}`, // Ensure unique ID across indexers
+                    indexer: indexer.name, // Add indexer name for display
+                    indexerId: indexer.id,
+                    indexerPriority: indexer.priority || 25
+                  }));
+                }
+                return [];
+              })
+              .catch(err => {
+                console.error(`[Search] Cardigann error for ${indexer.name}:`, err.message);
+                return [];
+              })
+          );
+        }
+      }
+    }
+
+    // Search API indexers using existing system
+    if (apiIndexers.length > 0) {
+      searchPromises.push(
+        searchIndexers(apiIndexers, query, parsedCategoryIds, parseInt(limit), parseInt(offset))
+          .then(({ results }) => results)
+          .catch(err => {
+            console.error('[Search] API indexers error:', err.message);
+            return [];
+          })
+      );
+    }
+
+    // Wait for all searches to complete
+    const searchResults = await Promise.all(searchPromises);
+    const allResults = searchResults.flat();
     
     console.log(`[Search] Search completed in ${Date.now() - searchStartTime}ms, ${allResults.length} total results`);
+
+    // Create indexer summaries
+    const indexerSummaries = indexers.map(idx => ({
+      id: idx.id,
+      name: idx.name,
+      resultCount: allResults.filter(r => r.indexerId === idx.id || r.indexer === idx.name).length
+    }));
 
     // Cache the raw results before filtering/sorting
     setCached(cacheKey, { allResults, indexerSummaries });

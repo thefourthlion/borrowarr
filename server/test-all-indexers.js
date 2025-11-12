@@ -426,10 +426,11 @@ function generateReports(results) {
     allResults: results
   };
   
-  // Save JSON report
+  // Save JSON report (used by populateCardigannIndexers.js)
   const jsonPath = path.join(__dirname, 'indexer-test-report.json');
   fs.writeFileSync(jsonPath, JSON.stringify(jsonReport, null, 2));
   console.log(`\n📄 JSON report saved: ${jsonPath}`);
+  console.log(`   This file will be used to mark verified indexers in the database`);
   
   // Generate Markdown report
   let markdown = `# Cardigann Indexer Test Report\n\n`;

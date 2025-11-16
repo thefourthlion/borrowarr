@@ -1,10 +1,15 @@
 "use client";
-import React, { useEffect, useRef } from 'react';
-import { ArrowRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowRight, Film, Tv, Heart, Download, Check } from 'lucide-react';
 import { Spinner } from '@nextui-org/spinner';
 import { Chip } from '@nextui-org/chip';
-import { Card } from '@/components/ui/card';
+import { Button } from '@nextui-org/button';
+import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from '@nextui-org/modal';
 import Link from 'next/link';
+import axios from 'axios';
+import { useAuth } from '@/context/AuthContext';
+import AddMovieModal from './AddMovieModal';
+import AddSeriesModal from './AddSeriesModal';
 import {
   Carousel,
   CarouselContent,
@@ -15,6 +20,7 @@ import {
 } from "@/components/ui/carousel";
 import "../styles/SideScrollMovieList.scss";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
 const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500";
 
 interface TMDBMedia {
@@ -35,10 +41,25 @@ interface TMDBMedia {
   media_type?: 'movie' | 'tv';
 }
 
+interface TorrentResult {
+  id: string;
+  protocol: "torrent" | "nzb";
+  title: string;
+  indexer: string;
+  indexerId: number;
+  size: number;
+  sizeFormatted: string;
+  seeders: number | null;
+  leechers: number | null;
+  downloadUrl: string;
+}
+
 interface SideScrollMovieListProps {
   title: string;
   items: TMDBMedia[];
   loading?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
   icon?: React.ReactNode;
   categoryPath?: string;
 }
@@ -47,340 +68,572 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
   title,
   items,
   loading = false,
+  loadingMore = false,
+  onLoadMore,
   icon,
   categoryPath,
 }) => {
-  console.log('[SideScrollMovieList] Component rendered:', { title, itemsCount: items.length, loading });
-  console.log('[SideScrollMovieList] Items data:', items);
+  const { user } = useAuth();
+  const [api, setApi] = useState<CarouselApi>();
+  const [canScrollPrev, setCanScrollPrev] = useState(false);
+  const [canScrollNext, setCanScrollNext] = useState(false);
+  const [hasLoadedMore, setHasLoadedMore] = useState(false);
   
-  const getMediaTitle = (item: TMDBMedia) => {
-    const title = item.title || item.name || 'Unknown';
-    console.log('[SideScrollMovieList] getMediaTitle for item:', item.id, '->', title);
-    return title;
+  // Modal states
+  const [selectedMedia, setSelectedMedia] = useState<TMDBMedia | null>(null);
+  const [isMovieModalOpen, setIsMovieModalOpen] = useState(false);
+  const [isSeriesModalOpen, setIsSeriesModalOpen] = useState(false);
+  
+  // Favorites state
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [favoritingIds, setFavoritingIds] = useState<Set<number>>(new Set());
+  
+  // Download state
+  const [downloading, setDownloading] = useState<Set<number>>(new Set());
+  const [downloadSuccess, setDownloadSuccess] = useState<Set<number>>(new Set());
+  
+  // Notification modal
+  const [notificationModal, setNotificationModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
+
+  const showNotification = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    setNotificationModal({ isOpen: true, title, message, type });
   };
-  
+
+  const closeNotification = () => {
+    setNotificationModal(prev => ({ ...prev, isOpen: false }));
+  };
+
+  // Fetch favorites on mount
+  useEffect(() => {
+    if (user) {
+      fetchFavorites();
+    }
+  }, [user]);
+
+  // Update scroll buttons and handle infinite scroll when API changes
+  useEffect(() => {
+    if (!api) return;
+
+    const updateScrollButtons = () => {
+      setCanScrollPrev(api.canScrollPrev());
+      setCanScrollNext(api.canScrollNext());
+      
+      // Check if near the end for infinite scroll
+      if (onLoadMore && !loadingMore && !hasLoadedMore) {
+        const scrollProgress = api.scrollProgress();
+        // Load more when scrolled 80% through
+        if (scrollProgress > 0.8) {
+          setHasLoadedMore(true);
+          onLoadMore();
+        }
+      }
+    };
+
+    updateScrollButtons();
+    api.on('select', updateScrollButtons);
+    api.on('scroll', updateScrollButtons);
+    api.on('reInit', updateScrollButtons);
+
+    return () => {
+      api.off('select', updateScrollButtons);
+      api.off('scroll', updateScrollButtons);
+      api.off('reInit', updateScrollButtons);
+    };
+  }, [api, onLoadMore, loadingMore, hasLoadedMore]);
+
+  // Reset hasLoadedMore when items length changes (new items loaded)
+  useEffect(() => {
+    if (items.length > 0) {
+      setHasLoadedMore(false);
+    }
+  }, [items.length]);
+
+  const fetchFavorites = async () => {
+    if (!user) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get(`${API_BASE_URL}/api/Favorites`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.data.success && response.data.favorites) {
+        const ids = new Set(
+          response.data.favorites.map((fav: any) => `${fav.tmdbId}-${fav.mediaType}`)
+        );
+        setFavoriteIds(ids);
+      }
+    } catch (error) {
+      console.error("Error fetching favorites:", error);
+    }
+  };
+
+  const handleMediaClick = (item: TMDBMedia) => {
+    const isTV = item.media_type === 'tv' || !!item.first_air_date || !!item.name;
+    const mediaWithPosterUrl = {
+      ...item,
+      posterUrl: item.posterUrl || (item.poster_path ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}` : null),
+    };
+    
+    setSelectedMedia(mediaWithPosterUrl);
+    
+    if (isTV) {
+      setIsSeriesModalOpen(true);
+    } else {
+      setIsMovieModalOpen(true);
+    }
+  };
+
+  const closeModals = () => {
+    setIsMovieModalOpen(false);
+    setIsSeriesModalOpen(false);
+    setSelectedMedia(null);
+  };
+
+  const handleQuickDownload = async (item: TMDBMedia, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!user) {
+      showNotification('Login Required', 'Please log in to download', 'warning');
+      return;
+    }
+
+    const isTV = item.media_type === 'tv' || !!item.first_air_date || !!item.name;
+    if (isTV) {
+      showNotification('Not Supported', 'Quick download is not supported for TV shows. Please use the modal to select episodes.', 'info');
+      return;
+    }
+
+    const movieId = item.id;
+    setDownloading((prev) => new Set(prev).add(movieId));
+
+    try {
+      const title = item.title || item.name || '';
+      const year = item.release_date ? new Date(item.release_date).getFullYear() : '';
+
+      // Fetch torrents
+      const torrentResponse = await axios.get(
+        `${API_BASE_URL}/api/TMDB/movie/${item.id}/torrents`,
+        {
+          params: { title, year, categoryIds: '2000' },
+          timeout: 30000,
+        }
+      );
+
+      if (!torrentResponse.data.success || torrentResponse.data.results.length === 0) {
+        throw new Error("No torrents found");
+      }
+
+      const bestTorrent = torrentResponse.data.results.reduce((best: TorrentResult, current: TorrentResult) => {
+        const bestPriority = (best as any).indexerPriority ?? 25;
+        const currentPriority = (current as any).indexerPriority ?? 25;
+        if (currentPriority < bestPriority) return current;
+        if (currentPriority > bestPriority) return best;
+        
+        const bestSeeders = best.seeders || 0;
+        const currentSeeders = current.seeders || 0;
+        return currentSeeders > bestSeeders ? current : best;
+      });
+
+      const posterUrl = item.poster_path 
+        ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}` 
+        : (item.posterUrl || null);
+
+      // Save to monitored movies
+      await axios.post(`${API_BASE_URL}/api/MonitoredMovies`, {
+        userId: user.id,
+        tmdbId: item.id,
+        title: title,
+        posterUrl,
+        releaseDate: item.release_date || null,
+        overview: item.overview,
+        qualityProfile: "any",
+        minAvailability: "released",
+        monitor: "movieOnly",
+      });
+
+      // Extract quality
+      const titleLower = bestTorrent.title.toLowerCase();
+      let quality = 'SD';
+      if (titleLower.includes('2160p') || titleLower.includes('4k')) quality = '2160p';
+      else if (titleLower.includes('1080p')) quality = '1080p';
+      else if (titleLower.includes('720p')) quality = '720p';
+
+      // Download the torrent with history
+      const downloadResponse = await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, {
+        downloadUrl: bestTorrent.downloadUrl,
+        protocol: bestTorrent.protocol,
+        releaseName: bestTorrent.title,
+        indexer: bestTorrent.indexer,
+        indexerId: bestTorrent.indexerId,
+        size: bestTorrent.size,
+        sizeFormatted: bestTorrent.sizeFormatted,
+        seeders: bestTorrent.seeders,
+        leechers: bestTorrent.leechers,
+        quality: quality,
+        source: 'DiscoverQuickDownload',
+        mediaType: 'movie',
+        mediaTitle: title,
+        tmdbId: item.id,
+      });
+
+      if (downloadResponse.data.success) {
+        setDownloadSuccess((prev) => new Set(prev).add(movieId));
+        showNotification('Download Started', `Downloading: ${bestTorrent.title}`, 'success');
+        setTimeout(() => {
+          setDownloadSuccess((prev) => {
+            const next = new Set(prev);
+            next.delete(movieId);
+            return next;
+          });
+        }, 3000);
+      } else {
+        throw new Error(downloadResponse.data.error || "Failed to download");
+      }
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error || error.message || "Download failed";
+      showNotification('Download Error', errorMsg, 'error');
+    } finally {
+      setDownloading((prev) => {
+        const next = new Set(prev);
+        next.delete(movieId);
+        return next;
+      });
+    }
+  };
+
+  const toggleFavorite = async (item: TMDBMedia, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!user) {
+      showNotification('Login Required', 'Please log in to add favorites', 'warning');
+      return;
+    }
+
+    const isTV = item.media_type === 'tv' || !!item.first_air_date || !!item.name;
+    const mediaType = isTV ? 'tv' : 'movie';
+    const favoriteKey = `${item.id}-${mediaType}`;
+    const isFavorited = favoriteIds.has(favoriteKey);
+    
+    setFavoritingIds((prev) => new Set(prev).add(item.id));
+
+    try {
+      const token = localStorage.getItem("token");
+      
+      if (isFavorited) {
+        await axios.delete(`${API_BASE_URL}/api/Favorites`, {
+          headers: { Authorization: `Bearer ${token}` },
+          data: { tmdbId: item.id, mediaType },
+        });
+        
+        setFavoriteIds((prev) => {
+          const next = new Set(prev);
+          next.delete(favoriteKey);
+          return next;
+        });
+      } else {
+        const posterUrl = item.poster_path 
+          ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}` 
+          : (item.posterUrl || null);
+
+        await axios.post(
+          `${API_BASE_URL}/api/Favorites`,
+          {
+            tmdbId: item.id,
+            mediaType,
+            title: item.title || item.name || '',
+            posterUrl,
+            overview: item.overview,
+            releaseDate: isTV ? item.first_air_date : item.release_date,
+            voteAverage: item.vote_average,
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        setFavoriteIds((prev) => new Set(prev).add(favoriteKey));
+      }
+    } catch (error: any) {
+      console.error('Error toggling favorite:', error);
+      const errorMsg = error.response?.data?.error || error.message || "Failed to update favorite";
+      showNotification('Error', errorMsg, 'error');
+    } finally {
+      setFavoritingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+    }
+  };
+
+  const getMediaTitle = (item: TMDBMedia) => item.title || item.name || 'Unknown';
   const getMediaYear = (item: TMDBMedia) => {
     const date = item.release_date || item.first_air_date;
-    const year = date ? new Date(date).getFullYear() : '';
-    console.log('[SideScrollMovieList] getMediaYear for item:', item.id, 'date:', date, '->', year);
-    return year;
+    return date ? new Date(date).getFullYear() : '';
   };
 
-  console.log('[SideScrollMovieList] Rendering with', items.length, 'items');
-  
-  const [api, setApi] = React.useState<CarouselApi>();
-  const carouselRef = useRef<HTMLDivElement>(null);
+  const renderMediaCard = (item: TMDBMedia) => {
+    const title = getMediaTitle(item);
+    const posterUrl = item.posterUrl || (item.poster_path ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}` : null);
+    const isTV = item.media_type === 'tv' || !!item.first_air_date || !!item.name;
+    const isDownloading = downloading.has(item.id);
+    const isDownloaded = downloadSuccess.has(item.id);
+    const isFavorited = favoriteIds.has(`${item.id}-${isTV ? 'tv' : 'movie'}`);
+    const isFavoriting = favoritingIds.has(item.id);
 
-  // Constrain viewport BEFORE carousel initializes - this is critical!
-  React.useEffect(() => {
-    if (!carouselRef.current || items.length === 0) return;
-    
-    const constrainViewport = () => {
-      const container = carouselRef.current;
-      if (!container) return;
-      
-      // Get the content-wrapper parent to account for padding
-      const contentWrapper = container.closest('.content-wrapper') as HTMLElement;
-      if (!contentWrapper) {
-        console.log('[SideScrollMovieList] No content-wrapper found');
-        return;
-      }
-      
-      // Find viewport - it might not exist yet if carousel hasn't rendered
-      const viewport = container.querySelector('[class*="overflow-hidden"]') as HTMLElement;
-      if (!viewport) {
-        // Viewport doesn't exist yet, try again soon
-        setTimeout(constrainViewport, 50);
-        return;
-      }
-      
-      // Calculate visible width: content-wrapper width minus its padding
-      const wrapperRect = contentWrapper.getBoundingClientRect();
-      const wrapperStyle = window.getComputedStyle(contentWrapper);
-      const paddingLeft = parseFloat(wrapperStyle.paddingLeft) || 0;
-      const paddingRight = parseFloat(wrapperStyle.paddingRight) || 0;
-      const visibleWidth = wrapperRect.width - paddingLeft - paddingRight;
-      
-      const viewportWidth = viewport.getBoundingClientRect().width;
-      const scrollWidth = viewport.scrollWidth;
-      
-      console.log('[SideScrollMovieList] Viewport constraint check:', {
-        wrapperWidth: wrapperRect.width,
-        paddingLeft,
-        paddingRight,
-        visibleWidth,
-        viewportWidth,
-        scrollWidth,
-        needsConstraint: viewportWidth >= scrollWidth || viewportWidth > visibleWidth
-      });
-      
-      // ALWAYS constrain to visible width - this is critical for Embla to detect overflow
-      // If scrollWidth exists and is larger, ensure viewport is smaller
-      const targetWidth = scrollWidth > 0 && scrollWidth > visibleWidth 
-        ? Math.min(visibleWidth, scrollWidth - 1) 
-        : visibleWidth;
-      
-      if (Math.abs(viewportWidth - targetWidth) > 1 || viewportWidth >= scrollWidth) {
-        console.log('[SideScrollMovieList] Constraining viewport from', viewportWidth, 'to', targetWidth, '(visibleWidth:', visibleWidth, ', scrollWidth:', scrollWidth, ')');
-        viewport.style.setProperty('width', `${targetWidth}px`, 'important');
-        viewport.style.setProperty('max-width', `${targetWidth}px`, 'important');
-        viewport.style.setProperty('min-width', `${targetWidth}px`, 'important');
-        viewport.style.setProperty('box-sizing', 'border-box', 'important');
-        
-        // Force a reflow to ensure the change takes effect
-        void viewport.offsetHeight;
-      }
-    };
-    
-    // Use ResizeObserver to watch for size changes
-    const resizeObserver = new ResizeObserver(() => {
-      constrainViewport();
-    });
-    
-    // Observe the content-wrapper for size changes
-    const contentWrapper = carouselRef.current.closest('.content-wrapper') as HTMLElement;
-    if (contentWrapper) {
-      resizeObserver.observe(contentWrapper);
-    }
-    
-    // Initial constraint - run multiple times to catch viewport when it appears
-    const timeouts: NodeJS.Timeout[] = [];
-    [0, 50, 100, 200, 300].forEach(delay => {
-      const timeout = setTimeout(() => {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(constrainViewport);
-        });
-      }, delay);
-      timeouts.push(timeout);
-    });
-    
-    // Also run on window resize
-    window.addEventListener('resize', constrainViewport);
-    
-    return () => {
-      resizeObserver.disconnect();
-      timeouts.forEach(clearTimeout);
-      window.removeEventListener('resize', constrainViewport);
-    };
-  }, [items]);
+    return (
+      <div
+        onClick={() => handleMediaClick(item)}
+        className="cursor-pointer group transition-all duration-300"
+      >
+        <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg border border-secondary/20 hover:border-secondary/60 hover:shadow-2xl hover:shadow-secondary/20 transition-all duration-300">
+          {posterUrl ? (
+            <img
+              src={posterUrl}
+              alt={title}
+              className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-80"
+              loading="lazy"
+            />
+          ) : (
+            <div className="w-full h-full bg-default-200 flex items-center justify-center">
+              {isTV ? <Tv size={48} className="text-default-400" /> : <Film size={48} className="text-default-400" />}
+            </div>
+          )}
+          
+          {/* Media Type Badge - Top Left */}
+          <div className="absolute top-1 left-1 z-10">
+            <Chip 
+              size="sm" 
+              color={isTV ? "primary" : "secondary"}
+              variant="flat" 
+              className="text-[10px] sm:text-xs font-bold uppercase backdrop-blur-md px-1 py-0.5"
+            >
+              {isTV ? 'TV' : 'Movie'}
+            </Chip>
+          </div>
 
-  React.useEffect(() => {
-    console.log('[SideScrollMovieList] Items changed:', {
-      count: items.length,
-      items: items.map(item => ({
-        id: item.id,
-        title: item.title || item.name,
-        media_type: item.media_type,
-        vote_average: item.vote_average,
-        poster_path: item.poster_path,
-        posterUrl: item.posterUrl,
-        release_date: item.release_date,
-        first_air_date: item.first_air_date
-      }))
-    });
-    
-    // Force carousel to reinit after items are loaded and images have rendered
-    if (api && items.length > 0 && carouselRef.current) {
-      console.log('[SideScrollMovieList] Forcing carousel reinit with', items.length, 'items');
-      
-      // Wait for images to load and DOM to settle
-      const reinitCarousel = () => {
-        const container = carouselRef.current;
-        if (!container) return;
-        
-        // Log container dimensions
-        const containerRect = container.getBoundingClientRect();
-        console.log('[SideScrollMovieList] Container dimensions:', {
-          width: containerRect.width,
-          scrollWidth: container.scrollWidth,
-          clientWidth: container.clientWidth
-        });
-        
-        // Find the viewport (overflow-hidden div) and constrain it
-        const viewport = container.querySelector('[class*="overflow-hidden"]') as HTMLElement;
-        const contentWrapper = container.closest('.content-wrapper') as HTMLElement;
-        
-        if (viewport && contentWrapper) {
-          const containerWidth = container.getBoundingClientRect().width;
-          const wrapperRect = contentWrapper.getBoundingClientRect();
-          const wrapperStyle = window.getComputedStyle(contentWrapper);
-          const paddingLeft = parseFloat(wrapperStyle.paddingLeft) || 0;
-          const paddingRight = parseFloat(wrapperStyle.paddingRight) || 0;
-          const visibleWidth = wrapperRect.width - paddingLeft - paddingRight;
-          
-          const viewportRect = viewport.getBoundingClientRect();
-          console.log('[SideScrollMovieList] Viewport dimensions:', {
-            width: viewportRect.width,
-            scrollWidth: viewport.scrollWidth,
-            clientWidth: viewport.clientWidth,
-            containerWidth: containerWidth,
-            visibleWidth: visibleWidth,
-            wrapperWidth: wrapperRect.width,
-            padding: { left: paddingLeft, right: paddingRight }
-          });
-          
-          // Force constrain viewport to visible width - use setProperty with important
-          if (viewportRect.width > visibleWidth + 1 || viewportRect.width >= viewport.scrollWidth) {
-            console.log('[SideScrollMovieList] Forcing viewport constraint from', viewportRect.width, 'to', visibleWidth);
-            viewport.style.setProperty('width', `${visibleWidth}px`, 'important');
-            viewport.style.setProperty('max-width', `${visibleWidth}px`, 'important');
-            viewport.style.setProperty('min-width', `${visibleWidth}px`, 'important');
-            viewport.style.setProperty('box-sizing', 'border-box', 'important');
-          }
-        }
-        
-        console.log('[SideScrollMovieList] Reinitializing carousel...');
-        api.reInit();
-        
-        // Check scroll state after a brief delay
-        setTimeout(() => {
-          const canPrev = api.canScrollPrev();
-          const canNext = api.canScrollNext();
-          const containerNode = api.containerNode();
-          console.log('[SideScrollMovieList] After reinit - canScrollPrev:', canPrev, 'canScrollNext:', canNext);
-          if (containerNode) {
-            console.log('[SideScrollMovieList] Container node dimensions:', {
-              offsetWidth: containerNode.offsetWidth,
-              scrollWidth: containerNode.scrollWidth,
-              clientWidth: containerNode.clientWidth
-            });
-          }
-          
-          // If still false, try again after images load
-          if (!canNext && items.length > 5) {
-            console.log('[SideScrollMovieList] Scroll still false, waiting for images...');
-            setTimeout(() => {
-              api.reInit();
-              console.log('[SideScrollMovieList] Second reinit - canScrollPrev:', api.canScrollPrev(), 'canScrollNext:', api.canScrollNext());
-            }, 500);
-          }
-        }, 300);
-      };
-      
-      // Wait for next frame to ensure DOM is updated
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setTimeout(reinitCarousel, 200);
-        });
-      });
-    }
-  }, [items, api]);
+          {/* Rating Badge - Top Right */}
+          {item.vote_average > 0 && (
+            <div className="absolute top-1 right-1 z-10 bg-black/85 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] sm:text-xs">
+              <span className="font-semibold text-white">
+                ⭐ {item.vote_average.toFixed(1)}
+              </span>
+            </div>
+          )}
+
+          {/* Favorite Button - Bottom Right (left of download) */}
+          {user && (
+            <button
+              onClick={(e) => toggleFavorite(item, e)}
+              disabled={isFavoriting}
+              className={`absolute bottom-1 right-10 z-10 p-1.5 rounded-full backdrop-blur-md transition-all duration-200 ${
+                isFavorited
+                  ? 'bg-danger/90 hover:bg-danger'
+                  : 'bg-secondary/60 hover:bg-secondary/80'
+              } ${isFavoriting ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={isFavorited ? 'Remove from Favorites' : 'Add to Favorites'}
+            >
+              {isFavoriting ? (
+                <Spinner size="sm" color="white" className="w-4 h-4" />
+              ) : (
+                <Heart 
+                  size={16} 
+                  className={`text-white ${isFavorited ? 'fill-white' : ''}`}
+                />
+              )}
+            </button>
+          )}
+
+          {/* Download Button - Bottom Right */}
+          {user && !isTV && (
+            <button
+              onClick={(e) => handleQuickDownload(item, e)}
+              disabled={isDownloading || isDownloaded}
+              className={`absolute bottom-1 right-1 z-10 p-1.5 rounded-full backdrop-blur-md transition-all duration-200 ${
+                isDownloaded
+                  ? 'bg-success/90'
+                  : 'bg-primary/60 hover:bg-primary/80'
+              } ${isDownloading || isDownloaded ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={isDownloaded ? 'Downloaded' : 'Quick Download'}
+            >
+              {isDownloading ? (
+                <Spinner size="sm" color="white" className="w-4 h-4" />
+              ) : isDownloaded ? (
+                <Check size={16} className="text-white" />
+              ) : (
+                <Download size={16} className="text-white" />
+              )}
+            </button>
+          )}
+
+          {/* Title Overlay */}
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <h3 className="text-white font-semibold text-sm line-clamp-2" title={title}>
+              {title}
+            </h3>
+            {getMediaYear(item) && (
+              <p className="text-white/70 text-xs mt-1">{getMediaYear(item)}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div className="SideScrollMovieList">
-        
-      {/* Header */}
-      <div className="header">
-        <div className="title-section">
-          {icon && <span className="icon">{icon}</span>}
-          <h2 className="title">{title}</h2>
-        </div>
-        {categoryPath && (
-          <Link href={categoryPath} className="view-all-link">
-            <span>View All</span>
-            <ArrowRight size={18} />
-          </Link>
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="content-wrapper">
-        {loading ? (
-          <div className="loading-container">
-            <Spinner size="lg" color="primary" />
+    <>
+      <div className="side-scroll-movie-list w-full py-1">
+        <div className="container max-w-[2400px] mx-auto px-2 sm:px-3">
+          {/* Header */}
+          <div className="mb-3 sm:mb-4 px-1">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 sm:gap-3">
+                {icon && <div className="flex-shrink-0">{icon}</div>}
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-left">{title}</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Carousel Navigation Arrows */}
+                {!loading && items.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      isIconOnly
+                      size="sm"
+                      variant="flat"
+                      className="bg-default-100 hover:bg-default-200 transition-all min-w-9 h-9 rounded-full"
+                      onPress={() => api?.scrollPrev()}
+                      isDisabled={!canScrollPrev}
+                    >
+                      <ArrowRight size={18} className="rotate-180" />
+                    </Button>
+                    <Button
+                      isIconOnly
+                      size="sm"
+                      variant="flat"
+                      className="bg-default-100 hover:bg-default-200 transition-all min-w-9 h-9 rounded-full"
+                      onPress={() => api?.scrollNext()}
+                      isDisabled={!canScrollNext}
+                    >
+                      <ArrowRight size={18} />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-        ) : items.length === 0 ? (
-          <div className="empty-container">
-            <p>No items to display</p>
-          </div>
-        ) : (
-          <div className="carousel-container" ref={carouselRef}>
-            <Carousel
-              setApi={setApi}
-              opts={{
-                align: "start",
-                loop: false,
-              }}
-              className="w-full relative max-w-full"
-            >
-              <CarouselContent className="-ml-4 md:-ml-2">
-                {items.map((item, index) => {
-                  console.log('[SideScrollMovieList] Mapping item', index, ':', item);
-                  return (
-                  <CarouselItem
-                    key={`${item.id}-${item.media_type || 'unknown'}`}
-                    className="pl-4 md:pl-2 basis-[150px] sm:basis-[180px] md:basis-[200px] lg:basis-[220px] flex-shrink-0 flex-grow-0 min-w-[150px] sm:min-w-[180px] md:min-w-[200px] lg:min-w-[220px]"
-                  >
-                    <Card className="movie-card p-0 overflow-hidden cursor-pointer">
-                        
-                      <div className="relative h-full">
-                        {/* Poster Image */}
-                        {item.poster_path || item.posterUrl ? (
-                          <img
-                            src={item.posterUrl || `${TMDB_IMAGE_BASE_URL}${item.poster_path}`}
-                            alt={getMediaTitle(item)}
-                            className="poster-image"
-                            loading="lazy"
-                            onLoad={() => {
-                              // Trigger carousel reinit when images load
-                              if (api && items.length > 0) {
-                                console.log('[SideScrollMovieList] Image loaded, checking carousel state');
-                                setTimeout(() => {
-                                  api.reInit();
-                                  console.log('[SideScrollMovieList] After image load - canScrollPrev:', api.canScrollPrev(), 'canScrollNext:', api.canScrollNext());
-                                }, 50);
-                              }
-                            }}
-                          />
-                        ) : (
-                          <div className="poster-placeholder">
-                            <span>No Image</span>
-                          </div>
-                        )}
-                        
-                        {/* Media Type Badge */}
-                        {item.media_type && (
-                          <Chip
-                            size="sm"
-                            className="media-type-badge"
-                            color={item.media_type === 'movie' ? 'primary' : 'secondary'}
-                            variant="flat"
-                          >
-                            {item.media_type.toUpperCase()}
-                          </Chip>
-                        )}
 
-                        {/* Rating Badge */}
-                        {item.vote_average > 0 && (
-                          <div className="rating-badge">
-                            <span>⭐ {item.vote_average.toFixed(1)}</span>
-                          </div>
-                        )}
-                        
-
-                        {/* Title Overlay */}
-                        <div className="movie-info-overlay">
-                          <h3 className="movie-title" title={getMediaTitle(item)}>
-                            {getMediaTitle(item)}
-                          </h3>
-                          {getMediaYear(item) && (
-                            <p className="movie-year">{getMediaYear(item)}</p>
-                          )}
-                        </div>
+          {/* Content */}
+          {loading ? (
+            <div className="flex justify-center items-center py-12">
+              <Spinner size="lg" color="secondary" />
+            </div>
+          ) : items.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-default-500">No items to display</p>
+            </div>
+          ) : (
+            <div className="relative">
+              <Carousel
+                opts={{
+                  align: "start",
+                  loop: false,
+                  skipSnaps: false,
+                  dragFree: true,
+                }}
+                setApi={setApi}
+                className="w-full"
+              >
+                <CarouselContent className="-ml-2 sm:-ml-3">
+                  {items.map((item) => (
+                    <CarouselItem 
+                      key={`${item.media_type || 'movie'}-${item.id}`}
+                      className="pl-2 sm:pl-3 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/5 xl:basis-1/6 2xl:basis-1/7 3xl:basis-1/8 4xl:basis-1/10 5xl:basis-1/12"
+                      style={{ flexBasis: `clamp(160px, ${100 / Math.min(items.length, 12)}%, 280px)` }}
+                    >
+                      {renderMediaCard(item)}
+                    </CarouselItem>
+                  ))}
+                  
+                  {/* Loading More Indicator */}
+                  {loadingMore && (
+                    <CarouselItem className="pl-2 sm:pl-3 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/5 xl:basis-1/6 2xl:basis-1/7 3xl:basis-1/8 4xl:basis-1/10 5xl:basis-1/12">
+                      <div className="flex items-center justify-center h-full min-h-[300px]">
+                        <Spinner size="lg" color="secondary" />
                       </div>
-                    </Card>
-                  </CarouselItem>
-                  );
-                })}
-              </CarouselContent>
-              <CarouselPrevious />
-              <CarouselNext />
-            </Carousel>
-            
-          </div>
-        )}
+                    </CarouselItem>
+                  )}
+                </CarouselContent>
+              </Carousel>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Movie Modal */}
+      {selectedMedia && !isSeriesModalOpen && (
+        <AddMovieModal
+          isOpen={isMovieModalOpen}
+          onClose={closeModals}
+          media={selectedMedia}
+          onAddMovie={() => {
+            closeModals();
+            fetchFavorites();
+          }}
+        />
+      )}
+
+      {/* Series Modal */}
+      {selectedMedia && !isMovieModalOpen && (
+        <AddSeriesModal
+          isOpen={isSeriesModalOpen}
+          onClose={closeModals}
+          media={selectedMedia}
+          onAddSeries={() => {
+            closeModals();
+            fetchFavorites();
+          }}
+        />
+      )}
+
+      {/* Notification Modal */}
+      <Modal
+        isOpen={notificationModal.isOpen}
+        onClose={closeNotification}
+        size="md"
+        classNames={{
+          base: "bg-background",
+          header: "border-b border-divider",
+        }}
+      >
+        <ModalContent>
+          <ModalHeader>
+            <div className="flex items-center gap-2">
+              {notificationModal.type === 'success' && <span className="text-2xl">✅</span>}
+              {notificationModal.type === 'error' && <span className="text-2xl">❌</span>}
+              {notificationModal.type === 'warning' && <span className="text-2xl">⚠️</span>}
+              {notificationModal.type === 'info' && <span className="text-2xl">ℹ️</span>}
+              <span>{notificationModal.title}</span>
+            </div>
+          </ModalHeader>
+          <ModalBody className="py-6">
+            <p className="whitespace-pre-wrap">{notificationModal.message}</p>
+          </ModalBody>
+          <ModalFooter>
+            <Button color="primary" onPress={closeNotification}>
+              OK
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+    </>
   );
 };
 

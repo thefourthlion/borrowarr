@@ -1,4 +1,5 @@
 const DownloadClients = require("../models/DownloadClients");
+const History = require("../models/History");
 const { getAllDownloadClients, getDownloadClientsByProtocol, getDownloadClientDefinition } = require("../data/downloadClientDefinitions");
 
 /**
@@ -482,6 +483,67 @@ exports.grabRelease = async (req, res) => {
       } else {
         return res.status(400).json({ error: "Invalid download URL format" });
       }
+    }
+
+    // Log to history
+    try {
+      const { 
+        releaseName, 
+        indexer, 
+        indexerId, 
+        size, 
+        sizeFormatted, 
+        seeders, 
+        leechers, 
+        quality, 
+        source,
+        mediaType,
+        mediaTitle,
+        tmdbId,
+        seasonNumber,
+        episodeNumber,
+      } = req.body;
+
+      console.log('[DownloadClients] Creating history entry with data:', {
+        userId: req.userId,
+        mediaType: mediaType || 'unknown',
+        mediaTitle: mediaTitle || null,
+        tmdbId: tmdbId || null,
+        releaseName: releaseName || downloadUrl,
+        protocol: determinedProtocol === 'nzb' ? 'nzb' : 'torrent',
+        indexer: indexer || null,
+        source: source || 'Manual',
+        downloadClient: clientData.name,
+      });
+
+      const historyEntry = await History.create({
+        userId: req.userId,
+        mediaType: mediaType || 'unknown',
+        mediaTitle: mediaTitle || null,
+        tmdbId: tmdbId || null,
+        seasonNumber: seasonNumber || null,
+        episodeNumber: episodeNumber || null,
+        releaseName: releaseName || downloadUrl,
+        protocol: determinedProtocol === 'nzb' ? 'nzb' : 'torrent',
+        indexer: indexer || null,
+        indexerId: indexerId || null,
+        downloadUrl: downloadUrl,
+        size: size || null,
+        sizeFormatted: sizeFormatted || null,
+        seeders: seeders || null,
+        leechers: leechers || null,
+        quality: quality || null,
+        status: 'grabbed',
+        source: source || 'Manual',
+        downloadClient: clientData.name,
+        downloadClientId: result || null,
+      });
+
+      console.log('[DownloadClients] ✅ History entry created successfully:', historyEntry.id);
+    } catch (historyError) {
+      console.error('[DownloadClients] ❌ Failed to log history:', historyError.message);
+      console.error('[DownloadClients] Error stack:', historyError.stack);
+      // Don't fail the request if history logging fails
     }
 
     res.json({

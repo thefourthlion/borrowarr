@@ -183,9 +183,14 @@ class TMDBService {
       const response = await api.get(`/tv/${tvId}`, {
         params: {
           language: 'en-US',
-          append_to_response: 'credits,videos,alternative_titles,content_ratings',
+          append_to_response: 'credits,videos,alternative_titles,content_ratings,external_ids',
         },
       });
+
+      // Merge external_ids into the main response for easier access
+      if (response.data.external_ids?.imdb_id) {
+        response.data.imdb_id = response.data.external_ids.imdb_id;
+      }
 
       return {
         success: true,

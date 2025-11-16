@@ -33,7 +33,16 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 app.use(cors());
 
-// Connect to database
+// Ensure all models are loaded BEFORE database sync
+require("./models/User");
+require("./models/MonitoredMovies");
+require("./models/MonitoredSeries");
+require("./models/Settings");
+require("./models/Favorites");
+require("./models/History");
+require("./models/PlexConnection");
+
+// Connect to database (this will sync all loaded models)
 connectDB();
 
 // Start monitoring service (after database connection)
@@ -41,13 +50,6 @@ setTimeout(() => {
   const { startMonitoringScheduler } = require('./services/monitoringService');
   startMonitoringScheduler();
 }, 10000); // Wait 10 seconds after server starts
-
-// Ensure all models are loaded for sync
-require("./models/User");
-require("./models/MonitoredMovies");
-require("./models/MonitoredSeries");
-require("./models/Settings");
-require("./models/Favorites");
 
 app.get("/", (req, res) => {
   res.json({ app: "running" });
@@ -65,6 +67,8 @@ app.use("/api/MonitoredSeries", require("./routes/monitoredSeries"));
 app.use("/api/Cardigann", require("./routes/Cardigann"));
 app.use("/api/Settings", require("./routes/Settings"));
 app.use("/api/Favorites", require("./routes/Favorites"));
+app.use("/api/History", require("./routes/History"));
+app.use("/api/PlexConnection", require("./routes/PlexConnection"));
 
 app.listen(PORT, () => {
   console.log("✅ Listening on port " + PORT);

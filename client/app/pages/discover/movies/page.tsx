@@ -6,6 +6,7 @@ import { Chip } from "@nextui-org/chip";
 import { Spinner } from "@nextui-org/spinner";
 import { Input } from "@nextui-org/input";
 import { Select, SelectItem } from "@nextui-org/select";
+import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@nextui-org/modal";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Film,
@@ -74,6 +75,19 @@ const MoviesPage = () => {
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favoritingIds, setFavoritingIds] = useState<Set<number>>(new Set());
   
+  // Modal state for notifications
+  const [notificationModal, setNotificationModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
+  
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
   
@@ -82,6 +96,11 @@ const MoviesPage = () => {
     const urlQuery = searchParams.get('q');
     const urlType = searchParams.get('type'); // 'all', 'movie', or undefined (defaults to 'movie')
     const urlIndexerId = searchParams.get('indexerId');
+    const urlGenres = searchParams.get('genres');
+    const urlStudio = searchParams.get('studio');
+    const urlSortBy = searchParams.get('sortBy');
+    const urlId = searchParams.get('id'); // Single movie ID to show modal
+    
     if (urlQuery) {
       setSearchQuery(urlQuery);
     }
@@ -89,6 +108,34 @@ const MoviesPage = () => {
       setSelectedIndexer(urlIndexerId);
     } else {
       setSelectedIndexer("all");
+    }
+    if (urlGenres) {
+      // Support comma-separated genre IDs
+      const genreIds = urlGenres.split(',').map(id => parseInt(id, 10)).filter(id => !isNaN(id));
+      setSelectedGenres(new Set(genreIds));
+    }
+    if (urlStudio) {
+      // Store studio ID to filter by (we'll need to handle this in the API call)
+      // For now, we can add it to keywords or create a separate state
+      setKeywords(urlStudio); // Temporary solution
+    }
+    if (urlSortBy) {
+      setSortBy(urlSortBy);
+    }
+    if (urlId) {
+      // If a specific movie ID is provided, open the modal for that movie
+      const movieId = parseInt(urlId, 10);
+      if (!isNaN(movieId)) {
+        // Fetch and open modal for this movie
+        axios.get(`${API_BASE_URL}/api/TMDB/movie/${movieId}`)
+          .then(res => {
+            if (res.data.success && res.data.movie) {
+              setSelectedMedia(res.data.movie);
+              setIsModalOpen(true);
+            }
+          })
+          .catch(err => console.error('Error fetching movie:', err));
+      }
     }
   }, [searchParams]);
   
@@ -118,6 +165,19 @@ const MoviesPage = () => {
   const [selectedIndexer, setSelectedIndexer] = useState<string>("all");
 
   const debouncedSearchQuery = useDebounce(searchQuery, 500);
+
+  const showNotification = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    setNotificationModal({
+      isOpen: true,
+      title,
+      message,
+      type,
+    });
+  };
+
+  const closeNotification = () => {
+    setNotificationModal(prev => ({ ...prev, isOpen: false }));
+  };
 
   // Fetch genres
   useEffect(() => {
@@ -153,9 +213,18 @@ const MoviesPage = () => {
       });
   }, [watchRegion]);
 
-  // Fetch indexers
+  // Fetch indexers (only when user is authenticated)
   useEffect(() => {
-    axios.get(`${API_BASE_URL}/api/Indexers/read`)
+    if (!user) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    axios.get(`${API_BASE_URL}/api/Indexers/read`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
       .then((response) => {
         if (response.data.data) {
           setIndexers(response.data.data.filter((idx: any) => idx.enabled) || []);
@@ -164,7 +233,7 @@ const MoviesPage = () => {
       .catch((error) => {
         console.error("Error fetching indexers:", error);
       });
-  }, []);
+  }, [user]);
 
   // Fetch favorites
   useEffect(() => {
@@ -318,7 +387,7 @@ const MoviesPage = () => {
     e.stopPropagation();
     
     if (!user) {
-      alert("Please log in to download movies");
+      showNotification('Login Required', 'Please log in to download movies', 'warning');
       return;
     }
 
@@ -397,7 +466,7 @@ const MoviesPage = () => {
       }
     } catch (error: any) {
       const errorMsg = error.response?.data?.error || error.message || "Download failed";
-      alert(`Error: ${errorMsg}`);
+      showNotification('Download Error', errorMsg, 'error');
     } finally {
       setDownloading((prev) => {
         const next = new Set(prev);
@@ -411,7 +480,7 @@ const MoviesPage = () => {
     e.stopPropagation();
     
     if (!user) {
-      alert("Please log in to add favorites");
+      showNotification('Login Required', 'Please log in to add favorites', 'warning');
       return;
     }
 
@@ -468,7 +537,7 @@ const MoviesPage = () => {
       console.error('Error response:', error.response?.data);
       const errorMsg = error.response?.data?.error || error.message || "Failed to update favorite";
       const errorDetails = error.response?.data?.details ? ` (${error.response.data.details})` : '';
-      alert(`Error: ${errorMsg}${errorDetails}`);
+      showNotification('Error', `${errorMsg}${errorDetails}`, 'error');
     } finally {
       setFavoritingIds((prev) => {
         const next = new Set(prev);
@@ -519,7 +588,7 @@ const MoviesPage = () => {
         className="cursor-pointer group transition-all duration-300 hover:scale-105 hover:-translate-y-1"
         style={{ height: '100%' }}
       >
-        <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg border border-secondary/20 hover:border-secondary/60 hover:shadow-2xl hover:shadow-secondary/20 transition-all duration-300">
+        <div className="relative aspect-[2/3] w-full overflow-hidden rounded-md sm:rounded-lg md:rounded-xl border border-secondary/20 hover:border-secondary/60 hover:shadow-xl sm:hover:shadow-2xl hover:shadow-secondary/20 transition-all duration-300">
           {posterUrl ? (
               <img
               src={posterUrl}
@@ -533,12 +602,12 @@ const MoviesPage = () => {
             )}
           
           {/* Media Type Badge - Top Left */}
-          <div className="absolute top-1 left-1 z-10">
+          <div className="absolute top-0.5 left-0.5 sm:top-1 sm:left-1 z-10">
             <Chip 
               size="sm" 
               color="primary" 
               variant="flat" 
-              className="text-[10px] sm:text-xs font-bold uppercase backdrop-blur-md px-1 py-0.5"
+              className="text-[9px] sm:text-[10px] md:text-xs font-bold uppercase backdrop-blur-md px-0.5 sm:px-1 py-0.5 h-4 sm:h-5"
             >
                 Movie
               </Chip>
@@ -546,7 +615,7 @@ const MoviesPage = () => {
 
           {/* Rating Badge - Top Right */}
           {item.vote_average > 0 && (
-            <div className="absolute top-1 right-1 z-10 bg-black/85 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] sm:text-xs">
+            <div className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 z-10 bg-black/85 backdrop-blur-md px-1 sm:px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] md:text-xs">
               <span className="font-semibold text-white">
                 ⭐ {item.vote_average.toFixed(1)}
               </span>
@@ -558,7 +627,7 @@ const MoviesPage = () => {
             <button
               onClick={(e) => toggleFavorite(item, e)}
               disabled={isFavoriting}
-              className={`absolute bottom-1 right-10 z-10 p-1.5 rounded-full backdrop-blur-md transition-all duration-200 ${
+              className={`absolute bottom-0.5 right-7 sm:bottom-1 sm:right-10 z-10 p-1 sm:p-1.5 rounded-full backdrop-blur-md transition-all duration-200 ${
                 isFavorited
                   ? 'bg-danger/90 hover:bg-danger'
                   : 'bg-secondary/60 hover:bg-secondary/80'
@@ -566,11 +635,11 @@ const MoviesPage = () => {
               title={isFavorited ? 'Remove from Favorites' : 'Add to Favorites'}
             >
               {isFavoriting ? (
-                <Spinner size="sm" color="white" className="w-4 h-4" />
+                <Spinner size="sm" color="white" className="w-3 h-3 sm:w-4 sm:h-4" />
               ) : (
                 <Heart 
-                  size={16} 
-                  className={isFavorited ? 'text-white fill-white' : 'text-purple-300'} 
+                  size={14} 
+                  className={`sm:w-4 sm:h-4 ${isFavorited ? 'text-white fill-white' : 'text-purple-300'}`} 
                 />
               )}
             </button>
@@ -580,7 +649,7 @@ const MoviesPage = () => {
           <button
             onClick={(e) => handleQuickDownload(item, e)}
             disabled={isDownloading || isDownloaded}
-            className={`absolute bottom-1 right-1 z-10 p-1.5 rounded-full backdrop-blur-md transition-all duration-200 ${
+            className={`absolute bottom-0.5 right-0.5 sm:bottom-1 sm:right-1 z-10 p-1 sm:p-1.5 rounded-full backdrop-blur-md transition-all duration-200 ${
               isDownloaded
                 ? 'bg-success/90 hover:bg-success'
                 : 'bg-secondary/90 hover:bg-secondary'
@@ -588,21 +657,21 @@ const MoviesPage = () => {
             title={isDownloaded ? 'Downloaded' : isDownloading ? 'Downloading...' : 'Quick Download'}
           >
             {isDownloading ? (
-              <Spinner size="sm" color="white" className="w-4 h-4" />
+              <Spinner size="sm" color="white" className="w-3 h-3 sm:w-4 sm:h-4" />
             ) : isDownloaded ? (
-              <Check size={16} className="text-white" />
+              <Check size={14} className="sm:w-4 sm:h-4 text-white" />
             ) : (
-              <Download size={16} className="text-white" />
+              <Download size={14} className="sm:w-4 sm:h-4 text-white" />
             )}
           </button>
 
           {/* Title and Year Overlay - Bottom */}
-          <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/95 via-black/80 to-transparent transition-all duration-300 group-hover:from-black/98 group-hover:via-black/90">
-            <h3 className="font-semibold text-xs sm:text-sm text-white line-clamp-2 mb-0.5">
+          <div className="absolute bottom-0 left-0 right-0 p-1.5 sm:p-2 bg-gradient-to-t from-black/95 via-black/80 to-transparent transition-all duration-300 group-hover:from-black/98 group-hover:via-black/90">
+            <h3 className="font-semibold text-[10px] sm:text-xs md:text-sm text-white line-clamp-2 mb-0.5 leading-tight">
               {title}
             </h3>
             {year && (
-              <p className="text-[10px] sm:text-xs text-white/70">{year}</p>
+              <p className="text-[9px] sm:text-[10px] md:text-xs text-white/70">{year}</p>
             )}
           </div>
         </div>
@@ -614,7 +683,7 @@ const MoviesPage = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="border-b border-secondary/20 sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+        <div className="max-w-[2400px] mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
             <div className="min-w-0 flex items-center gap-3">
               <Button
@@ -648,7 +717,7 @@ const MoviesPage = () => {
       </div>
 
       {/* Content */}
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
+      <div className="max-w-[2400px] mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
         {/* Search and Controls */}
         <div className="mb-6 space-y-4">
           <div className="flex flex-col sm:flex-row gap-3">
@@ -1027,7 +1096,7 @@ const MoviesPage = () => {
             <div className="mb-4 text-xs sm:text-sm text-foreground/60">
               Showing {media.length} of {totalResults} results
             </div>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 3xl:grid-cols-12 gap-2 sm:gap-3 relative z-0">
+            <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 3xl:grid-cols-10 4xl:grid-cols-12 5xl:grid-cols-14 gap-2 sm:gap-3 md:gap-4 relative z-0">
               {media.map((item) => (
                 <React.Fragment key={item.id}>
                   {renderMediaCard(item)}
@@ -1074,6 +1143,37 @@ const MoviesPage = () => {
         onClose={() => setIsModalOpen(false)}
         media={selectedMedia}
       />
+
+      {/* Notification Modal */}
+      <Modal
+        isOpen={notificationModal.isOpen}
+        onClose={closeNotification}
+        size="md"
+        classNames={{
+          base: "bg-background",
+          header: "border-b border-divider",
+        }}
+      >
+        <ModalContent>
+          <ModalHeader>
+            <div className="flex items-center gap-2">
+              {notificationModal.type === 'success' && <span className="text-2xl">✅</span>}
+              {notificationModal.type === 'error' && <span className="text-2xl">❌</span>}
+              {notificationModal.type === 'warning' && <span className="text-2xl">⚠️</span>}
+              {notificationModal.type === 'info' && <span className="text-2xl">ℹ️</span>}
+              <span>{notificationModal.title}</span>
+            </div>
+          </ModalHeader>
+          <ModalBody className="py-6">
+            <p className="whitespace-pre-wrap">{notificationModal.message}</p>
+          </ModalBody>
+          <ModalFooter>
+            <Button color="primary" onPress={closeNotification}>
+              OK
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </div>
   );
 };

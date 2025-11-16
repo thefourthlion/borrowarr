@@ -25,6 +25,9 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Play,
+  Maximize2,
+  Heart,
 } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
@@ -184,11 +187,40 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
   const [seasonTorrents, setSeasonTorrents] = useState<Map<number, TorrentResult[]>>(new Map());
   const [loadingSeasonTorrents, setLoadingSeasonTorrents] = useState<Map<number, boolean>>(new Map());
 
-  // Reset state when modal opens/closes
+  // Favorite state
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [isFavoriting, setIsFavoriting] = useState(false);
+  
+  // Modal state for notifications
+  const [notificationModal, setNotificationModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
+
+  const showNotification = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    setNotificationModal({
+      isOpen: true,
+      title,
+      message,
+      type,
+    });
+  };
+
+  const closeNotification = () => {
+    setNotificationModal(prev => ({ ...prev, isOpen: false }));
+  };
+
+  // Reset state when modal opens/closes or media changes
   useEffect(() => {
     if (isOpen && media) {
-      fetchTVShowDetails();
-    } else {
+      // Reset all state first to ensure clean slate for new media
       setTvShowDetails(null);
       setSeasons([]);
       setSelectedSeasons(new Set());
@@ -209,8 +241,42 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
       setSeasonShowingTorrents(null);
       setSeasonTorrents(new Map());
       setLoadingSeasonTorrents(new Map());
+      setDownloadingEpisodes(new Map());
+      setDownloadedEpisodes(new Set());
+      setDownloadErrors(new Map());
+      setIsFavorited(false);
+      
+      // Then fetch new data
+      fetchTVShowDetails();
+      checkIfFavorited();
+    } else if (!isOpen) {
+      // Only reset when closing if not already reset
+      setTvShowDetails(null);
+      setSeasons([]);
+      setSelectedSeasons(new Set());
+      setSelectedEpisodes(new Set());
+      setSelectAllSeasons(true);
+      setExpandedSeasons(new Set());
+      setTrailerKey(null);
+      setEpisodeShowingTorrents(null);
+      setEpisodeTorrents(new Map());
+      setLoadingEpisodeTorrents(new Map());
+      setDownloadingTorrents(new Set());
+      setDownloadTorrentSuccess(new Set());
+      setDownloadTorrentErrors(new Map());
+      setShowingCompleteSeriesTorrents(false);
+      setCompleteSeriesTorrents([]);
+      setLoadingCompleteSeriesTorrents(false);
+      setSelectedSeasonForComplete(null);
+      setSeasonShowingTorrents(null);
+      setSeasonTorrents(new Map());
+      setLoadingSeasonTorrents(new Map());
+      setDownloadingEpisodes(new Map());
+      setDownloadedEpisodes(new Set());
+      setDownloadErrors(new Map());
+      setIsFavorited(false);
     }
-  }, [isOpen, media]);
+  }, [isOpen, media?.id]); // Changed dependency to media?.id to trigger on media change
 
   // When select all seasons changes, update individual season selections
   useEffect(() => {
@@ -468,7 +534,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
 
   const handleDownloadTorrent = async (torrent: TorrentResult, seasonNumber?: number, episodeNumber?: number) => {
     if (!user) {
-      alert("Please log in to download episodes");
+      showNotification('Login Required', 'Please log in to download episodes', 'warning');
       return;
     }
 
@@ -482,10 +548,40 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
     });
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, {
+      // Extract quality from torrent title
+      const titleLower = torrent.title.toLowerCase();
+      let quality = 'SD';
+      if (titleLower.includes('2160p') || titleLower.includes('4k') || titleLower.includes('uhd')) {
+        quality = '2160p';
+      } else if (titleLower.includes('1080p')) {
+        quality = '1080p';
+      } else if (titleLower.includes('720p')) {
+        quality = '720p';
+      }
+
+      const downloadPayload = {
         downloadUrl: torrent.downloadUrl,
         protocol: torrent.protocol, // Pass protocol to help backend select correct client
-      });
+        // History information
+        releaseName: torrent.title,
+        indexer: torrent.indexer,
+        indexerId: torrent.indexerId,
+        size: torrent.size,
+        sizeFormatted: torrent.sizeFormatted,
+        seeders: torrent.seeders,
+        leechers: torrent.leechers,
+        quality: quality,
+        source: 'AddSeriesModal',
+        mediaType: 'tv',
+        mediaTitle: media?.name || media?.title || '',
+        tmdbId: media?.id || null,
+        seasonNumber: seasonNumber || null,
+        episodeNumber: episodeNumber || null,
+      };
+
+      console.log('[AddSeriesModal] Sending download request with history data:', downloadPayload);
+
+      const response = await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, downloadPayload);
 
       if (response.data.success) {
         setDownloadTorrentSuccess(prev => new Set(prev).add(torrentId));
@@ -586,7 +682,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
       setCompleteSeriesTorrents([]);
       // Optionally show error to user
       if (error.response?.status === 500) {
-        alert(`Error searching for complete series torrents: ${errorMessage}`);
+        showNotification('Search Error', `Error searching for complete series torrents: ${errorMessage}`, 'error');
       }
     } finally {
       setLoadingCompleteSeriesTorrents(false);
@@ -657,7 +753,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
       });
       // Optionally show error to user
       if (error.response?.status === 500) {
-        alert(`Error searching for season torrents: ${errorMessage}`);
+        showNotification('Search Error', `Error searching for season torrents: ${errorMessage}`, 'error');
       }
     } finally {
       setLoadingSeasonTorrents(prev => {
@@ -670,7 +766,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
 
   const downloadEpisode = async (seasonNumber: number, episodeNumber: number, episodeName: string) => {
     if (!media || !user) {
-      alert("Please log in to download episodes");
+      showNotification('Login Required', 'Please log in to download episodes', 'warning');
       return;
     }
 
@@ -719,11 +815,41 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
         return currentSeeders > bestSeeders ? current : best;
       });
 
+      // Extract quality from torrent title
+      const titleLower = bestTorrent.title.toLowerCase();
+      let quality = 'SD';
+      if (titleLower.includes('2160p') || titleLower.includes('4k') || titleLower.includes('uhd')) {
+        quality = '2160p';
+      } else if (titleLower.includes('1080p')) {
+        quality = '1080p';
+      } else if (titleLower.includes('720p')) {
+        quality = '720p';
+      }
+
       // Download the torrent
-      const downloadResponse = await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, {
+      const downloadPayload = {
         downloadUrl: bestTorrent.downloadUrl,
         protocol: bestTorrent.protocol, // Pass protocol to help backend select correct client
-      });
+        // History information
+        releaseName: bestTorrent.title,
+        indexer: bestTorrent.indexer,
+        indexerId: bestTorrent.indexerId,
+        size: bestTorrent.size,
+        sizeFormatted: bestTorrent.sizeFormatted,
+        seeders: bestTorrent.seeders,
+        leechers: bestTorrent.leechers,
+        quality: quality,
+        source: 'AddSeriesModal',
+        mediaType: 'tv',
+        mediaTitle: title,
+        tmdbId: media.id,
+        seasonNumber: seasonNumber,
+        episodeNumber: episodeNumber,
+      };
+
+      console.log('[AddSeriesModal] Sending download request with history data:', downloadPayload);
+
+      const downloadResponse = await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, downloadPayload);
 
       if (downloadResponse.data.success) {
         setDownloadedEpisodes(prev => new Set(prev).add(episodeKey));
@@ -744,12 +870,12 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
 
   const handleAddSeries = async () => {
     if (!user) {
-      alert("Please log in to add series to your monitored list");
+      showNotification('Login Required', 'Please log in to add series to your monitored list', 'warning');
       return;
     }
 
     if (!media || selectedEpisodes.size === 0) {
-      alert("Please select at least one episode to download");
+      showNotification('Selection Required', 'Please select at least one episode to download', 'warning');
       return;
     }
 
@@ -789,7 +915,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
       const firstAirDate = media.first_air_date || null;
 
       if (!user) {
-        alert("Please log in to add series to your monitored list");
+        showNotification('Login Required', 'Please log in to add series to your monitored list', 'warning');
         return;
       }
 
@@ -839,14 +965,95 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
       // Close modal and show summary
       setTimeout(() => {
         onClose();
-        alert(`Series added to monitoring!\n\nSuccessfully queued: ${successCount} episodes\nFailed: ${failCount} episodes`);
+        showNotification(
+          'Series Added',
+          `Series added to monitoring!\n\nSuccessfully queued: ${successCount} episodes\nFailed: ${failCount} episodes`,
+          successCount > 0 ? 'success' : 'warning'
+        );
         if (onAddSeries) onAddSeries();
       }, 1000);
     } catch (error: any) {
       console.error("Error adding series:", error);
-      alert(error.message || "Failed to add series");
+      showNotification('Error', error.message || 'Failed to add series', 'error');
     } finally {
       setAddingSeries(false);
+    }
+  };
+
+  const checkIfFavorited = async () => {
+    if (!user || !media) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(
+        `${API_BASE_URL}/api/Favorites/check`,
+        {
+          params: {
+            tmdbId: media.id,
+            mediaType: 'tv',
+          },
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      
+      setIsFavorited(response.data.isFavorited || false);
+    } catch (error) {
+      console.error('Error checking favorite status:', error);
+    }
+  };
+
+  const toggleFavorite = async () => {
+    if (!user || !media) {
+      showNotification('Login Required', 'Please log in to add favorites', 'warning');
+      return;
+    }
+
+    setIsFavoriting(true);
+    
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (isFavorited) {
+        // Remove from favorites
+        await axios.delete(`${API_BASE_URL}/api/Favorites`, {
+          headers: { Authorization: `Bearer ${token}` },
+          data: {
+            tmdbId: media.id,
+            mediaType: 'tv',
+          },
+        });
+        
+        setIsFavorited(false);
+      } else {
+        // Add to favorites
+        const posterUrl = media.poster_path 
+          ? `${TMDB_IMAGE_BASE_URL}${media.poster_path}` 
+          : (media.posterUrl || null);
+
+        await axios.post(
+          `${API_BASE_URL}/api/Favorites`,
+          {
+            tmdbId: media.id,
+            mediaType: 'tv',
+            title: media.name || media.title || '',
+            posterUrl,
+            overview: media.overview,
+            releaseDate: media.first_air_date,
+            voteAverage: media.vote_average,
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        
+        setIsFavorited(true);
+      }
+    } catch (error: any) {
+      console.error('Error toggling favorite:', error);
+      const errorMsg = error.response?.data?.error || error.message || "Failed to update favorite";
+      showNotification('Error', errorMsg, 'error');
+    } finally {
+      setIsFavoriting(false);
     }
   };
 
@@ -884,6 +1091,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
   );
 
   return (
+    <>
     <Modal
       isOpen={isOpen}
       onClose={onClose}
@@ -929,6 +1137,25 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                   )}
                 </div>
               </div>
+              <div className="flex gap-2">
+                {user && (
+                  <Button
+                    size="sm"
+                    variant="flat"
+                    color={isFavorited ? "danger" : "default"}
+                    startContent={
+                      isFavoriting ? (
+                        <Spinner size="sm" className="w-4 h-4" />
+                      ) : (
+                        <Heart size={16} className={isFavorited ? 'fill-current' : ''} />
+                      )
+                    }
+                    onPress={toggleFavorite}
+                    isDisabled={isFavoriting}
+                  >
+                    {isFavorited ? 'Unfavorite' : 'Favorite'}
+                  </Button>
+                )}
               {tvShowDetails?.imdb_id && (
                 <Button
                   as="a"
@@ -942,6 +1169,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                   View on IMDb
                 </Button>
               )}
+              </div>
             </div>
             {tvShowDetails?.tagline && (
               <p className="text-sm text-default-400 italic mt-1">{tvShowDetails.tagline}</p>
@@ -1011,6 +1239,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                       <p className="text-sm font-medium text-default-600 mb-2">External Links:</p>
                       <div className="flex flex-wrap gap-2">
                         {tvShowDetails?.imdb_id && (
+                          <>
                           <Button
                             as="a"
                             href={`https://www.imdb.com/title/${tvShowDetails.imdb_id}`}
@@ -1024,6 +1253,20 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                           >
                             IMDb
                           </Button>
+                            <Button
+                              as="a"
+                              href={`https://www.imdb.com/title/${tvShowDetails.imdb_id}/parentalguide`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              size="sm"
+                              variant="flat"
+                              color="warning"
+                              startContent={<Users size={14} />}
+                              className="text-xs"
+                            >
+                              Parents Guide
+                            </Button>
+                          </>
                         )}
                         {media.id && (
                           <Button
@@ -1059,6 +1302,36 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                     </div>
                   )}
                   
+                  {/* Additional Info Grid */}
+                  {tvShowDetails && (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+                      {tvShowDetails.status && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Tv size={16} className="text-default-400" />
+                          <span className="text-default-600">
+                            Status: <span className="font-medium">{tvShowDetails.status}</span>
+                          </span>
+                        </div>
+                      )}
+                      {tvShowDetails.original_language && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Globe size={16} className="text-default-400" />
+                          <span className="text-default-600">
+                            Language: <span className="font-medium">{tvShowDetails.original_language.toUpperCase()}</span>
+                          </span>
+                        </div>
+                      )}
+                      {tvShowDetails.popularity && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Star size={16} className="text-default-400" />
+                          <span className="text-default-600">
+                            Popularity: <span className="font-medium">{tvShowDetails.popularity.toFixed(0)}</span>
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
                   {/* Genres */}
                   {tvShowDetails?.genres && tvShowDetails.genres.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-4">
@@ -1069,6 +1342,56 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                       ))}
                     </div>
                   )}
+
+                  {/* Networks */}
+                  {tvShowDetails?.networks && tvShowDetails.networks.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-sm font-medium text-default-600 mb-2">Networks:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {tvShowDetails.networks.slice(0, 5).map((network) => (
+                          <Chip key={network.id} size="sm" variant="flat">
+                            {network.name}
+                          </Chip>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Creator/Showrunner */}
+                  {tvShowDetails?.credits?.crew && (() => {
+                    const creator = tvShowDetails.credits.crew.find(person => 
+                      person.job === 'Creator' || person.job === 'Executive Producer' || person.department === 'Production'
+                    );
+                    if (creator) {
+                      return (
+                        <div className="mt-4">
+                          <p className="text-sm font-medium text-default-600">
+                            <span className="font-semibold">Creator:</span> {creator.name}
+                          </p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
+                  {/* Top Cast */}
+                  {tvShowDetails?.credits?.cast && tvShowDetails.credits.cast.length > 0 && (() => {
+                    const topCast = tvShowDetails.credits.cast
+                      .sort((a, b) => (a.order || 999) - (b.order || 999))
+                      .slice(0, 5);
+                    return (
+                      <div className="mt-4">
+                        <p className="text-sm font-medium text-default-600 mb-2">Cast:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {topCast.map((actor) => (
+                            <Chip key={actor.id} size="sm" variant="flat" className="text-xs">
+                              {actor.name} {actor.character && `as ${actor.character}`}
+                            </Chip>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -1077,6 +1400,28 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                 <div className="relative">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-lg font-semibold">Trailer</h3>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        startContent={<Maximize2 size={16} />}
+                        onPress={() => {
+                          const iframe = document.getElementById('tv-trailer-iframe') as HTMLIFrameElement;
+                          if (iframe) {
+                            if (iframe.requestFullscreen) {
+                              iframe.requestFullscreen();
+                            } else if ((iframe as any).webkitRequestFullscreen) {
+                              (iframe as any).webkitRequestFullscreen();
+                            } else if ((iframe as any).mozRequestFullScreen) {
+                              (iframe as any).mozRequestFullScreen();
+                            } else if ((iframe as any).msRequestFullscreen) {
+                              (iframe as any).msRequestFullscreen();
+                            }
+                          }
+                        }}
+                      >
+                        Fullscreen
+                      </Button>
                     <Button
                       size="sm"
                       variant="flat"
@@ -1088,9 +1433,11 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                     >
                       Watch on YouTube
                     </Button>
+                    </div>
                   </div>
                   <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-black">
                     <iframe
+                      id="tv-trailer-iframe"
                       src={`${YOUTUBE_EMBED_URL}${trailerKey}?autoplay=0&rel=0&modestbranding=1`}
                       className="w-full h-full"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -1444,6 +1791,38 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
         </ModalFooter>
       </ModalContent>
     </Modal>
+
+    {/* Notification Modal */}
+    <Modal
+      isOpen={notificationModal.isOpen}
+      onClose={closeNotification}
+      size="md"
+      classNames={{
+        base: "bg-background",
+        header: "border-b border-divider",
+      }}
+    >
+      <ModalContent>
+        <ModalHeader>
+          <div className="flex items-center gap-2">
+            {notificationModal.type === 'success' && <span className="text-2xl">✅</span>}
+            {notificationModal.type === 'error' && <span className="text-2xl">❌</span>}
+            {notificationModal.type === 'warning' && <span className="text-2xl">⚠️</span>}
+            {notificationModal.type === 'info' && <span className="text-2xl">ℹ️</span>}
+            <span>{notificationModal.title}</span>
+          </div>
+        </ModalHeader>
+        <ModalBody className="py-6">
+          <p className="whitespace-pre-wrap">{notificationModal.message}</p>
+        </ModalBody>
+        <ModalFooter>
+          <Button color="primary" onPress={closeNotification}>
+            OK
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+    </>
   );
 };
 

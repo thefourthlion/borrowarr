@@ -69,6 +69,13 @@ const Search = () => {
   const debouncedQuery = useDebounce(searchQuery, 300);
 
   const fetchIndexers = useCallback(async () => {
+    // Only fetch indexers if user is authenticated
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setIndexers([]);
+      return;
+    }
+
     const cacheKey = "indexers";
     const cached = getCached(cacheKey);
     if (cached) {
@@ -80,6 +87,9 @@ const Search = () => {
 
     try {
       const response = await axios.get(`${API_BASE_URL}/api/Indexers/read`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
         timeout: 5000,
       });
       const enabledIndexers = (response.data.data || []).filter(

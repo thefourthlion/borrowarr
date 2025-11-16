@@ -2,9 +2,11 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@nextui-org/button";
 import { Card, CardBody } from "@nextui-org/card";
+import { Chip } from "@nextui-org/chip";
 import { Spinner } from "@nextui-org/spinner";
 import { Input } from "@nextui-org/input";
 import { Select, SelectItem } from "@nextui-org/select";
+import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@nextui-org/modal";
 import { useRouter } from "next/navigation";
 import {
   Film,
@@ -81,6 +83,32 @@ const FavoritesPage = () => {
   const [downloading, setDownloading] = useState<Set<number>>(new Set());
   const [downloadSuccess, setDownloadSuccess] = useState<Set<number>>(new Set());
 
+  // Modal state for notifications
+  const [notificationModal, setNotificationModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
+
+  const showNotification = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    setNotificationModal({
+      isOpen: true,
+      title,
+      message,
+      type,
+    });
+  };
+
+  const closeNotification = () => {
+    setNotificationModal(prev => ({ ...prev, isOpen: false }));
+  };
+
   // Fetch favorites
   const fetchFavorites = useCallback(async (page = 1, append = false) => {
     if (!user) return;
@@ -88,7 +116,7 @@ const FavoritesPage = () => {
     if (append) {
       setLoadingMore(true);
     } else {
-      setLoading(true);
+    setLoading(true);
     }
 
     try {
@@ -192,7 +220,7 @@ const FavoritesPage = () => {
       setFavorites((prev) => prev.filter((f) => f.id !== favorite.id));
     } catch (error: any) {
       const errorMsg = error.response?.data?.error || error.message || "Failed to remove favorite";
-      alert(`Error: ${errorMsg}`);
+      showNotification('Error', errorMsg, 'error');
     }
   };
 
@@ -224,7 +252,7 @@ const FavoritesPage = () => {
     e.stopPropagation();
 
     if (!user) {
-      alert("Please log in to download");
+      showNotification('Login Required', 'Please log in to download', 'warning');
       return;
     }
 
@@ -292,7 +320,7 @@ const FavoritesPage = () => {
         }
       } else {
         // TV series download logic
-        alert("Please use the series modal to select specific episodes to download");
+        showNotification('Series Download', 'Please use the series modal to select specific episodes to download', 'info');
         setDownloading((prev) => {
           const next = new Set(prev);
           next.delete(mediaId);
@@ -302,7 +330,7 @@ const FavoritesPage = () => {
       }
     } catch (error: any) {
       const errorMsg = error.response?.data?.error || error.message || "Download failed";
-      alert(`Error: ${errorMsg}`);
+      showNotification('Download Error', errorMsg, 'error');
     } finally {
       setDownloading((prev) => {
         const next = new Set(prev);
@@ -327,90 +355,87 @@ const FavoritesPage = () => {
         style={{ height: '100%' }}
       >
         <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg border border-secondary/20 hover:border-secondary/60 hover:shadow-2xl hover:shadow-secondary/20 transition-all duration-300">
-          {posterUrl ? (
-            <img
-              src={posterUrl}
-              alt={title}
+            {posterUrl ? (
+              <img
+                src={posterUrl}
+                alt={title}
               className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-80"
-            />
-          ) : (
-            <div className="w-full h-full bg-default-200 flex items-center justify-center">
-              {favorite.mediaType === 'movie' ? (
-                <Film size={48} className="text-default-400" />
-              ) : (
-                <Tv size={48} className="text-default-400" />
-              )}
-            </div>
-          )}
-
-          {/* Rating Badge - Top Left */}
-          {favorite.voteAverage && favorite.voteAverage > 0 && (
-            <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-md text-xs font-bold z-10">
-              <span className="text-yellow-400">⭐ {favorite.voteAverage.toFixed(1)}</span>
-            </div>
-          )}
-
-          {/* Media Type Badge - Top Right */}
-          <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-md text-xs font-bold z-10">
-            <span className="text-white flex items-center gap-1">
-              {favorite.mediaType === 'movie' ? (
-                <>
-                  <Film size={12} />
-                  Movie
-                </>
-              ) : (
-                <>
-                  <Tv size={12} />
-                  Series
-                </>
-              )}
-            </span>
-          </div>
-
-          {/* Unfavorite Button - Bottom Right (left of download) */}
-          {user && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                removeFavorite(favorite);
-              }}
-              className="absolute bottom-2 right-12 z-10 p-2 rounded-full backdrop-blur-md transition-all duration-200 bg-danger/90 hover:bg-danger hover:scale-110"
-              title="Remove from Favorites"
-            >
-              <Heart size={16} className="text-white fill-white" />
-            </button>
-          )}
-
-          {/* Download Button - Bottom Right */}
-          <button
-            onClick={(e) => handleQuickDownload(favorite, e)}
-            disabled={isDownloading || isDownloaded}
-            className={`absolute bottom-2 right-2 z-10 p-2 rounded-full backdrop-blur-md transition-all duration-200 ${
-              isDownloaded
-                ? 'bg-success/90 hover:bg-success'
-                : 'bg-secondary/90 hover:bg-secondary'
-            } ${isDownloading ? 'opacity-50 cursor-not-allowed' : 'hover:scale-110'}`}
-            title={isDownloaded ? 'Downloaded' : isDownloading ? 'Downloading...' : 'Quick Download'}
-          >
-            {isDownloading ? (
-              <Spinner size="sm" color="white" className="w-4 h-4" />
-            ) : isDownloaded ? (
-              <Check size={16} className="text-white" />
+              />
             ) : (
-              <Download size={16} className="text-white" />
+            <div className="w-full h-full bg-default-200 flex items-center justify-center">
+                {favorite.mediaType === 'movie' ? (
+                <Film size={48} className="text-default-400" />
+                ) : (
+                <Tv size={48} className="text-default-400" />
+                )}
+              </div>
             )}
-          </button>
 
-          {/* Title and Year Overlay - Bottom */}
-          <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/95 via-black/80 to-transparent transition-all duration-300 group-hover:from-black/98 group-hover:via-black/90">
-            <h3 className="font-semibold text-xs sm:text-sm text-white line-clamp-2 mb-0.5">
-              {title}
-            </h3>
-            {year && (
-              <p className="text-[10px] sm:text-xs text-white/70">{year}</p>
+          {/* Media Type Badge - Top Left */}
+          <div className="absolute top-1 left-1 z-10">
+            <Chip 
+              size="sm" 
+              color="primary" 
+              variant="flat" 
+              className="text-[10px] sm:text-xs font-bold uppercase backdrop-blur-md px-1 py-0.5"
+            >
+              {favorite.mediaType === 'movie' ? 'Movie' : 'Series'}
+            </Chip>
+              </div>
+
+          {/* Rating Badge - Top Right */}
+          {favorite.voteAverage && favorite.voteAverage > 0 && (
+            <div className="absolute top-1 right-1 z-10 bg-black/85 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] sm:text-xs">
+              <span className="font-semibold text-white">
+                ⭐ {favorite.voteAverage.toFixed(1)}
+              </span>
+            </div>
+          )}
+
+            {/* Unfavorite Button - Bottom Right (left of download) */}
+            {user && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeFavorite(favorite);
+                }}
+                className="absolute bottom-1 right-10 z-10 p-1.5 rounded-full backdrop-blur-md transition-all duration-200 bg-danger/90 hover:bg-danger"
+                title="Remove from Favorites"
+              >
+                <Heart size={16} className="text-white fill-white" />
+              </button>
             )}
+
+            {/* Download Button - Bottom Right */}
+            <button
+              onClick={(e) => handleQuickDownload(favorite, e)}
+              disabled={isDownloading || isDownloaded}
+              className={`absolute bottom-1 right-1 z-10 p-1.5 rounded-full backdrop-blur-md transition-all duration-200 ${
+                isDownloaded
+                  ? 'bg-success/90 hover:bg-success'
+                  : 'bg-secondary/90 hover:bg-secondary'
+              } ${isDownloading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={isDownloaded ? 'Downloaded' : isDownloading ? 'Downloading...' : 'Quick Download'}
+            >
+              {isDownloading ? (
+                <Spinner size="sm" color="white" className="w-4 h-4" />
+              ) : isDownloaded ? (
+                <Check size={16} className="text-white" />
+              ) : (
+                <Download size={16} className="text-white" />
+              )}
+            </button>
+
+            {/* Title and Year Overlay - Bottom */}
+            <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/95 via-black/80 to-transparent transition-all duration-300 group-hover:from-black/98 group-hover:via-black/90">
+              <h3 className="font-semibold text-xs sm:text-sm text-white line-clamp-2 mb-0.5">
+                {title}
+              </h3>
+              {year && (
+              <p className="text-[10px] sm:text-xs text-white/70">{year}</p>
+              )}
+            </div>
           </div>
-        </div>
       </div>
     );
   };
@@ -419,7 +444,7 @@ const FavoritesPage = () => {
     return (
       <div className="min-h-screen bg-background">
         <div className="border-b border-secondary/20 sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
-          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <div className="max-w-[2400px] mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
               <div className="min-w-0 flex items-center gap-3">
                 <Button
@@ -445,13 +470,13 @@ const FavoritesPage = () => {
             </div>
           </div>
         </div>
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
+        <div className="max-w-[2400px] mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
           <Card className="card-interactive">
-            <CardBody className="text-center py-12">
+              <CardBody className="text-center py-12">
               <Heart size={64} className="mx-auto text-danger/50 mb-4" />
-              <p className="text-lg text-default-500">Please log in to view your favorites</p>
-            </CardBody>
-          </Card>
+                <p className="text-lg text-default-500">Please log in to view your favorites</p>
+              </CardBody>
+            </Card>
         </div>
       </div>
     );
@@ -461,7 +486,7 @@ const FavoritesPage = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="border-b border-secondary/20 sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+        <div className="max-w-[2400px] mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
             <div className="min-w-0 flex items-center gap-3">
               <Button
@@ -477,8 +502,8 @@ const FavoritesPage = () => {
               <div className="min-w-0">
                 <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-danger to-danger-600 bg-clip-text text-transparent truncate flex items-center gap-2">
                   <Heart size={28} className="text-danger fill-danger" />
-                  My Favorites
-                </h1>
+          My Favorites
+        </h1>
                 <p className="text-xs sm:text-sm text-foreground/60 mt-1">
                   {favorites.length} {mediaTypeFilter === 'all' ? 'total' : mediaTypeFilter === 'movie' ? 'movies' : 'series'} in your collection
                 </p>
@@ -489,14 +514,14 @@ const FavoritesPage = () => {
       </div>
 
       {/* Content */}
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
+      <div className="max-w-[2400px] mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
         {/* Search and Controls */}
         <div className="mb-6 space-y-4">
           <div className="flex flex-col sm:flex-row gap-3">
-            <Input
+          <Input
               placeholder="Search your favorites..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
               startContent={<Search size={18} className="text-secondary" />}
               className="flex-1"
               size="sm"
@@ -544,15 +569,15 @@ const FavoritesPage = () => {
         </div>
 
         {/* Results */}
-        {loading ? (
+          {loading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Spinner size="lg" color="secondary" />
             <p className="mt-4 text-sm text-foreground/60">Loading your favorites...</p>
-          </div>
-        ) : favorites.length > 0 ? (
-          <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 sm:gap-4 relative z-0">
-              {favorites.map((favorite) => renderFavoriteCard(favorite))}
+            </div>
+          ) : favorites.length > 0 ? (
+            <>
+            <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 3xl:grid-cols-10 4xl:grid-cols-12 5xl:grid-cols-14 gap-2 sm:gap-3 md:gap-4 relative z-0">
+                {favorites.map((favorite) => renderFavoriteCard(favorite))}
             </div>
 
             {/* Loading More Indicator */}
@@ -567,24 +592,24 @@ const FavoritesPage = () => {
             {!hasMore && favorites.length > 0 && (
               <div className="text-center py-8">
                 <p className="text-sm text-foreground/40">You&apos;ve reached the end</p>
-              </div>
-            )}
-          </>
-        ) : (
+                </div>
+              )}
+            </>
+          ) : (
           <Card className="card-interactive border-2 border-secondary/20">
             <CardBody className="text-center py-16 sm:py-20">
               <Heart size={80} className="mx-auto text-danger/30 mb-6" />
               <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-2">
-                {searchQuery.trim() ? 'No favorites match your search' : 'No favorites yet'}
+                  {searchQuery.trim() ? 'No favorites match your search' : 'No favorites yet'}
               </h2>
               <p className="text-sm sm:text-base text-foreground/60 max-w-md mx-auto">
-                {searchQuery.trim()
+                  {searchQuery.trim()
                   ? 'Try a different search term or filter'
-                  : 'Browse movies and series, then click the heart icon to add them here!'}
-              </p>
-            </CardBody>
-          </Card>
-        )}
+                    : 'Browse movies and series, then click the heart icon to add them here!'}
+                </p>
+              </CardBody>
+            </Card>
+          )}
       </div>
 
       {/* Modals */}
@@ -607,6 +632,37 @@ const FavoritesPage = () => {
         media={selectedMedia}
         onAddSeries={() => fetchFavorites(1, false)}
       />
+
+      {/* Notification Modal */}
+      <Modal
+        isOpen={notificationModal.isOpen}
+        onClose={closeNotification}
+        size="md"
+        classNames={{
+          base: "bg-background",
+          header: "border-b border-divider",
+        }}
+      >
+        <ModalContent>
+          <ModalHeader>
+            <div className="flex items-center gap-2">
+              {notificationModal.type === 'success' && <span className="text-2xl">✅</span>}
+              {notificationModal.type === 'error' && <span className="text-2xl">❌</span>}
+              {notificationModal.type === 'warning' && <span className="text-2xl">⚠️</span>}
+              {notificationModal.type === 'info' && <span className="text-2xl">ℹ️</span>}
+              <span>{notificationModal.title}</span>
+            </div>
+          </ModalHeader>
+          <ModalBody className="py-6">
+            <p className="whitespace-pre-wrap">{notificationModal.message}</p>
+          </ModalBody>
+          <ModalFooter>
+            <Button color="primary" onPress={closeNotification}>
+              OK
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </div>
   );
 };

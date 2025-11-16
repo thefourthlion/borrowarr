@@ -878,7 +878,7 @@ const Monitored = () => {
             </CardBody>
           </Card>
         ) : (
-          <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 3xl:grid-cols-10 gap-3 sm:gap-4 lg:gap-5">
+          <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 3xl:grid-cols-10 4xl:grid-cols-12 5xl:grid-cols-14 gap-2 sm:gap-3 md:gap-4 lg:gap-5">
             {filteredItems.map((item) => {
               const isSeries = item.type === "series";
               const seriesItem = isSeries ? item as MonitoredSeries : null;

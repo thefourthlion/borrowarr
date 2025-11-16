@@ -2,7 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { SocialIcon } from "react-social-icons";
 import { Logo } from "@/components/icons";
-import { Film, Tv, Settings, User, BarChart3, Database, Server, Mail, Heart } from "lucide-react";
+import { Film, Tv, Settings, User, BarChart3, Database, Server, Mail, Heart, Clock } from "lucide-react";
 import "../styles/Footer.scss";
 
 const Footer = () => {
@@ -64,6 +64,12 @@ const Footer = () => {
           <h4 className="section-title">Discover</h4>
           <ul className="section-links">
             <li>
+              <Link href="/pages/discover" className="footer-link">
+                <Tv size={16} />
+                <span>Browse All</span>
+              </Link>
+            </li>
+            <li>
               <Link href="/pages/discover/movies" className="footer-link">
                 <Film size={16} />
                 <span>Movies</span>
@@ -106,6 +112,12 @@ const Footer = () => {
                 <span>System</span>
               </Link>
             </li>
+            <li>
+              <Link href="/pages/plexconnection" className="footer-link">
+                <Server size={16} />
+                <span>Plex Connection</span>
+              </Link>
+            </li>
           </ul>
         </div>
 
@@ -113,6 +125,12 @@ const Footer = () => {
         <div className="footer-section">
           <h4 className="section-title">Account</h4>
           <ul className="section-links">
+            <li>
+              <Link href="/pages/medialibrary" className="footer-link">
+                <Server size={16} />
+                <span>Media Library</span>
+              </Link>
+            </li>
             <li>
               <Link href="/pages/login" className="footer-link">
                 <User size={16} />
@@ -129,6 +147,12 @@ const Footer = () => {
               <Link href="/pages/favorites" className="footer-link">
                 <Heart size={16} />
                 <span>Favorites</span>
+              </Link>
+            </li>
+            <li>
+              <Link href="/pages/history" className="footer-link">
+                <Clock size={16} />
+                <span>History</span>
               </Link>
             </li>
             <li>

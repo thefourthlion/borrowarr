@@ -29,6 +29,7 @@ import {
   Award,
   Play,
   Maximize2,
+  Heart,
 } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
@@ -155,17 +156,71 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [isVideoFullscreen, setIsVideoFullscreen] = useState(false);
 
-  // Fetch movie details when modal opens
+  // Favorite state
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [isFavoriting, setIsFavoriting] = useState(false);
+  
+  // Modal state for notifications
+  const [notificationModal, setNotificationModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
+
+  const showNotification = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    setNotificationModal({
+      isOpen: true,
+      title,
+      message,
+      type,
+    });
+  };
+
+  const closeNotification = () => {
+    setNotificationModal(prev => ({ ...prev, isOpen: false }));
+  };
+
+  // Fetch movie details when modal opens or media changes
   useEffect(() => {
     if (isOpen && media) {
-      fetchMovieDetails();
-      fetchTorrents();
-    } else {
+      // Reset all state first to ensure clean slate for new media
       setMovieDetails(null);
       setTorrents([]);
       setTrailerKey(null);
+      setIsFavorited(false);
+      setDownloading(new Set());
+      setDownloadSuccess(new Set());
+      setDownloadError(new Map());
+      setOpenSelects(new Set());
+      setMonitor("movieOnly");
+      setMinAvailability("released");
+      setQualityProfile("any");
+      
+      // Then fetch new data
+      fetchMovieDetails();
+      fetchTorrents();
+      checkIfFavorited();
+    } else if (!isOpen) {
+      // Only reset when closing
+      setMovieDetails(null);
+      setTorrents([]);
+      setTrailerKey(null);
+      setIsFavorited(false);
+      setDownloading(new Set());
+      setDownloadSuccess(new Set());
+      setDownloadError(new Map());
+      setOpenSelects(new Set());
+      setMonitor("movieOnly");
+      setMinAvailability("released");
+      setQualityProfile("any");
     }
-  }, [isOpen, media]);
+  }, [isOpen, media?.id]); // Changed dependency to media?.id to trigger on media change
 
   const fetchMovieDetails = async () => {
     if (!media) return;
@@ -242,10 +297,38 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
     });
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, {
+      // Extract quality from torrent title
+      const titleLower = torrent.title.toLowerCase();
+      let quality = 'SD';
+      if (titleLower.includes('2160p') || titleLower.includes('4k') || titleLower.includes('uhd')) {
+        quality = '2160p';
+      } else if (titleLower.includes('1080p')) {
+        quality = '1080p';
+      } else if (titleLower.includes('720p')) {
+        quality = '720p';
+      }
+
+      const downloadPayload = {
         downloadUrl: torrent.downloadUrl,
         protocol: torrent.protocol, // Pass protocol to help backend select correct client
-      });
+        // History information
+        releaseName: torrent.title,
+        indexer: torrent.indexer,
+        indexerId: torrent.indexerId,
+        size: torrent.size,
+        sizeFormatted: torrent.sizeFormatted,
+        seeders: torrent.seeders,
+        leechers: torrent.leechers,
+        quality: quality,
+        source: 'AddMovieModal',
+        mediaType: 'movie',
+        mediaTitle: media?.title || media?.name || '',
+        tmdbId: media?.id || null,
+      };
+
+      console.log('[AddMovieModal] Sending download request with history data:', downloadPayload);
+
+      const response = await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, downloadPayload);
 
       if (response.data.success) {
         setDownloadSuccess((prev) => new Set(prev).add(torrent.id));
@@ -303,18 +386,18 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
 
   const handleAddMovie = async () => {
     if (!user) {
-      alert("Please log in to add media to your monitored list");
+      showNotification('Login Required', 'Please log in to add media to your monitored list', 'warning');
       return;
     }
 
     if (!media || torrents.length === 0) {
-      alert("No torrents available for this media");
+      showNotification('No Torrents', 'No torrents available for this media', 'warning');
       return;
     }
 
     const isTV = media.media_type === 'tv' || !!media.first_air_date;
     if (isTV) {
-      alert("TV show monitoring is not yet implemented. Please use manual download for now.");
+      showNotification('Not Supported', 'TV show monitoring is not yet implemented. Please use manual download for now.', 'info');
       return;
     }
 
@@ -348,7 +431,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
       const releaseDate = media.release_date || null;
 
       if (!user) {
-        alert("Please log in to add media to your monitored list");
+        showNotification('Login Required', 'Please log in to add media to your monitored list', 'warning');
         return;
       }
 
@@ -375,7 +458,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
             // File already exists!
             setTimeout(() => {
               onClose();
-              alert(`Movie already exists in your library! Found: ${checkResponse.data.result.fileInfo.fileName}`);
+              showNotification('Already in Library', `Movie already exists in your library! Found: ${checkResponse.data.result.fileInfo.fileName}`, 'info');
               if (onAddMovie) onAddMovie();
             }, 1000);
             return;
@@ -386,7 +469,43 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
         }
       }
 
-      await handleDownloadTorrent(bestTorrent);
+      // Extract quality from torrent title
+      const titleLower = bestTorrent.title.toLowerCase();
+      let quality = 'SD';
+      if (titleLower.includes('2160p') || titleLower.includes('4k') || titleLower.includes('uhd')) {
+        quality = '2160p';
+      } else if (titleLower.includes('1080p')) {
+        quality = '1080p';
+      } else if (titleLower.includes('720p')) {
+        quality = '720p';
+      }
+
+      // Download with history information
+      const downloadPayload = {
+        downloadUrl: bestTorrent.downloadUrl,
+        protocol: bestTorrent.protocol,
+        // History information
+        releaseName: bestTorrent.title,
+        indexer: bestTorrent.indexer,
+        indexerId: bestTorrent.indexerId,
+        size: bestTorrent.size,
+        sizeFormatted: bestTorrent.sizeFormatted,
+        seeders: bestTorrent.seeders,
+        leechers: bestTorrent.leechers,
+        quality: quality,
+        source: 'AddMovieModal',
+        mediaType: 'movie',
+        mediaTitle: title,
+        tmdbId: media.id,
+      };
+
+      console.log('[AddMovieModal] Sending download request with history data:', downloadPayload);
+
+      const downloadResponse = await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, downloadPayload);
+
+      if (!downloadResponse.data.success) {
+        throw new Error(downloadResponse.data.error || "Failed to download");
+      }
       
       if (movieId) {
         await axios.put(`${API_BASE_URL}/api/MonitoredMovies/${movieId}`, {
@@ -401,14 +520,91 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
         const message = isUpdate 
           ? `Updating monitored media! Downloading: ${bestTorrent.title}`
           : `Movie added to monitoring! Downloading: ${bestTorrent.title}`;
-        alert(message);
+        showNotification('Success', message, 'success');
         if (onAddMovie) onAddMovie();
       }, 1000);
     } catch (error: any) {
       console.error("Error adding movie:", error);
-      alert(error.message || "Failed to add movie");
+      showNotification('Error', error.message || 'Failed to add movie', 'error');
     } finally {
       setAddingMovie(false);
+    }
+  };
+
+  const checkIfFavorited = async () => {
+    if (!user || !media) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(
+        `${API_BASE_URL}/api/Favorites/check`,
+        {
+          params: {
+            tmdbId: media.id,
+            mediaType: 'movie',
+          },
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      
+      setIsFavorited(response.data.isFavorited || false);
+    } catch (error) {
+      console.error('Error checking favorite status:', error);
+    }
+  };
+
+  const toggleFavorite = async () => {
+    if (!user || !media) {
+      showNotification('Login Required', 'Please log in to add favorites', 'warning');
+      return;
+    }
+
+    setIsFavoriting(true);
+    
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (isFavorited) {
+        // Remove from favorites
+        await axios.delete(`${API_BASE_URL}/api/Favorites`, {
+          headers: { Authorization: `Bearer ${token}` },
+          data: {
+            tmdbId: media.id,
+            mediaType: 'movie',
+          },
+        });
+        
+        setIsFavorited(false);
+      } else {
+        // Add to favorites
+        const posterUrl = media.poster_path 
+          ? `${TMDB_IMAGE_BASE_URL}${media.poster_path}` 
+          : (media.posterUrl || null);
+
+        await axios.post(
+          `${API_BASE_URL}/api/Favorites`,
+          {
+            tmdbId: media.id,
+            mediaType: 'movie',
+            title: media.title || media.name || '',
+            posterUrl,
+            overview: media.overview,
+            releaseDate: media.release_date,
+            voteAverage: media.vote_average,
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        
+        setIsFavorited(true);
+      }
+    } catch (error: any) {
+      console.error('Error toggling favorite:', error);
+      const errorMsg = error.response?.data?.error || error.message || "Failed to update favorite";
+      showNotification('Error', errorMsg, 'error');
+    } finally {
+      setIsFavoriting(false);
     }
   };
 
@@ -502,6 +698,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
   const topCast = getTopCast();
 
   return (
+    <>
     <Modal
       isOpen={isOpen}
       onClose={() => {
@@ -552,6 +749,25 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
                   )}
                 </div>
               </div>
+              <div className="flex gap-2">
+                {user && (
+                  <Button
+                    size="sm"
+                    variant="flat"
+                    color={isFavorited ? "danger" : "default"}
+                    startContent={
+                      isFavoriting ? (
+                        <Spinner size="sm" className="w-4 h-4" />
+                      ) : (
+                        <Heart size={16} className={isFavorited ? 'fill-current' : ''} />
+                      )
+                    }
+                    onPress={toggleFavorite}
+                    isDisabled={isFavoriting}
+                  >
+                    {isFavorited ? 'Unfavorite' : 'Favorite'}
+                  </Button>
+                )}
               {movieDetails?.imdb_id && (
                 <Button
                   as="a"
@@ -565,6 +781,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
                   View on IMDb
                 </Button>
               )}
+              </div>
             </div>
             {movieDetails?.tagline && (
               <p className="text-sm text-default-400 italic mt-1">{movieDetails.tagline}</p>
@@ -638,6 +855,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
                       <p className="text-sm font-medium text-default-600 mb-2">External Links:</p>
                       <div className="flex flex-wrap gap-2">
                         {movieDetails?.imdb_id && (
+                          <>
                           <Button
                             as="a"
                             href={`https://www.imdb.com/title/${movieDetails.imdb_id}`}
@@ -651,6 +869,20 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
                           >
                             IMDb
                           </Button>
+                            <Button
+                              as="a"
+                              href={`https://www.imdb.com/title/${movieDetails.imdb_id}/parentalguide`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              size="sm"
+                              variant="flat"
+                              color="warning"
+                              startContent={<Users size={14} />}
+                              className="text-xs"
+                            >
+                              Parents Guide
+                            </Button>
+                          </>
                         )}
                         {media.id && (
                           <Button
@@ -1041,6 +1273,38 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
         </ModalFooter>
       </ModalContent>
     </Modal>
+
+    {/* Notification Modal */}
+    <Modal
+      isOpen={notificationModal.isOpen}
+      onClose={closeNotification}
+      size="md"
+      classNames={{
+        base: "bg-background",
+        header: "border-b border-divider",
+      }}
+    >
+      <ModalContent>
+        <ModalHeader>
+          <div className="flex items-center gap-2">
+            {notificationModal.type === 'success' && <span className="text-2xl">✅</span>}
+            {notificationModal.type === 'error' && <span className="text-2xl">❌</span>}
+            {notificationModal.type === 'warning' && <span className="text-2xl">⚠️</span>}
+            {notificationModal.type === 'info' && <span className="text-2xl">ℹ️</span>}
+            <span>{notificationModal.title}</span>
+          </div>
+        </ModalHeader>
+        <ModalBody className="py-6">
+          <p className="whitespace-pre-wrap">{notificationModal.message}</p>
+        </ModalBody>
+        <ModalFooter>
+          <Button color="primary" onPress={closeNotification}>
+            OK
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+    </>
   );
 };
 

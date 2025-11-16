@@ -11,8 +11,9 @@ module.exports = {
     extend: {
       screens: {
         'xs': '475px',    // Extra small devices
-        '3xl': '1920px',  // Very large monitors
-        '4xl': '2560px',  // 4K monitors
+        '3xl': '1920px',  // Very large monitors (1080p ultrawide)
+        '4xl': '2560px',  // 4K monitors (1440p ultrawide)
+        '5xl': '3440px',  // 5K ultrawide monitors
       },
       fontFamily: {
         sans: ["var(--font-sans)"],

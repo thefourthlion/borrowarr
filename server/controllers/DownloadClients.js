@@ -110,12 +110,12 @@ async function testDownloadClient(implementation, settings) {
  * Get proxy instance for client implementation
  */
 function getClientProxy(implementation, settings) {
-  switch (implementation) {
-    case 'Deluge':
-      const DelugeProxy = require('../services/downloadClients/delugeProxy');
+    switch (implementation) {
+      case 'Deluge':
+        const DelugeProxy = require('../services/downloadClients/delugeProxy');
       return new DelugeProxy(settings);
-    case 'Sabnzbd':
-      const SabnzbdProxy = require('../services/downloadClients/sabnzbdProxy');
+      case 'Sabnzbd':
+        const SabnzbdProxy = require('../services/downloadClients/sabnzbdProxy');
       return new SabnzbdProxy(settings);
     case 'QBittorrent':
       const QBittorrentProxy = require('../services/downloadClients/qbittorrentProxy');
@@ -162,7 +162,7 @@ function getClientProxy(implementation, settings) {
     case 'DownloadStation':
       const DownloadStationProxy = require('../services/downloadClients/downloadstationProxy');
       return new DownloadStationProxy(settings);
-    default:
+      default:
       throw new Error(`Client ${implementation} not yet implemented`);
   }
 }
@@ -306,7 +306,7 @@ exports.testDownloadClient = async (req, res) => {
     if (req.params.id) {
       const client = await DownloadClients.findOne({
         where: { id: req.params.id, userId: req.userId },
-      });
+    });
       if (!client) {
         return res.status(404).json({ success: false, error: "Download client not found" });
       }
@@ -325,9 +325,9 @@ exports.testDownloadClient = async (req, res) => {
 
     console.log('Testing client:', implementation, 'with settings:', { ...settings, password: '***' });
 
-    const result = await testDownloadClient(implementation, settings);
-    console.log('Test result:', result);
-    res.json(result);
+      const result = await testDownloadClient(implementation, settings);
+      console.log('Test result:', result);
+      res.json(result);
   } catch (err) {
     console.error("Error testing download client:", err);
     res.status(500).json({
@@ -411,9 +411,9 @@ exports.grabRelease = async (req, res) => {
       if (downloadUrl.startsWith("magnet:")) {
         determinedProtocol = "torrent";
       } else if (downloadUrl.includes(".torrent") || downloadUrl.includes("torrent")) {
-        determinedProtocol = "torrent";
-      } else {
-        determinedProtocol = "nzb";
+          determinedProtocol = "torrent";
+        } else {
+          determinedProtocol = "nzb";
       }
     }
 

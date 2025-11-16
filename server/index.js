@@ -36,10 +36,18 @@ app.use(cors());
 // Connect to database
 connectDB();
 
+// Start monitoring service (after database connection)
+setTimeout(() => {
+  const { startMonitoringScheduler } = require('./services/monitoringService');
+  startMonitoringScheduler();
+}, 10000); // Wait 10 seconds after server starts
+
 // Ensure all models are loaded for sync
 require("./models/User");
 require("./models/MonitoredMovies");
 require("./models/MonitoredSeries");
+require("./models/Settings");
+require("./models/Favorites");
 
 app.get("/", (req, res) => {
   res.json({ app: "running" });
@@ -55,6 +63,8 @@ app.use("/api/TMDB", require("./routes/tmdb"));
 app.use("/api/MonitoredMovies", require("./routes/monitoredMovies"));
 app.use("/api/MonitoredSeries", require("./routes/monitoredSeries"));
 app.use("/api/Cardigann", require("./routes/Cardigann"));
+app.use("/api/Settings", require("./routes/Settings"));
+app.use("/api/Favorites", require("./routes/Favorites"));
 
 app.listen(PORT, () => {
   console.log("✅ Listening on port " + PORT);

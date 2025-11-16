@@ -367,6 +367,25 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
       const isUpdate = saveMovieResponse.data.isUpdate;
       const movieId = saveMovieResponse.data.movie?.id;
 
+      // Check if file already exists before downloading
+      if (movieId) {
+        try {
+          const checkResponse = await axios.post(`${API_BASE_URL}/api/MonitoredMovies/${movieId}/check-file`);
+          if (checkResponse.data.result.status === 'found') {
+            // File already exists!
+            setTimeout(() => {
+              onClose();
+              alert(`Movie already exists in your library! Found: ${checkResponse.data.result.fileInfo.fileName}`);
+              if (onAddMovie) onAddMovie();
+            }, 1000);
+            return;
+          }
+        } catch (error) {
+          console.error('Error checking for existing file:', error);
+          // Continue with download if check fails
+        }
+      }
+
       await handleDownloadTorrent(bestTorrent);
       
       if (movieId) {

@@ -126,6 +126,12 @@ const Footer = () => {
               </Link>
             </li>
             <li>
+              <Link href="/pages/favorites" className="footer-link">
+                <Heart size={16} />
+                <span>Favorites</span>
+              </Link>
+            </li>
+            <li>
               <Link href="/pages/stats" className="footer-link">
                 <BarChart3 size={16} />
                 <span>Stats</span>

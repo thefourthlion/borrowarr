@@ -53,7 +53,7 @@ const MonitoredMovies = sequelize.define(
       defaultValue: "movieOnly",
     },
     status: {
-      type: DataTypes.ENUM("monitoring", "downloading", "downloaded", "error"),
+      type: DataTypes.ENUM("monitoring", "downloading", "downloaded", "error", "missing"),
       allowNull: false,
       defaultValue: "monitoring",
     },
@@ -63,6 +63,27 @@ const MonitoredMovies = sequelize.define(
     },
     downloadedTorrentTitle: {
       type: DataTypes.STRING,
+      allowNull: true,
+    },
+    fileExists: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    filePath: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    fileName: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    fileSize: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+    },
+    lastChecked: {
+      type: DataTypes.DATE,
       allowNull: true,
     },
   },

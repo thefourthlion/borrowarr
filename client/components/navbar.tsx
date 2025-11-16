@@ -18,7 +18,7 @@ import { ThemeSwitch } from "@/components/theme-switch";
 import { Logo } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { Search, User, Film, ChevronDown, Tv, Sparkles, Settings, BarChart3, Database, Server } from "lucide-react";
+import { Search, User, Film, ChevronDown, Tv, Sparkles, Settings, BarChart3, Database, Server, Heart } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { Select, SelectItem } from "@nextui-org/select";
 import axios from "axios";
@@ -259,6 +259,19 @@ export const Navbar = () => {
                       Monitored
                     </NextLink>
                     <NextLink
+                      href={user ? "/pages/favorites" : "/pages/login"}
+                      className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      onClick={() => {
+                        setAccountDropdownOpen(false);
+                        if (!user) {
+                          router.push('/pages/login');
+                        }
+                      }}
+                    >
+                      <Heart size={18} />
+                      Favorites
+                    </NextLink>
+                    <NextLink
                       href={user ? "/pages/stats" : "/pages/login"}
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
                       onClick={() => {
@@ -299,6 +312,7 @@ export const Navbar = () => {
         <NavbarItem className="hidden md:flex flex-grow max-w-md gap-2">
           {indexers.length > 0 && (
             <Select
+              aria-label="Select indexer"
               selectedKeys={new Set([selectedIndexer])}
               onSelectionChange={(keys) => {
                 const selected = Array.from(keys)[0] as string;
@@ -308,7 +322,7 @@ export const Navbar = () => {
               size="sm"
               classNames={{
                 base: "w-32 flex-shrink-0",
-                trigger: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus:border-secondary transition-colors",
+                trigger: "bg-content2 border-2 border-secondary/40 hover:border-secondary/40 focus:border-secondary transition-colors",
               }}
             >
               <SelectItem key="all" value="all">All Indexers</SelectItem>
@@ -365,6 +379,7 @@ export const Navbar = () => {
             { label: "Download Clients", href: user ? "/pages/settings/downloadclients" : "/pages/login", requiresAuth: true },
             { label: "System", href: user ? "/pages/system" : "/pages/login", requiresAuth: true },
             { label: "Monitored", href: user ? "/pages/monitored" : "/pages/login", requiresAuth: true },
+            { label: "Favorites", href: user ? "/pages/favorites" : "/pages/login", requiresAuth: true },
             { label: "Stats", href: user ? "/pages/stats" : "/pages/login", requiresAuth: true },
             { label: "Account", href: user ? "/pages/account" : "/pages/login", requiresAuth: true },
             { 

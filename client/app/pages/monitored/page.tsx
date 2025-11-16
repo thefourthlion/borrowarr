@@ -48,9 +48,14 @@ interface MonitoredMovie {
   qualityProfile: string;
   minAvailability: string;
   monitor: string;
-  status: "monitoring" | "downloading" | "downloaded" | "error";
+  status: "monitoring" | "downloading" | "downloaded" | "error" | "missing";
   downloadedTorrentId: string | null;
   downloadedTorrentTitle: string | null;
+  fileExists: boolean;
+  filePath: string | null;
+  fileName: string | null;
+  fileSize: number | null;
+  lastChecked: string | null;
   createdAt: string;
   updatedAt: string;
   type?: "movie";
@@ -657,6 +662,30 @@ const Monitored = () => {
             </p>
           </div>
             <div className="flex flex-wrap gap-2">
+              <Button
+                color="success"
+                variant="flat"
+                className="flex-1 xs:flex-none"
+                size="sm"
+                startContent={<CheckCircle2 size={16} />}
+                onPress={async () => {
+                  if (!user) return;
+                  try {
+                    setLoading(true);
+                    await axios.post(`${API_BASE_URL}/api/MonitoredMovies/check-all?userId=${user.id}`);
+                    await fetchMonitoredContent();
+                    alert("File check complete! Monitored list updated.");
+                  } catch (error) {
+                    console.error("Error checking files:", error);
+                    alert("Failed to check files");
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+              >
+                <span className="hidden xs:inline">Check All Files</span>
+                <span className="xs:hidden">Check</span>
+              </Button>
           <Button
                 color="secondary"
                 className="btn-glow flex-1 xs:flex-none"
@@ -901,7 +930,22 @@ const Monitored = () => {
                     </div>
 
                     {/* Status Badge - Top Right */}
-                    <div className="absolute top-1.5 right-1.5 z-10">
+                    <div className="absolute top-1.5 right-1.5 z-10 flex gap-1">
+                      {/* File Exists Indicator */}
+                      {movieItem && movieItem.fileExists && (
+                        <Chip
+                          size="sm"
+                          color="success"
+                          variant="flat"
+                          startContent={<CheckCircle2 size={12} />}
+                          className="text-[10px] sm:text-xs backdrop-blur-md"
+                          title={`File found: ${movieItem.fileName || 'Found in library'}`}
+                        >
+                          <span className="hidden sm:inline">On Disk</span>
+                          <span className="sm:hidden">✓</span>
+                        </Chip>
+                      )}
+                      
                       <Chip
                         size="sm"
                         color={getStatusColor(item.status)}

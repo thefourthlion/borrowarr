@@ -16,6 +16,7 @@ import {
   Calendar,
   Download,
   Check,
+  Heart,
 } from "lucide-react";
 import axios from "axios";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -68,6 +69,10 @@ const SeriesPage = () => {
   // Download state
   const [downloading, setDownloading] = useState<Set<number>>(new Set());
   const [downloadSuccess, setDownloadSuccess] = useState<Set<number>>(new Set());
+  
+  // Favorites state
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [favoritingIds, setFavoritingIds] = useState<Set<number>>(new Set());
   
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -160,6 +165,24 @@ const SeriesPage = () => {
         console.error("Error fetching indexers:", error);
       });
   }, []);
+
+  // Fetch favorites
+  useEffect(() => {
+    if (user) {
+      const token = localStorage.getItem("token");
+      axios.get(`${API_BASE_URL}/api/Favorites/ids?mediaType=tv`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((response) => {
+          if (response.data.success && response.data.favoriteIds) {
+            setFavoriteIds(new Set(response.data.favoriteIds));
+          }
+        })
+        .catch((error) => {
+          console.error("Error fetching favorites:", error);
+        });
+    }
+  }, [user]);
 
   // Count active filters
   useEffect(() => {
@@ -447,6 +470,77 @@ const SeriesPage = () => {
     }
   };
 
+  const toggleFavorite = async (item: TMDBMedia, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!user) {
+      alert("Please log in to add favorites");
+      return;
+    }
+
+    const favoriteKey = `${item.id}-tv`;
+    const isFavorited = favoriteIds.has(favoriteKey);
+    
+    setFavoritingIds((prev) => new Set(prev).add(item.id));
+
+    try {
+      const token = localStorage.getItem("token");
+      
+      if (isFavorited) {
+        // Remove from favorites
+        await axios.delete(`${API_BASE_URL}/api/Favorites`, {
+          headers: { Authorization: `Bearer ${token}` },
+          data: {
+            tmdbId: item.id,
+            mediaType: 'tv',
+          },
+        });
+        
+        setFavoriteIds((prev) => {
+          const next = new Set(prev);
+          next.delete(favoriteKey);
+          return next;
+        });
+      } else {
+        // Add to favorites
+        const posterUrl = item.poster_path 
+          ? `https://image.tmdb.org/t/p/w500${item.poster_path}` 
+          : (item.posterUrl || null);
+
+        const response = await axios.post(
+          `${API_BASE_URL}/api/Favorites`,
+          {
+            tmdbId: item.id,
+            mediaType: 'tv',
+            title: item.name || item.title || '',
+            posterUrl,
+            overview: item.overview,
+            releaseDate: item.first_air_date,
+            voteAverage: item.vote_average,
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        
+        console.log('Favorite added successfully:', response.data);
+        setFavoriteIds((prev) => new Set(prev).add(favoriteKey));
+      }
+    } catch (error: any) {
+      console.error('Error toggling favorite:', error);
+      console.error('Error response:', error.response?.data);
+      const errorMsg = error.response?.data?.error || error.message || "Failed to update favorite";
+      const errorDetails = error.response?.data?.details ? ` (${error.response.data.details})` : '';
+      alert(`Error: ${errorMsg}${errorDetails}`);
+    } finally {
+      setFavoritingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+    }
+  };
+
   const clearFilters = () => {
     setFirstAirDateFrom("");
     setFirstAirDateTo("");
@@ -479,6 +573,8 @@ const SeriesPage = () => {
     const posterUrl = item.posterUrl || (item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null);
     const isDownloading = downloading.has(item.id);
     const isDownloaded = downloadSuccess.has(item.id);
+    const isFavorited = favoriteIds.has(`${item.id}-tv`);
+    const isFavoriting = favoritingIds.has(item.id);
 
     return (
       <div
@@ -518,6 +614,29 @@ const SeriesPage = () => {
                 ⭐ {item.vote_average.toFixed(1)}
               </span>
             </div>
+          )}
+
+          {/* Favorite Button - Bottom Right (left of download) */}
+          {user && (
+            <button
+              onClick={(e) => toggleFavorite(item, e)}
+              disabled={isFavoriting}
+              className={`absolute bottom-1 right-10 z-10 p-1.5 rounded-full backdrop-blur-md transition-all duration-200 ${
+                isFavorited
+                  ? 'bg-danger/90 hover:bg-danger'
+                  : 'bg-secondary/60 hover:bg-secondary/80'
+              } ${isFavoriting ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={isFavorited ? 'Remove from Favorites' : 'Add to Favorites'}
+            >
+              {isFavoriting ? (
+                <Spinner size="sm" color="white" className="w-4 h-4" />
+              ) : (
+                <Heart 
+                  size={16} 
+                  className={isFavorited ? 'text-white fill-white' : 'text-purple-300'} 
+                />
+              )}
+            </button>
           )}
 
           {/* Download Button - Bottom Right */}
@@ -610,6 +729,7 @@ const SeriesPage = () => {
               />
               {indexers.length > 0 && (
                 <Select
+                  aria-label="Select indexer"
                   selectedKeys={new Set([selectedIndexer])}
                   onSelectionChange={(keys) => {
                     const selected = Array.from(keys)[0] as string;
@@ -633,6 +753,7 @@ const SeriesPage = () => {
             </div>
             <div className="flex gap-2">
               <Select
+                aria-label="Sort series"
                 selectedKeys={new Set([sortBy])}
                 onSelectionChange={(keys) => {
                   const selected = Array.from(keys)[0] as string;
@@ -671,8 +792,8 @@ const SeriesPage = () => {
 
         {/* Filters Panel */}
         {filtersOpen && (
-          <Card className="mb-6 card-interactive border-2 border-secondary/20">
-            <CardBody className="p-4 sm:p-6">
+          <Card className="mb-6 card-interactive border-2 border-secondary/20 relative z-50">
+            <CardBody className="p-4 sm:p-6 relative z-50">
               <div className="flex justify-between items-center mb-4 sm:mb-6">
                 <h2 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent">
                   Filters
@@ -735,6 +856,7 @@ const SeriesPage = () => {
                 <div className="space-y-2">
                   <label className="text-xs sm:text-sm font-medium text-foreground">Genres</label>
                   <Select
+                    aria-label="Filter by genres"
                     selectedKeys={selectedGenres}
                     onSelectionChange={(keys) => setSelectedGenres(new Set(Array.from(keys).map(k => parseInt(k as string))))}
                     selectionMode="multiple"
@@ -771,6 +893,7 @@ const SeriesPage = () => {
                 <div className="space-y-2">
                   <label className="text-xs sm:text-sm font-medium text-foreground">Original Language</label>
                   <Select
+                    aria-label="Filter by original language"
                     selectedKeys={new Set([originalLanguage])}
                     onSelectionChange={(keys) => {
                       const selected = Array.from(keys)[0] as string;
@@ -967,7 +1090,7 @@ const SeriesPage = () => {
             <div className="mb-4 text-xs sm:text-sm text-foreground/60">
               Showing {media.length} of {totalResults} results
             </div>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 3xl:grid-cols-12 gap-2 sm:gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 3xl:grid-cols-12 gap-2 sm:gap-3 relative z-0">
               {media.map((item) => (
                 <React.Fragment key={item.id}>
                   {renderMediaCard(item)}

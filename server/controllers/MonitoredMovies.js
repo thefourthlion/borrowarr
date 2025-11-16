@@ -1,4 +1,5 @@
 const MonitoredMovies = require("../models/MonitoredMovies");
+const { checkMonitoredMovie, checkUserMonitoredMovies } = require("../services/monitoringService");
 
 /**
  * Get all monitored movies for a user
@@ -163,6 +164,48 @@ exports.isMovieMonitored = async (req, res) => {
   } catch (error) {
     console.error("Error checking if movie is monitored:", error);
     res.status(500).json({ error: "Failed to check movie status" });
+  }
+};
+
+/**
+ * Manually check a single monitored movie for file existence
+ */
+exports.checkMovieFile = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const movie = await MonitoredMovies.findByPk(id);
+
+    if (!movie) {
+      return res.status(404).json({ error: "Movie not found" });
+    }
+
+    const result = await checkMonitoredMovie(movie);
+
+    res.json({ success: true, result });
+  } catch (error) {
+    console.error("Error checking movie file:", error);
+    res.status(500).json({ error: "Failed to check movie file" });
+  }
+};
+
+/**
+ * Manually check all monitored movies for a user
+ */
+exports.checkAllMovieFiles = async (req, res) => {
+  try {
+    const { userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({ error: "userId is required" });
+    }
+
+    const results = await checkUserMonitoredMovies(userId);
+
+    res.json({ success: true, results });
+  } catch (error) {
+    console.error("Error checking all movie files:", error);
+    res.status(500).json({ error: "Failed to check movie files" });
   }
 };
 

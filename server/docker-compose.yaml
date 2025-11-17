@@ -1,0 +1,14 @@
+services:
+  borrowarr-server:
+    build: .
+    container_name: borrowarr-server
+    ports:
+      - "3013:3013"
+    volumes:
+      - ./:/borrowarr-server
+      - /borrowarr-server/node_modules
+    environment:
+      - NODE_ENV=development
+    stdin_open: true  # This allows interactive commands (optional)
+    tty: true         # This allows for TTY (optional)
+    command: npm run dev

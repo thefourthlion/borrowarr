@@ -32,7 +32,7 @@ import { useRouter } from "next/navigation";
 import SideScrollMovieList from "@/components/SideScrollMovieList";
 import CategoryCarousel from "@/components/CategoryCarousel";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500";
 const TMDB_BACKDROP_BASE_URL = "https://image.tmdb.org/t/p/original";
 

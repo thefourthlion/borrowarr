@@ -1,36 +1,31 @@
-# Base image
-FROM node:18-alpine AS base
+# Use the official Node.js LTS image
+FROM node:20-alpine
+
+# Set the working directory inside the container
 WORKDIR /app
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Copy package.json and package-lock.json
+COPY package*.json ./
 
-# Dependencies stage
-FROM base AS deps
-RUN apk add --no-cache libc6-compat
+# Install dependencies (including dev dependencies needed for build)
+# Use --legacy-peer-deps to handle NextUI peer dependency conflicts
+RUN npm install --legacy-peer-deps
 
-# Copy package files
-COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile
+# Copy the .env file first (for build time)
+COPY .env ./
 
-# Builder stage
-FROM base AS builder
-COPY --from=deps /app/node_modules ./node_modules
+# Copy the rest of your application files
 COPY . .
 
-# Build the app (static export)
-ENV NEXT_TELEMETRY_DISABLED 1
-RUN pnpm build
+# Build the Next.js app for production
+RUN npm run build
 
-# Runner stage (use a lightweight static file server)
-FROM nginx:alpine AS runner
-WORKDIR /usr/share/nginx/html
+# Expose the port your app runs on
+EXPOSE 3012
 
-# Copy static export output
-COPY --from=builder /app/out ./
+# Set the PORT environment variable
+ENV PORT=3012
+ENV NODE_ENV=production
 
-# Expose port
-EXPOSE 80
-
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Start the Next.js production server
+CMD ["npm", "run", "start"]

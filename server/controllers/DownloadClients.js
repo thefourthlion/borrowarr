@@ -400,7 +400,7 @@ exports.testAllDownloadClients = async (req, res) => {
 
 exports.grabRelease = async (req, res) => {
   try {
-    const { downloadUrl, clientId, protocol } = req.body;
+    const { downloadUrl, clientId, protocol, mediaType } = req.body;
 
     if (!downloadUrl) {
       return res.status(400).json({ error: "Download URL or magnet link is required" });
@@ -419,7 +419,7 @@ exports.grabRelease = async (req, res) => {
     }
 
     const dbProtocol = determinedProtocol === "nzb" ? "usenet" : determinedProtocol;
-    console.log(`[grabRelease] Protocol: ${determinedProtocol} (DB: ${dbProtocol}), UserId: ${req.userId}`);
+    console.log(`[grabRelease] Protocol: ${determinedProtocol} (DB: ${dbProtocol}), UserId: ${req.userId}, MediaType: ${mediaType}`);
 
     // Get client
     let client;
@@ -443,6 +443,30 @@ exports.grabRelease = async (req, res) => {
 
     const clientData = client.toJSON();
     const settings = clientData.settings || {};
+    
+    // Determine category to use based on mediaType and client configuration
+    let categoryToUse = null;
+    if (clientData.categories && Array.isArray(clientData.categories)) {
+      // Check for universal category first (overrides all)
+      const universalCategory = clientData.categories.find(c => c.category === 'universal');
+      if (universalCategory && universalCategory.clientCategory) {
+        categoryToUse = universalCategory.clientCategory;
+        console.log(`[grabRelease] Using universal category: ${categoryToUse}`);
+      } else if (mediaType) {
+        // Check for media-specific category
+        const mediaCategory = clientData.categories.find(c => c.category === mediaType);
+        if (mediaCategory && mediaCategory.clientCategory) {
+          categoryToUse = mediaCategory.clientCategory;
+          console.log(`[grabRelease] Using ${mediaType} category: ${categoryToUse}`);
+        }
+      }
+    }
+    
+    // Apply category to settings if found
+    if (categoryToUse) {
+      settings.category = categoryToUse;
+    }
+    
     const clientProxy = getClientProxy(clientData.implementation, settings);
 
     // Add to client

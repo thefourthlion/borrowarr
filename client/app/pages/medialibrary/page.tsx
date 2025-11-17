@@ -33,7 +33,7 @@ import AddMovieModal from "@/components/AddMovieModal";
 import AddSeriesModal from "@/components/AddSeriesModal";
 import "../../../styles/MediaLibrary.scss";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 
 interface PlexMedia {
   key: string;

@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/carousel";
 import "../styles/SideScrollMovieList.scss";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500";
 
 interface TMDBMedia {
@@ -33,7 +33,7 @@ interface TMDBMedia {
   release_date?: string;
   first_air_date?: string;
   vote_average: number;
-  genre_ids?: number[];
+  genre_ids: number[];
   genres?: string[];
   language?: string;
   network?: string;
@@ -168,7 +168,7 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
       });
 
       if (response.data.success && response.data.favorites) {
-        const ids = new Set(
+        const ids = new Set<string>(
           response.data.favorites.map((fav: any) => `${fav.tmdbId}-${fav.mediaType}`)
         );
         setFavoriteIds(ids);

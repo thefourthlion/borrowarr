@@ -35,7 +35,7 @@ export const Navbar = () => {
   const settingsDropdownRef = useRef<HTMLDivElement>(null);
   const [indexers, setIndexers] = useState<any[]>([]);
   const [selectedIndexer, setSelectedIndexer] = useState<string>("all");
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 
   const handleAuthAction = () => {
     if (user) {
@@ -380,13 +380,13 @@ export const Navbar = () => {
                 base: "w-32 flex-shrink-0",
                 trigger: "bg-content2 border-2 border-secondary/40 hover:border-secondary/40 focus:border-secondary transition-colors",
               }}
+              items={[{ id: 'all', name: 'All Indexers' }, ...indexers]}
             >
-              <SelectItem key="all" value="all">All Indexers</SelectItem>
-              {indexers.map((indexer) => (
+              {(indexer: any) => (
                 <SelectItem key={indexer.id.toString()} value={indexer.id.toString()}>
                   {indexer.name}
                 </SelectItem>
-              ))}
+              )}
             </Select>
           )}
           <Input

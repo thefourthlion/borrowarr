@@ -34,7 +34,7 @@ import {
 import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500";
 const YOUTUBE_EMBED_URL = "https://www.youtube.com/embed/";
 const YOUTUBE_WATCH_URL = "https://www.youtube.com/watch?v=";
@@ -160,6 +160,11 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
   const [isFavorited, setIsFavorited] = useState(false);
   const [isFavoriting, setIsFavoriting] = useState(false);
   
+  // Validation state
+  const [hasIndexers, setHasIndexers] = useState(false);
+  const [hasDownloadClients, setHasDownloadClients] = useState(false);
+  const [checkingRequirements, setCheckingRequirements] = useState(false);
+  
   // Modal state for notifications
   const [notificationModal, setNotificationModal] = useState<{
     isOpen: boolean;
@@ -186,6 +191,73 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
     setNotificationModal(prev => ({ ...prev, isOpen: false }));
   };
 
+  // Check if user has indexers and download clients
+  const checkRequirements = async () => {
+    if (!user) {
+      setHasIndexers(false);
+      setHasDownloadClients(false);
+      return;
+    }
+
+    setCheckingRequirements(true);
+    try {
+      const token = localStorage.getItem('accessToken'); // Fixed: use 'accessToken' not 'token'
+      
+      // Check indexers
+      const indexersResponse = await axios.get(`${API_BASE_URL}/api/Indexers/read`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const indexers = indexersResponse.data.data || indexersResponse.data || [];
+      const activeIndexers = indexers.filter((idx: any) => idx.enabled);
+      setHasIndexers(activeIndexers.length > 0);
+      
+      // Check download clients
+      const clientsResponse = await axios.get(`${API_BASE_URL}/api/DownloadClients/read`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const clients = clientsResponse.data.data || clientsResponse.data || [];
+      const activeClients = clients.filter((client: any) => client.enabled); // Fixed: use 'enabled' not 'isActive'
+      setHasDownloadClients(activeClients.length > 0);
+    } catch (error) {
+      console.error('Error checking requirements:', error);
+      setHasIndexers(false);
+      setHasDownloadClients(false);
+    } finally {
+      setCheckingRequirements(false);
+    }
+  };
+
+  const validateBeforeAction = (): boolean => {
+    if (!user) {
+      showNotification(
+        'Sign In Required',
+        'Please sign in to download content. Click on "Login" in the navigation menu to get started.',
+        'warning'
+      );
+      return false;
+    }
+
+    if (!hasIndexers) {
+      showNotification(
+        'Indexers Required',
+        'You need to configure at least one indexer before downloading content. Go to Settings → Indexers to add an indexer.',
+        'warning'
+      );
+      return false;
+    }
+
+    if (!hasDownloadClients) {
+      showNotification(
+        'Download Client Required',
+        'You need to configure a download client before downloading content. Go to Settings → Download Clients to add a client.',
+        'warning'
+      );
+      return false;
+    }
+
+    return true;
+  };
+
   // Fetch movie details when modal opens or media changes
   useEffect(() => {
     if (isOpen && media) {
@@ -206,6 +278,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
       fetchMovieDetails();
       fetchTorrents();
       checkIfFavorited();
+      checkRequirements();
     } else if (!isOpen) {
       // Only reset when closing
       setMovieDetails(null);
@@ -260,6 +333,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
     
     setLoadingTorrents(true);
     try {
+      const token = localStorage.getItem('accessToken');
       const title = media.title || media.name || '';
       const year = media.release_date 
         ? new Date(media.release_date).getFullYear() 
@@ -273,6 +347,9 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
             year: year,
             categoryIds: media.media_type === 'tv' ? '5000' : '2000',
           },
+          headers: token ? {
+            Authorization: `Bearer ${token}`,
+          } : undefined,
           timeout: 30000,
         }
       );
@@ -289,6 +366,10 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
   };
 
   const handleDownloadTorrent = async (torrent: TorrentResult) => {
+    if (!validateBeforeAction()) {
+      return;
+    }
+
     setDownloading((prev) => new Set(prev).add(torrent.id));
     setDownloadError((prev) => {
       const next = new Map(prev);
@@ -385,8 +466,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
   };
 
   const handleAddMovie = async () => {
-    if (!user) {
-      showNotification('Login Required', 'Please log in to add media to your monitored list', 'warning');
+    if (!validateBeforeAction()) {
       return;
     }
 
@@ -430,13 +510,8 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
       const title = media.title || media.name || '';
       const releaseDate = media.release_date || null;
 
-      if (!user) {
-        showNotification('Login Required', 'Please log in to add media to your monitored list', 'warning');
-        return;
-      }
-
       const saveMovieResponse = await axios.post(`${API_BASE_URL}/api/MonitoredMovies`, {
-        userId: user.id,
+        userId: user!.id,
         tmdbId: media.id,
         title: title,
         posterUrl,
@@ -535,7 +610,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
     if (!user || !media) return;
     
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('accessToken'); // Fixed: use 'accessToken' not 'token'
       const response = await axios.get(
         `${API_BASE_URL}/api/Favorites/check`,
         {
@@ -562,7 +637,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
     setIsFavoriting(true);
     
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('accessToken'); // Fixed: use 'accessToken' not 'token'
       
       if (isFavorited) {
         // Remove from favorites

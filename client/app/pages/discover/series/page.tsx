@@ -24,7 +24,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import AddSeriesModal from "@/components/AddSeriesModal";
 import { useAuth } from "@/context/AuthContext";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 
 interface TMDBMedia {
   id: number;
@@ -325,8 +325,8 @@ const SeriesPage = () => {
         if (append) {
           setMedia(prev => {
             // Create a Map to deduplicate by item.id
-            const existingIds = new Set(prev.map(item => item.id));
-            const newResults = results.filter(item => !existingIds.has(item.id));
+            const existingIds = new Set(prev.map((item: TMDBMedia) => item.id));
+            const newResults = results.filter((item: TMDBMedia) => !existingIds.has(item.id));
             return [...prev, ...newResults];
             });
         } else {
@@ -814,13 +814,13 @@ const SeriesPage = () => {
                   classNames={{
                     trigger: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
                   }}
+                  items={[{ id: 'all', name: 'All Indexers' }, ...indexers]}
                 >
-                  <SelectItem key="all" value="all">All Indexers</SelectItem>
-                  {indexers.map((indexer) => (
+                  {(indexer: any) => (
                     <SelectItem key={indexer.id.toString()} value={indexer.id.toString()}>
                       {indexer.name}
                     </SelectItem>
-                  ))}
+                  )}
                 </Select>
               )}
             </div>
@@ -851,10 +851,7 @@ const SeriesPage = () => {
                 startContent={<Filter size={18} />}
                 onPress={() => setFiltersOpen(!filtersOpen)}
                 size="sm"
-                className={activeFilters > 0 ? "btn-glow" : ""}
-                classNames={{
-                  base: activeFilters > 0 ? "" : "border-2 border-secondary/20 hover:border-secondary/40",
-                }}
+                className={activeFilters > 0 ? "btn-glow" : "border-2 border-secondary/20 hover:border-secondary/40"}
               >
                 <span className="hidden sm:inline">{activeFilters} Active</span>
                 <span className="sm:hidden">{activeFilters}</span>

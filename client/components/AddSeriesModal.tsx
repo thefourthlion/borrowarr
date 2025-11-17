@@ -32,7 +32,7 @@ import {
 import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500";
 const YOUTUBE_EMBED_URL = "https://www.youtube.com/embed/";
 const YOUTUBE_WATCH_URL = "https://www.youtube.com/watch?v=";
@@ -191,6 +191,11 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
   const [isFavorited, setIsFavorited] = useState(false);
   const [isFavoriting, setIsFavoriting] = useState(false);
   
+  // Validation state
+  const [hasIndexers, setHasIndexers] = useState(false);
+  const [hasDownloadClients, setHasDownloadClients] = useState(false);
+  const [checkingRequirements, setCheckingRequirements] = useState(false);
+  
   // Modal state for notifications
   const [notificationModal, setNotificationModal] = useState<{
     isOpen: boolean;
@@ -215,6 +220,73 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
 
   const closeNotification = () => {
     setNotificationModal(prev => ({ ...prev, isOpen: false }));
+  };
+
+  // Check if user has indexers and download clients
+  const checkRequirements = async () => {
+    if (!user) {
+      setHasIndexers(false);
+      setHasDownloadClients(false);
+      return;
+    }
+
+    setCheckingRequirements(true);
+    try {
+      const token = localStorage.getItem('accessToken') // Fixed: use 'accessToken' not 'token';
+      
+      // Check indexers
+      const indexersResponse = await axios.get(`${API_BASE_URL}/api/Indexers/read`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const indexers = indexersResponse.data.data || indexersResponse.data || [];
+      const activeIndexers = indexers.filter((idx: any) => idx.enabled);
+      setHasIndexers(activeIndexers.length > 0);
+      
+      // Check download clients
+      const clientsResponse = await axios.get(`${API_BASE_URL}/api/DownloadClients/read`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const clients = clientsResponse.data.data || clientsResponse.data || [];
+      const activeClients = clients.filter((client: any) => client.enabled); // Fixed: use 'enabled' not 'isActive'
+      setHasDownloadClients(activeClients.length > 0);
+    } catch (error) {
+      console.error('Error checking requirements:', error);
+      setHasIndexers(false);
+      setHasDownloadClients(false);
+    } finally {
+      setCheckingRequirements(false);
+    }
+  };
+
+  const validateBeforeAction = (): boolean => {
+    if (!user) {
+      showNotification(
+        'Sign In Required',
+        'Please sign in to download content. Click on "Login" in the navigation menu to get started.',
+        'warning'
+      );
+      return false;
+    }
+
+    if (!hasIndexers) {
+      showNotification(
+        'Indexers Required',
+        'You need to configure at least one indexer before downloading content. Go to Settings → Indexers to add an indexer.',
+        'warning'
+      );
+      return false;
+    }
+
+    if (!hasDownloadClients) {
+      showNotification(
+        'Download Client Required',
+        'You need to configure a download client before downloading content. Go to Settings → Download Clients to add a client.',
+        'warning'
+      );
+      return false;
+    }
+
+    return true;
   };
 
   // Reset state when modal opens/closes or media changes
@@ -249,6 +321,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
       // Then fetch new data
       fetchTVShowDetails();
       checkIfFavorited();
+      checkRequirements();
     } else if (!isOpen) {
       // Only reset when closing if not already reset
       setTvShowDetails(null);
@@ -485,6 +558,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
     setEpisodeShowingTorrents(episodeKey);
 
     try {
+      const token = localStorage.getItem('accessToken') // Fixed: use 'accessToken' not 'token';
       const title = media.name || media.title || '';
       const year = media.first_air_date ? new Date(media.first_air_date).getFullYear() : '';
 
@@ -499,6 +573,9 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
             year: year,
             categoryIds: '5000',
           },
+          headers: token ? {
+            Authorization: `Bearer ${token}`,
+          } : undefined,
           timeout: 30000,
         }
       );
@@ -533,8 +610,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
   };
 
   const handleDownloadTorrent = async (torrent: TorrentResult, seasonNumber?: number, episodeNumber?: number) => {
-    if (!user) {
-      showNotification('Login Required', 'Please log in to download episodes', 'warning');
+    if (!validateBeforeAction()) {
       return;
     }
 
@@ -765,8 +841,11 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
   };
 
   const downloadEpisode = async (seasonNumber: number, episodeNumber: number, episodeName: string) => {
-    if (!media || !user) {
-      showNotification('Login Required', 'Please log in to download episodes', 'warning');
+    if (!validateBeforeAction()) {
+      return;
+    }
+
+    if (!media) {
       return;
     }
 
@@ -779,6 +858,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
     });
 
     try {
+      const token = localStorage.getItem('accessToken') // Fixed: use 'accessToken' not 'token';
       const title = media.name || media.title || '';
       const year = media.first_air_date ? new Date(media.first_air_date).getFullYear() : '';
 
@@ -793,6 +873,9 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
             year: year,
             categoryIds: '5000',
           },
+          headers: token ? {
+            Authorization: `Bearer ${token}`,
+          } : undefined,
           timeout: 30000,
         }
       );
@@ -869,8 +952,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
   };
 
   const handleAddSeries = async () => {
-    if (!user) {
-      showNotification('Login Required', 'Please log in to add series to your monitored list', 'warning');
+    if (!validateBeforeAction()) {
       return;
     }
 
@@ -914,13 +996,8 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
       const title = media.name || media.title || '';
       const firstAirDate = media.first_air_date || null;
 
-      if (!user) {
-        showNotification('Login Required', 'Please log in to add series to your monitored list', 'warning');
-        return;
-      }
-
       const saveSeriesResponse = await axios.post(`${API_BASE_URL}/api/MonitoredSeries`, {
-        userId: user.id,
+        userId: user!.id,
         tmdbId: media.id,
         title: title,
         posterUrl,
@@ -984,7 +1061,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
     if (!user || !media) return;
     
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('accessToken') // Fixed: use 'accessToken' not 'token';
       const response = await axios.get(
         `${API_BASE_URL}/api/Favorites/check`,
         {
@@ -1011,7 +1088,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
     setIsFavoriting(true);
     
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('accessToken') // Fixed: use 'accessToken' not 'token';
       
       if (isFavorited) {
         // Remove from favorites

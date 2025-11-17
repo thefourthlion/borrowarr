@@ -1,6 +1,6 @@
 const axios = require("axios");
 
-const API_BASE_URL = "http://localhost:3002";
+const API_BASE_URL = "http://localhost:3013";
 const USER_ID = "93ffa6e1-f2ee-4faa-a86a-bd3a2daa79df";
 
 // We'll need to get a JWT token first, but for now let's test the search endpoint

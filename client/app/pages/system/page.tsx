@@ -66,7 +66,7 @@ const System = () => {
   const fetchSettings = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.get("http://localhost:3002/api/Settings", {
+      const response = await axios.get("http://localhost:3013/api/Settings", {
         headers: { Authorization: `Bearer ${token}` },
       });
       setSettings(response.data);
@@ -85,7 +85,7 @@ const System = () => {
     try {
       const token = localStorage.getItem("token");
       const response = await axios.put(
-        "http://localhost:3002/api/Settings",
+        "http://localhost:3013/api/Settings",
         settings,
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -131,7 +131,7 @@ const System = () => {
     try {
       const token = localStorage.getItem("token");
       const response = await axios.post(
-        "http://localhost:3002/api/Settings/test-directory",
+        "http://localhost:3013/api/Settings/test-directory",
         { directory },
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -238,7 +238,7 @@ const System = () => {
                         try {
                           const token = localStorage.getItem("token");
                           const response = await axios.post(
-                            "http://localhost:3002/api/Settings/import-movies",
+                            "http://localhost:3013/api/Settings/import-movies",
                             { dryRun: false },
                             {
                               headers: { Authorization: `Bearer ${token}` },
@@ -336,7 +336,7 @@ const System = () => {
                         try {
                           const token = localStorage.getItem("token");
                           const response = await axios.post(
-                            "http://localhost:3002/api/Settings/import-series",
+                            "http://localhost:3013/api/Settings/import-series",
                             { dryRun: false },
                             {
                               headers: { Authorization: `Bearer ${token}` },
@@ -592,7 +592,7 @@ const System = () => {
                   try {
                     const token = localStorage.getItem("token");
                     const response = await axios.post(
-                      "http://localhost:3002/api/Settings/preview-renames",
+                      "http://localhost:3013/api/Settings/preview-renames",
                       { 
                         movieFileFormat: settings.movieFileFormat,
                         seriesFileFormat: settings.seriesFileFormat,
@@ -884,7 +884,7 @@ const System = () => {
                           // Rename movies
                           if (movies.length > 0) {
                             const movieResponse = await axios.post(
-                              "http://localhost:3002/api/Settings/execute-renames",
+                              "http://localhost:3013/api/Settings/execute-renames",
                               { renames: movies, type: 'movies' },
                               {
                                 headers: { Authorization: `Bearer ${token}` },
@@ -898,7 +898,7 @@ const System = () => {
                           // Rename series
                           if (series.length > 0) {
                             const seriesResponse = await axios.post(
-                              "http://localhost:3002/api/Settings/execute-renames",
+                              "http://localhost:3013/api/Settings/execute-renames",
                               { renames: series, type: 'series' },
                               {
                                 headers: { Authorization: `Bearer ${token}` },

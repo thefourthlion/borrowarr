@@ -34,7 +34,7 @@ import {
 import axios from "axios";
 import "../../../../styles/DownloadClients.scss";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 
 interface DownloadClient {
   id?: number;
@@ -847,10 +847,115 @@ const DownloadClients = () => {
                 <div className="space-y-3 sm:space-y-4">
                         {selectedClient.fields
                           .filter((f) => showAdvanced || !f.advanced)
+                          .filter((f) => f.name !== 'category') // Hide old default category field
                           .map((field) => renderField(field, selectedClient))}
                       </div>
                     </div>
             )}
+
+            {/* Category Configuration */}
+            <div className="space-y-3 sm:space-y-4 pt-2 border-t border-secondary/20">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm sm:text-base font-semibold">Category Configuration</h3>
+                <Chip size="sm" variant="flat" color="secondary" className="text-xs">Optional</Chip>
+              </div>
+              <p className="text-xs text-foreground/60">
+                Configure which category labels to use when sending downloads to this client. Leave blank to skip categorization.
+              </p>
+
+              <Input
+                label="Movie Category"
+                placeholder="movies"
+                value={
+                  formData.categories?.find((c: any) => c.category === 'movies')?.clientCategory || ''
+                }
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  const value = e.target.value;
+                  const newCategories = [...(formData.categories || [])];
+                  const existingIndex = newCategories.findIndex((c: any) => c.category === 'movies');
+                  
+                  if (existingIndex >= 0) {
+                    if (value) {
+                      newCategories[existingIndex].clientCategory = value;
+                    } else {
+                      newCategories.splice(existingIndex, 1);
+                    }
+                  } else if (value) {
+                    newCategories.push({ category: 'movies', clientCategory: value });
+                  }
+                  
+                  setFormData({ ...formData, categories: newCategories });
+                }}
+                description="Category label for movies (e.g., 'movies', 'films')"
+                size="sm"
+                classNames={{
+                  inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                  label: "text-xs sm:text-sm",
+                }}
+              />
+
+              <Input
+                label="TV Show Category"
+                placeholder="tv shows"
+                value={
+                  formData.categories?.find((c: any) => c.category === 'tv')?.clientCategory || ''
+                }
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  const value = e.target.value;
+                  const newCategories = [...(formData.categories || [])];
+                  const existingIndex = newCategories.findIndex((c: any) => c.category === 'tv');
+                  
+                  if (existingIndex >= 0) {
+                    if (value) {
+                      newCategories[existingIndex].clientCategory = value;
+                    } else {
+                      newCategories.splice(existingIndex, 1);
+                    }
+                  } else if (value) {
+                    newCategories.push({ category: 'tv', clientCategory: value });
+                  }
+                  
+                  setFormData({ ...formData, categories: newCategories });
+                }}
+                description="Category label for TV shows (e.g., 'tv shows', 'series')"
+                size="sm"
+                classNames={{
+                  inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                  label: "text-xs sm:text-sm",
+                }}
+              />
+
+              <Input
+                label="Universal Category (Optional)"
+                placeholder="all downloads"
+                value={
+                  formData.categories?.find((c: any) => c.category === 'universal')?.clientCategory || ''
+                }
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  const value = e.target.value;
+                  const newCategories = [...(formData.categories || [])];
+                  const existingIndex = newCategories.findIndex((c: any) => c.category === 'universal');
+                  
+                  if (existingIndex >= 0) {
+                    if (value) {
+                      newCategories[existingIndex].clientCategory = value;
+                    } else {
+                      newCategories.splice(existingIndex, 1);
+                    }
+                  } else if (value) {
+                    newCategories.push({ category: 'universal', clientCategory: value });
+                  }
+                  
+                  setFormData({ ...formData, categories: newCategories });
+                }}
+                description="If set, this category will be used for ALL downloads (overrides movie & TV categories)"
+                size="sm"
+                classNames={{
+                  inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                  label: "text-xs sm:text-sm",
+                }}
+              />
+            </div>
 
             {/* Test Button */}
             <Button

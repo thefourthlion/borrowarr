@@ -35,7 +35,7 @@ import {
 import axios from "axios";
 import "../../../styles/Indexers.scss";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 
 interface Indexer {
   id?: number;
@@ -102,6 +102,9 @@ const Indexers = () => {
   
   // Form state
   const [formData, setFormData] = useState<Partial<Indexer>>({});
+  
+  // Track open selects to prevent modal dismissal
+  const [openSelects, setOpenSelects] = useState<Set<string>>(new Set());
   
   const {
     isOpen: isAddModalOpen,
@@ -778,14 +781,19 @@ const Indexers = () => {
         <Modal
           isOpen={isConfigModalOpen}
           onClose={() => {
+            if (openSelects.size === 0) {
               onConfigModalClose();
               setEditingIndexer(null);
               setFormData({});
               setTestError(null);
               setTestSuccess(false);
+              setOpenSelects(new Set());
+            }
           }}
           size="2xl"
           scrollBehavior="inside"
+          isDismissable={openSelects.size === 0}
+          shouldBlockScroll={true}
         classNames={{
           backdrop: "bg-overlay/50 backdrop-blur-sm",
           base: "bg-content1 border border-secondary/20 mx-2 sm:mx-4",
@@ -802,7 +810,12 @@ const Indexers = () => {
                     </p>
                   </div>
           </ModalHeader>
-          <ModalBody className="py-4 sm:py-6 px-4 sm:px-6 space-y-3 sm:space-y-4">
+          <ModalBody className="py-4 sm:py-6 px-4 sm:px-6">
+            <div 
+              className="space-y-3 sm:space-y-4"
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
                 <Input
                   label="Name"
                   value={formData.name || ""}
@@ -819,6 +832,17 @@ const Indexers = () => {
                 label="Base URL"
                   selectedKeys={formData.baseUrl ? [formData.baseUrl] : []}
                 onChange={(e) => setFormData({ ...formData, baseUrl: e.target.value })}
+                onOpenChange={(open) => {
+                  setOpenSelects((prev) => {
+                    const next = new Set(prev);
+                    if (open) {
+                      next.add("baseUrl");
+                    } else {
+                      next.delete("baseUrl");
+                    }
+                    return next;
+                  });
+                }}
                 size="sm"
                 classNames={{
                   trigger: "bg-content2 border border-secondary/20",
@@ -851,6 +875,17 @@ const Indexers = () => {
               onSelectionChange={(keys) => {
                 const selected = Array.from(keys)[0] as string;
                 setFormData({ ...formData, syncProfile: selected });
+              }}
+              onOpenChange={(open) => {
+                setOpenSelects((prev) => {
+                  const next = new Set(prev);
+                  if (open) {
+                    next.add("syncProfile");
+                  } else {
+                    next.delete("syncProfile");
+                  }
+                  return next;
+                });
               }}
               size="sm"
               description="App profiles are used to control RSS, Automatic Search and Interactive Search settings on application sync"
@@ -1005,6 +1040,7 @@ const Indexers = () => {
             >
               Test Connection
             </Button>
+            </div>
           </ModalBody>
           <ModalFooter className="border-t border-secondary/20 px-4 sm:px-6 py-3 sm:py-4">
             <div className="flex flex-col sm:flex-row justify-between w-full gap-2">

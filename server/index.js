@@ -2,7 +2,7 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const helmet = require("helmet");
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.PORT || 3013;
 const { connectDB } = require("./config/database");
 require("dotenv").config({ path: "./.env" });
 

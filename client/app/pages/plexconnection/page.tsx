@@ -33,7 +33,7 @@ import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
 import "../../../styles/PlexConnection.scss";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 
 interface PlexConnection {
   connected: boolean;

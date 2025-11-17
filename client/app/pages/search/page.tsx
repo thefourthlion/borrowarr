@@ -9,7 +9,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useSearchParams } from "next/navigation";
 import "../../../styles/Search.scss";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 
 // Simple in-memory cache with TTL
 const cache = new Map<string, { data: any; timestamp: number; ttl: number }>();

@@ -7,6 +7,15 @@ exports.createIndexer = async (req, res) => {
     // Get available base URLs for this indexer and store them
     const availableBaseUrls = getBaseUrlsForIndexer(req.body.name);
     
+    // Generate cardigann_id from indexer name if not provided
+    // Convert name to lowercase and remove spaces/special chars
+    let cardigannId = req.body.cardigannId;
+    if (!cardigannId && req.body.name) {
+      cardigannId = req.body.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, ''); // Remove special chars and spaces (keeps "the")
+    }
+    
     const newIndexer = await Indexers.create({
       name: req.body.name,
       protocol: req.body.protocol,
@@ -33,6 +42,7 @@ exports.createIndexer = async (req, res) => {
       description: req.body.description,
       indexerType: req.body.indexerType || "Cardigann",
       status: req.body.status || "enabled",
+      cardigannId: cardigannId, // Set the cardigann ID for Cardigann indexers
       userId: req.userId, // Associate with authenticated user
     });
     
@@ -111,6 +121,14 @@ exports.readIndexerFromID = async (req, res) => {
 
 exports.updateIndexer = async (req, res) => {
   try {
+    // Generate cardigann_id from indexer name if not provided
+    let cardigannId = req.body.cardigannId;
+    if (!cardigannId && req.body.name) {
+      cardigannId = req.body.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, ''); // Remove special chars and spaces (keeps "the")
+    }
+    
     const [updated] = await Indexers.update(
       {
         name: req.body.name,
@@ -137,6 +155,7 @@ exports.updateIndexer = async (req, res) => {
         description: req.body.description,
         indexerType: req.body.indexerType,
         status: req.body.status,
+        cardigannId: cardigannId, // Set the cardigann ID
       },
       {
         where: { id: req.params.id, userId: req.userId }, // Ensure user owns this indexer

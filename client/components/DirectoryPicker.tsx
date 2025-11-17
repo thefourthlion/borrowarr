@@ -50,7 +50,7 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
     try {
       const token = localStorage.getItem("token");
       const response = await axios.get<DirectoryBrowserResponse>(
-        `http://localhost:3002/api/Settings/browse?currentPath=${encodeURIComponent(path)}`,
+        `http://localhost:3013/api/Settings/browse?currentPath=${encodeURIComponent(path)}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }

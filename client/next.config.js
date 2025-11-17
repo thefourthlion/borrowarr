@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    output: 'export',
+  // Removed 'output: export' since we're not using Capacitor
 };
 
 module.exports = nextConfig;

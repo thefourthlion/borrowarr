@@ -22,15 +22,16 @@ class SabnzbdProxy {
     // Ensure baseUrl ends with /api (SABnzbd API endpoint)
     // SABnzbd API is typically at /sabnzbd/api or just /api depending on configuration
     if (!baseUrl.endsWith('/api')) {
-      // If urlBase was provided and doesn't include 'sabnzbd', try /api directly
-      // Otherwise default to /sabnzbd/api
-      if (settings.urlBase && !settings.urlBase.includes('sabnzbd')) {
+      // Try to determine the correct API path
+      // Priority: 1) /api (root), 2) /sabnzbd/api (default)
+      if (!settings.urlBase || settings.urlBase.trim() === '' || settings.urlBase === '/') {
+        // No urlBase provided or explicitly root - try /api first
         baseUrl += '/api';
-      } else if (settings.urlBase === '/' || settings.urlBase === '') {
-        // If urlBase is explicitly set to root, try /api directly
+      } else if (settings.urlBase && !settings.urlBase.includes('sabnzbd')) {
+        // urlBase provided but doesn't include 'sabnzbd' - use /api
         baseUrl += '/api';
       } else {
-        // Default to /sabnzbd/api
+        // Default to /sabnzbd/api for other cases
         baseUrl += '/sabnzbd/api';
       }
     }
@@ -114,13 +115,42 @@ class SabnzbdProxy {
         throw new Error('API key is required');
       }
 
-      const response = await this.makeRequest({ mode: 'version' });
-      
-      return {
-        success: true,
-        version: response.version || 'Unknown',
-        message: `Successfully connected to SABnzbd${response.version ? ` (v${response.version})` : ''}`,
-      };
+      // Try the configured URL first
+      try {
+        const response = await this.makeRequest({ mode: 'version' });
+        
+        return {
+          success: true,
+          version: response.version || 'Unknown',
+          message: `Successfully connected to SABnzbd${response.version ? ` (v${response.version})` : ''}`,
+        };
+      } catch (firstError) {
+        // If we got a 404 and we're trying /api, try /sabnzbd/api as fallback
+        if (firstError.message.includes('404') && this.baseUrl.endsWith('/api')) {
+          const originalUrl = this.baseUrl;
+          
+          // Try /sabnzbd/api as fallback
+          this.baseUrl = this.baseUrl.replace(/\/api$/, '/sabnzbd/api');
+          
+          try {
+            const response = await this.makeRequest({ mode: 'version' });
+            
+            console.log(`[SABnzbd] Success with fallback URL: ${this.baseUrl}`);
+            return {
+              success: true,
+              version: response.version || 'Unknown',
+              message: `Successfully connected to SABnzbd${response.version ? ` (v${response.version})` : ''} (Note: API is at /sabnzbd/api, consider setting URL Base to "sabnzbd")`,
+            };
+          } catch (secondError) {
+            // Restore original URL and throw the first error
+            this.baseUrl = originalUrl;
+            throw firstError;
+          }
+        }
+        
+        // If it's not a 404 or we're not at /api, just throw the error
+        throw firstError;
+      }
     } catch (error) {
       return {
         success: false,

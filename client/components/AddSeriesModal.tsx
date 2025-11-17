@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@nextui-org/button";
 import { Card, CardBody } from "@nextui-org/card";
 import { Chip } from "@nextui-org/chip";
@@ -554,24 +554,25 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
     if (!media) return;
 
     const episodeKey = `${seasonNumber}-${episodeNumber}`;
+    
     setLoadingEpisodeTorrents(prev => new Map(prev).set(episodeKey, true));
     setEpisodeShowingTorrents(episodeKey);
 
     try {
-      const token = localStorage.getItem('accessToken') // Fixed: use 'accessToken' not 'token';
+      const token = localStorage.getItem('accessToken');
       const title = media.name || media.title || '';
-      const year = media.first_air_date ? new Date(media.first_air_date).getFullYear() : '';
 
-      // Search for torrents for this episode
+      // Build search query: "Title S01E01"
+      const searchQuery = `${title} S${String(seasonNumber).padStart(2, '0')}E${String(episodeNumber).padStart(2, '0')}`;
+
+      // Use the Search API endpoint to search for torrents - fetch all results
       const torrentResponse = await axios.get(
-        `${API_BASE_URL}/api/TMDB/tv/${media.id}/torrents`,
+        `${API_BASE_URL}/api/Search`,
         {
           params: {
-            title: title,
-            season: seasonNumber,
-            episode: episodeNumber,
-            year: year,
-            categoryIds: '5000',
+            query: searchQuery,
+            categoryIds: '5000', // TV shows category
+            limit: 1000, // Large limit to get all results
           },
           headers: token ? {
             Authorization: `Bearer ${token}`,
@@ -580,10 +581,10 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
         }
       );
 
-      if (torrentResponse.data.success && torrentResponse.data.results.length > 0) {
+      if (torrentResponse.data.results) {
         setEpisodeTorrents(prev => {
           const next = new Map(prev);
-          next.set(episodeKey, torrentResponse.data.results);
+          next.set(episodeKey, torrentResponse.data.results || []);
           return next;
         });
       } else {
@@ -711,8 +712,8 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
       // Build search query
       let searchQuery = title;
       if (seasonNumber !== undefined) {
-        // Complete season: "Show Name s01 Complete"
-        searchQuery += ` s${String(seasonNumber).padStart(2, '0')} Complete`;
+        // Complete season: "Show Name S01 Complete"
+        searchQuery += ` S${String(seasonNumber).padStart(2, '0')} Complete`;
       } else {
         // Complete series: "Show Name Complete" or "Show Name All Seasons"
         searchQuery += ' Complete';
@@ -722,31 +723,35 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
         searchQuery += ` ${year}`;
       }
 
-      // Use the Search API endpoint to search for torrents
+      // Use the Search API endpoint to search for torrents - fetch all results
       const torrentResponse = await axios.get(
         `${API_BASE_URL}/api/Search`,
         {
           params: {
             query: searchQuery,
             categoryIds: '5000', // TV shows category
+            limit: 1000, // Large limit to get all results
           },
           timeout: 30000,
         }
       );
 
       // Search API returns results directly, not wrapped in success
-      if (torrentResponse.data.results && torrentResponse.data.results.length > 0) {
+      if (torrentResponse.data.results) {
+        const newResults = torrentResponse.data.results || [];
+        
         // Sort by priority first (lower number = higher priority), then by seeders (descending)
-        const sortedResults = torrentResponse.data.results.sort((a: TorrentResult, b: TorrentResult) => {
+        const sortedResults = newResults.sort((a: TorrentResult, b: TorrentResult) => {
           const aPriority = (a as any).indexerPriority ?? 25;
           const bPriority = (b as any).indexerPriority ?? 25;
           if (aPriority !== bPriority) {
-            return aPriority - bPriority; // Lower number = higher priority
+            return aPriority - bPriority;
           }
           const aSeeders = a.seeders || 0;
           const bSeeders = b.seeders || 0;
           return bSeeders - aSeeders;
         });
+        
         setCompleteSeriesTorrents(sortedResults);
       } else {
         setCompleteSeriesTorrents([]);
@@ -775,37 +780,41 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
       const title = media.name || media.title || '';
       const year = media.first_air_date ? new Date(media.first_air_date).getFullYear() : '';
 
-      // Build search query: "Show Name s01"
-      let searchQuery = `${title} s${String(seasonNumber).padStart(2, '0')}`;
+      // Build search query: "Show Name S01"
+      let searchQuery = `${title} S${String(seasonNumber).padStart(2, '0')}`;
       if (year) {
         searchQuery += ` ${year}`;
       }
 
-      // Use the Search API endpoint to search for torrents
+      // Use the Search API endpoint to search for torrents - fetch all results
       const torrentResponse = await axios.get(
         `${API_BASE_URL}/api/Search`,
         {
           params: {
             query: searchQuery,
             categoryIds: '5000', // TV shows category
+            limit: 1000, // Large limit to get all results
           },
           timeout: 30000,
         }
       );
 
       // Search API returns results directly, not wrapped in success
-      if (torrentResponse.data.results && torrentResponse.data.results.length > 0) {
+      if (torrentResponse.data.results) {
+        const newResults = torrentResponse.data.results || [];
+        
         // Sort by priority first (lower number = higher priority), then by seeders (descending)
-        const sortedResults = torrentResponse.data.results.sort((a: TorrentResult, b: TorrentResult) => {
+        const sortedResults = newResults.sort((a: TorrentResult, b: TorrentResult) => {
           const aPriority = (a as any).indexerPriority ?? 25;
           const bPriority = (b as any).indexerPriority ?? 25;
           if (aPriority !== bPriority) {
-            return aPriority - bPriority; // Lower number = higher priority
+            return aPriority - bPriority;
           }
           const aSeeders = a.seeders || 0;
           const bSeeders = b.seeders || 0;
           return bSeeders - aSeeders;
         });
+        
         setSeasonTorrents(prev => {
           const next = new Map(prev);
           next.set(seasonNumber, sortedResults);
@@ -858,20 +867,19 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
     });
 
     try {
-      const token = localStorage.getItem('accessToken') // Fixed: use 'accessToken' not 'token';
+      const token = localStorage.getItem('accessToken');
       const title = media.name || media.title || '';
-      const year = media.first_air_date ? new Date(media.first_air_date).getFullYear() : '';
 
-      // Search for torrents for this episode
+      // Build search query: "Title S01E01"
+      const searchQuery = `${title} S${String(seasonNumber).padStart(2, '0')}E${String(episodeNumber).padStart(2, '0')}`;
+
+      // Use the Search API endpoint to search for torrents
       const torrentResponse = await axios.get(
-        `${API_BASE_URL}/api/TMDB/tv/${media.id}/torrents`,
+        `${API_BASE_URL}/api/Search`,
         {
           params: {
-            title: title,
-            season: seasonNumber,
-            episode: episodeNumber,
-            year: year,
-            categoryIds: '5000',
+            query: searchQuery,
+            categoryIds: '5000', // TV shows category
           },
           headers: token ? {
             Authorization: `Bearer ${token}`,
@@ -880,7 +888,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
         }
       );
 
-      if (!torrentResponse.data.success || torrentResponse.data.results.length === 0) {
+      if (!torrentResponse.data.results || torrentResponse.data.results.length === 0) {
         throw new Error(`No torrents found for ${title} S${String(seasonNumber).padStart(2, '0')}E${String(episodeNumber).padStart(2, '0')}`);
       }
 
@@ -1647,7 +1655,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                                     <Spinner size="sm" />
                                   </div>
                                 ) : (seasonTorrents.get(season.season_number) || []).length > 0 ? (
-                                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
                                     {seasonTorrents.get(season.season_number)?.map((torrent) => {
                                       const torrentId = torrent.id;
                                       const isDownloadingTorrent = downloadingTorrents.has(torrentId);
@@ -1661,11 +1669,17 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                                               <div className="flex-1 min-w-0">
                                                 <p className="font-medium text-sm truncate">{torrent.title}</p>
                                                 <div className="flex items-center gap-3 mt-1 text-xs text-default-500">
-                                                  <span>{torrent.indexer}</span>
+                                                  <Chip size="sm" variant="flat" color="secondary" className="text-xs">
+                                                    {torrent.indexer}
+                                                  </Chip>
                                                   <span>{torrent.sizeFormatted}</span>
-                                                  <span>👤 {torrent.seeders || 0}</span>
+                                                  <span className="flex items-center gap-1">
+                                                    🌱 <span className="font-semibold">{torrent.seeders || 0}</span>
+                                                  </span>
                                                   {torrent.leechers !== null && (
-                                                    <span>⬇️ {torrent.leechers}</span>
+                                                    <span className="flex items-center gap-1">
+                                                      📥 {torrent.leechers}
+                                                    </span>
                                                   )}
                                                 </div>
                                                 {torrentError && (
@@ -1779,7 +1793,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                                               <Spinner size="sm" />
                                             </div>
                                           ) : torrents.length > 0 ? (
-                                            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                                            <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
                                               {torrents.map((torrent) => {
                                                 const torrentId = torrent.id;
                                                 const isDownloadingTorrent = downloadingTorrents.has(torrentId);
@@ -1793,11 +1807,17 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                                                         <div className="flex-1 min-w-0">
                                                           <p className="font-medium text-sm truncate">{torrent.title}</p>
                                                           <div className="flex items-center gap-3 mt-1 text-xs text-default-500">
-                                                            <span>{torrent.indexer}</span>
+                                                            <Chip size="sm" variant="flat" color="secondary" className="text-xs">
+                                                              {torrent.indexer}
+                                                            </Chip>
                                                             <span>{torrent.sizeFormatted}</span>
-                                                            <span>👤 {torrent.seeders || 0}</span>
+                                                            <span className="flex items-center gap-1">
+                                                              🌱 <span className="font-semibold">{torrent.seeders || 0}</span>
+                                                            </span>
                                                             {torrent.leechers !== null && (
-                                                              <span>⬇️ {torrent.leechers}</span>
+                                                              <span className="flex items-center gap-1">
+                                                                📥 {torrent.leechers}
+                                                              </span>
                                                             )}
                                                           </div>
                                                           {torrentError && (

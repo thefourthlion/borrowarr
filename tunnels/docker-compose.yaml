@@ -1,0 +1,13 @@
+services:
+  borrowarr-tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: borrowarr-tunnel
+    command: tunnel --no-autoupdate run --token eyJhIjoiODM5ZmMzODRmYzhmMzI4NWUyZDBmMGQ2M2JmZTRmNzUiLCJ0IjoiODZlMzhhYmEtNTY5OS00MGUzLWI1NzQtNTQ1YTNhZTYyYTc2IiwicyI6IllXRmpNVEU1TWpRdFpXVTNOUzAwWmpKbExXRTJNalF0WldJM1pUZG1Zell5TlROaSJ9
+    restart: unless-stopped
+    networks:
+      - default
+
+networks:
+  default:
+    driver: bridge
+

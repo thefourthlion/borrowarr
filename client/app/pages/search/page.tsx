@@ -3,10 +3,12 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Input } from "@nextui-org/input";
 import { Chip } from "@nextui-org/chip";
 import { Spinner } from "@nextui-org/spinner";
-import { Search as SearchIcon, Download, Link as LinkIcon, Check, X } from "lucide-react";
+import { Button } from "@nextui-org/button";
+import { Search as SearchIcon, Download, Link as LinkIcon, Check, X, Filter, ChevronDown, ChevronUp, ChevronLeft } from "lucide-react";
 import axios, { CancelTokenSource } from "axios";
 import { useDebounce } from "@/hooks/useDebounce";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 import "../../../styles/Search.scss";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
@@ -51,6 +53,8 @@ interface Indexer {
 }
 
 const Search = () => {
+  const { user } = useAuth();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -62,6 +66,9 @@ const Search = () => {
   const [grabSuccess, setGrabSuccess] = useState<Set<string>>(new Set());
   const [grabError, setGrabError] = useState<Map<string, string>>(new Map());
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(true);
+  const [indexerSearchQuery, setIndexerSearchQuery] = useState("");
+  const [fetchingIndexers, setFetchingIndexers] = useState(false);
 
   const cancelTokenRef = useRef<CancelTokenSource | null>(null);
   const isInitialMount = useRef(true);
@@ -70,15 +77,20 @@ const Search = () => {
 
   const fetchIndexers = useCallback(async () => {
     // Only fetch indexers if user is authenticated
-    const token = localStorage.getItem("token");
-    if (!token) {
+    const accessToken = typeof window !== 'undefined' ? localStorage.getItem("accessToken") : null;
+    
+    console.log('[Search] Fetching indexers, user:', user ? 'logged in' : 'not logged in', 'token:', accessToken ? 'exists' : 'missing');
+    
+    if (!user || !accessToken) {
+      console.log('[Search] No user or token, skipping indexer fetch');
       setIndexers([]);
       return;
     }
 
-    const cacheKey = "indexers";
+    const cacheKey = `indexers:${user.id}`;
     const cached = getCached(cacheKey);
     if (cached) {
+      console.log('[Search] Using cached indexers:', cached.length);
       const enabledIndexers = cached.filter((idx: Indexer) => idx.enabled);
       setIndexers(enabledIndexers);
       setSelectedIndexers(new Set(enabledIndexers.map((idx: Indexer) => idx.id.toString())));
@@ -86,24 +98,33 @@ const Search = () => {
     }
 
     try {
+      setFetchingIndexers(true);
+      console.log('[Search] Fetching indexers from API...');
       const response = await axios.get(`${API_BASE_URL}/api/Indexers/read`, {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${accessToken}`,
         },
-        timeout: 5000,
+        timeout: 10000,
       });
-      const enabledIndexers = (response.data.data || []).filter(
-        (idx: Indexer) => idx.enabled
-      );
+      
+      console.log('[Search] Indexers response:', response.data);
+      
+      const allIndexers = response.data.data || [];
+      const enabledIndexers = allIndexers.filter((idx: Indexer) => idx.enabled);
+      
+      console.log('[Search] Total indexers:', allIndexers.length, 'Enabled:', enabledIndexers.length);
+      
       setIndexers(enabledIndexers);
       setSelectedIndexers(new Set(enabledIndexers.map((idx: Indexer) => idx.id.toString())));
-      setCached(cacheKey, response.data.data || [], 5 * 60 * 1000);
+      setCached(cacheKey, allIndexers, 5 * 60 * 1000);
     } catch (error: any) {
       if (axios.isCancel(error)) return;
-      console.error("Error fetching indexers:", error);
+      console.error("[Search] Error fetching indexers:", error.response?.data || error.message);
       setIndexers([]);
+    } finally {
+      setFetchingIndexers(false);
     }
-  }, []);
+  }, [user]);
 
   const performSearch = useCallback(async () => {
     if (!debouncedQuery.trim()) return;
@@ -191,13 +212,16 @@ const Search = () => {
   }, [debouncedQuery, selectedIndexers]);
 
   useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
+    if (user) {
+      console.log('[Search] User detected, fetching indexers...');
       fetchIndexers().catch((err) => {
         console.error("Error fetching indexers:", err);
       });
+    } else {
+      console.log('[Search] No user, clearing indexers');
+      setIndexers([]);
     }
-  }, [fetchIndexers]);
+  }, [user, fetchIndexers]);
 
   useEffect(() => {
     const urlQuery = searchParams.get('q');
@@ -330,154 +354,391 @@ const Search = () => {
     }
   }, []);
 
+  const selectAllIndexers = useCallback(() => {
+    setSelectedIndexers(new Set(indexers.map((idx) => idx.id.toString())));
+  }, [indexers]);
+
+  const selectNoneIndexers = useCallback(() => {
+    setSelectedIndexers(new Set());
+  }, []);
+
+  const selectIndexersByProtocol = useCallback((protocol: "torrent" | "nzb") => {
+    const filteredIndexers = indexers
+      .filter((idx) => idx.protocol === protocol)
+      .map((idx) => idx.id.toString());
+    setSelectedIndexers(new Set(filteredIndexers));
+  }, [indexers]);
+
+  // Filter indexers based on search query
+  const filteredIndexers = indexers.filter((indexer) =>
+    indexer.name.toLowerCase().includes(indexerSearchQuery.toLowerCase())
+  );
+
+  // Group indexers by protocol
+  const torrentIndexers = filteredIndexers.filter((idx) => idx.protocol === "torrent");
+  const nzbIndexers = filteredIndexers.filter((idx) => idx.protocol === "nzb");
+
 
     return (
     <div className="Search page min-h-screen bg-background">
       {/* Header */}
       <div className="border-b border-secondary/20 sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+        <div className="max-w-[2400px] mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
-            <div className="min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent truncate">
-                Search Indexers
-              </h1>
-              <p className="text-xs sm:text-sm text-foreground/60 mt-1">
-                Search torrents across all your indexers
-                  </p>
-                </div>
+            <div className="min-w-0 flex items-center gap-3">
+              <Button
+                isIconOnly
+                variant="light"
+                size="sm"
+                onPress={() => router.back()}
+                aria-label="Go back"
+                className="flex-shrink-0"
+              >
+                <ChevronLeft size={20} />
+              </Button>
+              <div className="min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent truncate">
+                  {searchQuery ? `Search: "${searchQuery}"` : 'Search Indexers'}
+                </h1>
+                <p className="text-xs sm:text-sm text-foreground/60 mt-1">
+                  {results.length > 0 ? `${results.length} results found` : 'Search torrents across all your indexers'}
+                </p>
               </div>
+            </div>
+          </div>
         </div>
       </div>
         
       {/* Content */}
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
-        <div className="container w-[95vw] sm:w-[92vw] md:w-[90vw] lg:w-[88vw] xl:w-[85vw] 2xl:w-[82vw] mx-auto space-y-4 sm:space-y-6">
-          {/* Search Bar & Indexer Filter */}
-          <div className="flex flex-col gap-3 sm:gap-4 w-full">
+      <div className="max-w-[2400px] mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
+        <div className="space-y-4 sm:space-y-6">
+          {/* Search Bar */}
           <div className="w-full">
-                <Input
-                  placeholder="Search torrents..."
-                  value={query}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
-                  onKeyPress={handleKeyPress}
+            <Input
+              placeholder="Search torrents (e.g., 'Shrek 2001', 'The Matrix')..."
+              value={query}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
+              onKeyPress={handleKeyPress}
               startContent={<SearchIcon size={20} className="text-secondary" />}
-                  size="lg"
+              size="lg"
               classNames={{
                 base: "w-full",
-                inputWrapper: "w-full bg-content2 border border-secondary/20 hover:border-secondary/40 transition-colors",
+                inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40 focus-within:border-secondary/60 transition-colors",
               }}
             />
+          </div>
+
+          {/* Indexer Filter Section */}
+          {fetchingIndexers ? (
+            <div className="bg-content2/50 backdrop-blur-sm border border-secondary/20 rounded-2xl p-6 text-center">
+              <Spinner size="sm" className="mb-2" />
+              <p className="text-sm text-foreground/60">Loading your indexers...</p>
+            </div>
+          ) : !user ? (
+            <div className="bg-content2/50 backdrop-blur-sm border border-secondary/20 rounded-2xl p-6 text-center">
+              <p className="text-sm text-foreground/60">Please log in to search indexers</p>
+            </div>
+          ) : indexers.length === 0 ? (
+            <div className="bg-content2/50 backdrop-blur-sm border border-secondary/20 rounded-2xl p-6 text-center">
+              <Filter size={32} className="text-foreground/40 mx-auto mb-3" />
+              <p className="text-sm font-semibold text-foreground mb-1">No Indexers Found</p>
+              <p className="text-xs text-foreground/60 mb-4">Add indexers in Settings to start searching</p>
+              <Button
+                as="a"
+                href="/pages/indexers"
+                size="sm"
+                color="secondary"
+                variant="flat"
+              >
+                Add Indexers
+              </Button>
+            </div>
+          ) : (
+            <div className="bg-content2/50 backdrop-blur-sm border border-secondary/20 rounded-2xl overflow-hidden">
+              {/* Filter Header */}
+              <div 
+                className="flex items-center justify-between p-4 cursor-pointer hover:bg-content2 transition-colors"
+                onClick={() => setShowFilters(!showFilters)}
+              >
+                <div className="flex items-center gap-3">
+                  <Filter size={20} className="text-secondary" />
+                  <div>
+                    <h3 className="font-semibold text-foreground">Filter by Indexers</h3>
+                    <p className="text-xs text-foreground/60">
+                      {selectedIndexers.size} of {indexers.length} selected
+                    </p>
+                  </div>
+                </div>
+                {showFilters ? (
+                  <ChevronUp size={20} className="text-foreground/60" />
+                ) : (
+                  <ChevronDown size={20} className="text-foreground/60" />
+                )}
               </div>
 
-          {/* Indexer Toggle Chips */}
-          {indexers.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {indexers.map((indexer) => {
-                const isSelected = selectedIndexers.has(indexer.id.toString());
-                return (
-                  <Chip
-                    key={indexer.id}
-                    size="sm"
-                    variant="bordered"
-                    color={isSelected ? "secondary" : "default"}
-                    onClose={isSelected ? () => removeIndexer(indexer.id.toString()) : undefined}
-                    onClick={() => toggleIndexer(indexer.id.toString())}
-                    className={`cursor-pointer transition-all ${
-                      isSelected 
-                        ? "border-secondary text-secondary" 
-                        : "border-default-300 text-default-500 hover:border-default-400"
-                    }`}
-                  >
-                    {indexer.name}
-                  </Chip>
-                );
-              })}
+              {/* Filter Content */}
+              {showFilters && (
+                <div className="border-t border-secondary/20 p-4 space-y-4">
+                  {/* Quick Actions */}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="flat"
+                      color="secondary"
+                      onClick={selectAllIndexers}
+                      className="text-xs"
+                    >
+                      Select All
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="flat"
+                      color="default"
+                      onClick={selectNoneIndexers}
+                      className="text-xs"
+                    >
+                      Select None
+                    </Button>
+                    {torrentIndexers.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        color="secondary"
+                        onClick={() => selectIndexersByProtocol("torrent")}
+                        className="text-xs"
+                      >
+                        Torrents Only
+                      </Button>
+                    )}
+                    {nzbIndexers.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        color="secondary"
+                        onClick={() => selectIndexersByProtocol("nzb")}
+                        className="text-xs"
+                      >
+                        NZB Only
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Search Indexers */}
+                  {indexers.length > 5 && (
+                    <Input
+                      placeholder="Search indexers..."
+                      value={indexerSearchQuery}
+                      onChange={(e) => setIndexerSearchQuery(e.target.value)}
+                      size="sm"
+                      startContent={<SearchIcon size={16} className="text-secondary" />}
+                      classNames={{
+                        inputWrapper: "bg-content1 border border-secondary/20",
+                      }}
+                    />
+                  )}
+
+                  {/* Torrent Indexers */}
+                  {torrentIndexers.length > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold text-foreground/60 mb-2 uppercase tracking-wide">
+                        Torrent Indexers ({torrentIndexers.length})
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {torrentIndexers.map((indexer) => {
+                          const isSelected = selectedIndexers.has(indexer.id.toString());
+                          return (
+                            <Chip
+                              key={indexer.id}
+                              size="sm"
+                              variant={isSelected ? "flat" : "bordered"}
+                              color={isSelected ? "secondary" : "default"}
+                              onClose={isSelected ? () => removeIndexer(indexer.id.toString()) : undefined}
+                              onClick={() => toggleIndexer(indexer.id.toString())}
+                              className={`cursor-pointer transition-all ${
+                                isSelected 
+                                  ? "border-secondary text-secondary" 
+                                  : "border-default-300 text-default-500 hover:border-default-400"
+                              }`}
+                            >
+                              {indexer.name}
+                            </Chip>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* NZB Indexers */}
+                  {nzbIndexers.length > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold text-foreground/60 mb-2 uppercase tracking-wide">
+                        NZB Indexers ({nzbIndexers.length})
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {nzbIndexers.map((indexer) => {
+                          const isSelected = selectedIndexers.has(indexer.id.toString());
+                          return (
+                            <Chip
+                              key={indexer.id}
+                              size="sm"
+                              variant={isSelected ? "flat" : "bordered"}
+                              color={isSelected ? "secondary" : "default"}
+                              onClose={isSelected ? () => removeIndexer(indexer.id.toString()) : undefined}
+                              onClick={() => toggleIndexer(indexer.id.toString())}
+                              className={`cursor-pointer transition-all ${
+                                isSelected 
+                                  ? "border-secondary text-secondary" 
+                                  : "border-default-300 text-default-500 hover:border-default-400"
+                              }`}
+                            >
+                              {indexer.name}
+                            </Chip>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* No Results Message */}
+                  {filteredIndexers.length === 0 && indexerSearchQuery && (
+                    <div className="text-center py-4 text-foreground/60 text-sm">
+                      No indexers found matching &quot;{indexerSearchQuery}&quot;
+                    </div>
+                  )}
                 </div>
               )}
             </div>
+          )}
 
         {/* Results */}
         {loading ? (
-          <div className="flex justify-center items-center py-12">
-            <Spinner size="lg" />
+          <div className="flex flex-col items-center justify-center py-16">
+            <Spinner size="lg" color="secondary" />
+            <p className="text-foreground/60 mt-4">Searching indexers...</p>
           </div>
         ) : results.length > 0 ? (
-          <div className="overflow-x-auto -mx-2 sm:-mx-4 md:-mx-6 px-2 sm:px-4 md:px-6">
-            <table className="w-full min-w-[600px]">
-                    <thead>
-                      <tr className="border-b border-divider">
-                  <th key="title" className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold">Title</th>
-                  <th key="indexer" className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold hidden sm:table-cell">Indexer</th>
-                  <th key="size" className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold hidden md:table-cell">Size</th>
-                  <th key="seeders" className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold">Seeders</th>
-                  <th key="leechers" className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold hidden lg:table-cell">Leechers</th>
-                  <th key="age" className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold hidden md:table-cell">Age</th>
-                  <th key="actions" className="text-left p-3 sm:p-4 text-xs sm:text-sm font-semibold">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                {results.map((result, index) => (
-                        <tr
-                          key={`${result.id}-${index}`}
-                          className="border-b border-divider hover:bg-content2 transition-colors"
-                        >
-                    <td className="p-3 sm:p-4 font-medium">
-                            <div className="flex flex-col gap-1">
-                        <span className="text-xs sm:text-sm break-words">{result.title}</span>
-                        <div className="flex flex-wrap gap-2 sm:hidden text-xs text-default-500">
-                          <span>{result.indexer}</span>
-                          <span>{result.sizeFormatted}</span>
-                          <span>{result.ageFormatted}</span>
-                              </div>
-                            </div>
-                          </td>
-                    <td className="p-3 sm:p-4 text-xs sm:text-sm hidden sm:table-cell">{result.indexer}</td>
-                    <td className="p-3 sm:p-4 text-xs sm:text-sm hidden md:table-cell">{result.sizeFormatted}</td>
-                    <td className="p-3 sm:p-4 text-xs sm:text-sm">
-                            {result.seeders !== null && result.seeders !== undefined ? result.seeders.toLocaleString() : "-"}
-                          </td>
-                    <td className="p-3 sm:p-4 text-xs sm:text-sm hidden lg:table-cell">
-                            {result.leechers !== null && result.leechers !== undefined ? result.leechers.toLocaleString() : "-"}
-                          </td>
-                    <td className="p-3 sm:p-4 text-xs sm:text-sm hidden md:table-cell">{result.ageFormatted}</td>
-                    <td className="p-3 sm:p-4">
-                      <div className="flex gap-1 sm:gap-2">
-                        <button
+          <div className="space-y-3">
+            {/* Results Header */}
+            <div className="flex items-center justify-between px-2">
+              <p className="text-sm text-foreground/60">
+                Showing {results.length} {results.length === 1 ? 'result' : 'results'}
+              </p>
+              <Chip size="sm" variant="flat" color="secondary">
+                {selectedIndexers.size} indexer{selectedIndexers.size !== 1 ? 's' : ''} selected
+              </Chip>
+            </div>
+
+            {/* Results List */}
+            <div className="space-y-2">
+              {results.map((result, index) => (
+                <div
+                  key={`${result.id}-${index}`}
+                  className="bg-content2/50 backdrop-blur-sm border border-secondary/20 rounded-xl p-4 hover:bg-content2 hover:border-secondary/40 transition-all duration-200 group"
+                >
+                  <div className="flex flex-col gap-3">
+                    {/* Title Row */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-sm sm:text-base text-foreground line-clamp-2 group-hover:text-secondary transition-colors">
+                          {result.title}
+                        </h3>
+                      </div>
+                      
+                      {/* Action Buttons */}
+                      <div className="flex gap-2 flex-shrink-0">
+                        <Button
+                          isIconOnly
+                          size="sm"
+                          color="secondary"
+                          variant="flat"
                           onClick={() => handleGrabRelease(result)}
                           disabled={!result.downloadUrl || grabbing.has(result.id)}
-                          className="p-1.5 sm:p-2 rounded-lg hover:bg-content3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                title={grabSuccess.has(result.id) ? "Grabbed successfully" : grabError.get(result.id) || "Grab release"}
-                              >
+                          title={grabSuccess.has(result.id) ? "Grabbed successfully" : grabError.get(result.id) || "Grab release"}
+                          className="hover:scale-110 transition-transform"
+                        >
                           {grabbing.has(result.id) ? (
-                            <Spinner size="sm" />
+                            <Spinner size="sm" color="white" />
                           ) : grabSuccess.has(result.id) ? (
-                            <Check size={14} className="sm:w-4 sm:h-4 text-success" />
-                                ) : (
-                            <Download size={14} className="sm:w-4 sm:h-4 text-secondary" />
-                                )}
-                        </button>
-                        <button
+                            <Check size={16} className="text-success" />
+                          ) : (
+                            <Download size={16} />
+                          )}
+                        </Button>
+                        <Button
+                          isIconOnly
+                          size="sm"
+                          color="secondary"
+                          variant="light"
                           onClick={() => handleCopyMagnetLink(result)}
-                          className="p-1.5 sm:p-2 rounded-lg hover:bg-content3 transition-colors"
-                                title={copiedLink === result.id ? "Copied!" : "Copy magnet link"}
-                              >
-                                {copiedLink === result.id ? (
-                            <Check size={14} className="sm:w-4 sm:h-4 text-success" />
-                                ) : (
-                            <LinkIcon size={14} className="sm:w-4 sm:h-4 text-secondary" />
-                                )}
-                        </button>
-                            </div>
-                          </td>
-                        </tr>
-                ))}
-                    </tbody>
-                  </table>
-                </div>
-        ) : searchQuery ? (
-              <div className="text-center py-12">
-            <p className="text-default-500 text-sm sm:text-base">No results found for &quot;{searchQuery}&quot;</p>
+                          title={copiedLink === result.id ? "Copied!" : "Copy magnet link"}
+                          className="hover:scale-110 transition-transform"
+                        >
+                          {copiedLink === result.id ? (
+                            <Check size={16} className="text-success" />
+                          ) : (
+                            <LinkIcon size={16} />
+                          )}
+                        </Button>
                       </div>
+                    </div>
+
+                    {/* Info Row */}
+                    <div className="flex flex-wrap gap-2 items-center text-xs sm:text-sm text-foreground/70">
+                      <Chip size="sm" variant="flat" color="secondary" className="text-xs">
+                        {result.indexer}
+                      </Chip>
+                      <Chip size="sm" variant="flat" className="text-xs">
+                        {result.sizeFormatted}
+                      </Chip>
+                      <Chip size="sm" variant="flat" className="text-xs">
+                        {result.ageFormatted}
+                      </Chip>
+                      {result.seeders !== null && result.seeders !== undefined && (
+                        <Chip 
+                          size="sm" 
+                          variant="flat" 
+                          color={result.seeders > 50 ? "success" : result.seeders > 10 ? "warning" : "default"}
+                          className="text-xs"
+                        >
+                          🌱 {result.seeders.toLocaleString()}
+                        </Chip>
+                      )}
+                      {result.leechers !== null && result.leechers !== undefined && (
+                        <Chip size="sm" variant="flat" className="text-xs hidden sm:inline-flex">
+                          📥 {result.leechers.toLocaleString()}
+                        </Chip>
+                      )}
+                     {result.protocol && (
+                       <Chip 
+                         size="sm" 
+                         variant="flat" 
+                         color={result.protocol === "torrent" ? "secondary" : "primary"}
+                         className="text-xs"
+                       >
+                         {result.protocol.toUpperCase()}
+                       </Chip>
+                     )}
+                    </div>
+                    
+                    {/* Error Message */}
+                    {grabError.has(result.id) && (
+                      <div className="text-xs text-danger bg-danger/10 px-3 py-2 rounded-lg">
+                        {grabError.get(result.id)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : searchQuery ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <SearchIcon size={48} className="text-foreground/20 mb-4" />
+            <p className="text-foreground/80 font-semibold text-lg mb-2">No results found</p>
+            <p className="text-foreground/60 text-sm max-w-md">
+              No torrents found for &quot;{searchQuery}&quot;. Try a different search term or select more indexers.
+            </p>
+          </div>
         ) : null}
               </div>
             </div>

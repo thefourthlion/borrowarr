@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@nextui-org/button";
 import { Card, CardBody } from "@nextui-org/card";
 import { Chip } from "@nextui-org/chip";
@@ -332,6 +332,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
     if (!media) return;
     
     setLoadingTorrents(true);
+    
     try {
       const token = localStorage.getItem('accessToken');
       const title = media.title || media.name || '';
@@ -339,13 +340,17 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
         ? new Date(media.release_date).getFullYear() 
         : (media.first_air_date ? new Date(media.first_air_date).getFullYear() : '');
       
+      // Build search query: "Movie Title year"
+      const searchQuery = year ? `${title} ${year}` : title;
+      
+      // Use the Search API endpoint to search for torrents - fetch all results
       const response = await axios.get(
-        `${API_BASE_URL}/api/TMDB/movie/${media.id}/torrents`,
+        `${API_BASE_URL}/api/Search`,
         {
           params: {
-            title: title,
-            year: year,
+            query: searchQuery,
             categoryIds: media.media_type === 'tv' ? '5000' : '2000',
+            limit: 1000, // Large limit to get all results
           },
           headers: token ? {
             Authorization: `Bearer ${token}`,
@@ -354,7 +359,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
         }
       );
 
-      if (response.data.success) {
+      if (response.data.results) {
         setTorrents(response.data.results || []);
       }
     } catch (error) {
@@ -1264,14 +1269,21 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
 
               {/* Torrents Section */}
               <div>
-                <h3 className="text-xl font-semibold mb-4">Available Torrents</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-semibold">Available Torrents</h3>
+                  {torrents.length > 0 && (
+                    <Chip size="sm" variant="flat" color="secondary">
+                      {torrents.length} result{torrents.length !== 1 ? 's' : ''}
+                    </Chip>
+                  )}
+                </div>
                 
                 {loadingTorrents ? (
                   <div className="flex justify-center items-center py-8">
                     <Spinner />
                   </div>
                 ) : torrents.length > 0 ? (
-                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
                     {torrents.map((torrent) => (
                       <Card key={torrent.id} className="hover:bg-content2">
                         <CardBody className="p-4">
@@ -1279,9 +1291,18 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
                             <div className="flex-1 min-w-0">
                               <p className="font-medium truncate">{torrent.title}</p>
                               <div className="flex items-center gap-3 mt-1 text-xs text-default-500">
-                                <span>{torrent.indexer}</span>
+                                <Chip size="sm" variant="flat" color="secondary" className="text-xs">
+                                  {torrent.indexer}
+                                </Chip>
                                 <span>{torrent.sizeFormatted}</span>
-                                <span>👤 {torrent.seeders || 0}</span>
+                                <span className="flex items-center gap-1">
+                                  🌱 <span className="font-semibold">{torrent.seeders || 0}</span>
+                                </span>
+                                {torrent.leechers !== null && (
+                                  <span className="flex items-center gap-1">
+                                    📥 {torrent.leechers}
+                                  </span>
+                                )}
                               </div>
                               {downloadError.has(torrent.id) && (
                                 <p className="text-xs text-danger mt-1">

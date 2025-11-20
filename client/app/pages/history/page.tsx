@@ -30,6 +30,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { ScrollToTop } from "@/components/ScrollToTop";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 
@@ -587,6 +588,8 @@ export default function HistoryPage() {
           </ModalFooter>
         </ModalContent>
       </Modal>
+      
+      <ScrollToTop />
     </div>
   );
 }

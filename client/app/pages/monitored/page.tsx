@@ -33,6 +33,7 @@ import {
 import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
+import { ScrollToTop } from "@/components/ScrollToTop";
 import "../../../styles/Monitored.scss";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
@@ -1026,6 +1027,7 @@ const Monitored = () => {
             })}
           </div>
         )}
+      </div>
 
         {/* Download Torrents Modal */}
         <Modal
@@ -1333,9 +1335,10 @@ const Monitored = () => {
             </ModalFooter>
           </ModalContent>
         </Modal>
-            </div>
-        </div>
-    );
+        
+        <ScrollToTop />
+    </div>
+  );
 };
 
 export default Monitored;

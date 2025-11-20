@@ -406,6 +406,17 @@ export const Navbar = () => {
           />
         </NavbarItem>
         <NavbarItem>
+          <Button
+            as={NextLink}
+            href="/pages/products"
+            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold shadow-lg shadow-purple-500/20"
+            variant="shadow"
+            startContent={<Sparkles size={16} />}
+          >
+            Premium
+          </Button>
+        </NavbarItem>
+        <NavbarItem>
           <Button 
             color="secondary" 
             variant="solid" 
@@ -428,6 +439,7 @@ export const Navbar = () => {
       <NavbarMenu>
         <div className="mx-4 mt-2 flex flex-col gap-2">
           {[
+            { label: "Premium", href: "/pages/products", icon: Sparkles },
             { label: "Discover", href: "/pages/discover" },
             { label: "Discover Movies", href: "/pages/discover/movies" },
             { label: "Discover Series", href: "/pages/discover/series" },
@@ -451,17 +463,27 @@ export const Navbar = () => {
             <NavbarMenuItem key={`${item.label}-${index}`}>
               {item.onClick ? (
                 <Link 
-                  color={"foreground"} 
+                  color={item.label === "Logout" ? "danger" : "foreground"} 
                   href={item.href} 
                   size="lg"
-                  onClick={item.onClick}
+                  className="w-full"
+                  onClick={() => {
+                    // Close menu logic would go here if we had a reference to setIsMenuOpen
+                    if (item.onClick) item.onClick();
+                  }}
                 >
                   {item.label}
                 </Link>
               ) : (
-                <Link color={"foreground"} href={item.href} size="lg">
+                <NextLink
+                  href={item.href}
+                  className={clsx(
+                    "w-full block py-2 text-lg",
+                    item.label === "Premium" ? "text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-pink-500 font-bold" : "text-foreground"
+                  )}
+                >
                   {item.label}
-                </Link>
+                </NextLink>
               )}
             </NavbarMenuItem>
           ))}

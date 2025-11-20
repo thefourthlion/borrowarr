@@ -23,6 +23,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import AddMovieModal from "@/components/AddMovieModal";
 import AddSeriesModal from "@/components/AddSeriesModal";
 import { useAuth } from "@/context/AuthContext";
+import { ScrollToTop } from "@/components/ScrollToTop";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 
@@ -663,6 +664,8 @@ const FavoritesPage = () => {
           </ModalFooter>
         </ModalContent>
       </Modal>
+      
+      <ScrollToTop />
     </div>
   );
 };

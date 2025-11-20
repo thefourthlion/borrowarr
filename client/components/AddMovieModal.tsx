@@ -30,6 +30,7 @@ import {
   Play,
   Maximize2,
   Heart,
+  ShoppingCart,
 } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
@@ -848,6 +849,17 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
                     {isFavorited ? 'Unfavorite' : 'Favorite'}
                   </Button>
                 )}
+                <Button
+                  as="a"
+                  href={`https://www.amazon.com/s?k=${encodeURIComponent((media.title || media.name || '') + " " + (media.release_date ? new Date(media.release_date).getFullYear() : "") + " blu-ray")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  size="sm"
+                  variant="flat"
+                  startContent={<ShoppingCart size={16} />}
+                >
+                  Buy on Amazon
+                </Button>
               {movieDetails?.imdb_id && (
                 <Button
                   as="a"
@@ -934,6 +946,18 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
                     <div className="mt-4">
                       <p className="text-sm font-medium text-default-600 mb-2">External Links:</p>
                       <div className="flex flex-wrap gap-2">
+                        <Button
+                          as="a"
+                          href={`https://www.amazon.com/s?k=${encodeURIComponent((media.title || media.name || '') + " " + (media.release_date ? new Date(media.release_date).getFullYear() : "") + " blu-ray")}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          size="sm"
+                          variant="flat"
+                          className="bg-[#FF9900] text-white"
+                          startContent={<ShoppingCart size={14} />}
+                        >
+                          Amazon
+                        </Button>
                         {movieDetails?.imdb_id && (
                           <>
                           <Button

@@ -31,6 +31,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useAuth } from "@/context/AuthContext";
 import AddMovieModal from "@/components/AddMovieModal";
 import AddSeriesModal from "@/components/AddSeriesModal";
+import { ScrollToTop } from "@/components/ScrollToTop";
 import "../../../styles/MediaLibrary.scss";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
@@ -1054,6 +1055,8 @@ const MediaLibrary = () => {
           }}
         />
       )}
+      
+      <ScrollToTop />
     </div>
   );
 };

@@ -22,6 +22,7 @@ import {
 import axios from "axios";
 import { useDebounce } from "@/hooks/useDebounce";
 import AddSeriesModal from "@/components/AddSeriesModal";
+import { ScrollToTop } from "@/components/ScrollToTop";
 import { useAuth } from "@/context/AuthContext";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
@@ -1238,6 +1239,8 @@ const SeriesPage = () => {
           </ModalFooter>
         </ModalContent>
       </Modal>
+      
+      <ScrollToTop />
     </div>
   );
 };

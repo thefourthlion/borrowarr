@@ -29,6 +29,9 @@ import {
   Maximize2,
   Heart,
   ShoppingCart,
+  Search,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
@@ -192,6 +195,10 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
   const [isFavorited, setIsFavorited] = useState(false);
   const [isFavoriting, setIsFavoriting] = useState(false);
   
+  // Hidden state
+  const [isHidden, setIsHidden] = useState(false);
+  const [isHiding, setIsHiding] = useState(false);
+  
   // Validation state
   const [hasIndexers, setHasIndexers] = useState(false);
   const [hasDownloadClients, setHasDownloadClients] = useState(false);
@@ -209,6 +216,10 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
     message: '',
     type: 'info',
   });
+
+  // Ref to track if we've already fetched data for this media
+  const fetchedMediaIdRef = useRef<number | null>(null);
+  const isFetchingRef = useRef(false);
 
   const showNotification = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
     setNotificationModal({
@@ -292,39 +303,14 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
 
   // Reset state when modal opens/closes or media changes
   useEffect(() => {
-    if (isOpen && media) {
-      // Reset all state first to ensure clean slate for new media
-      setTvShowDetails(null);
-      setSeasons([]);
-      setSelectedSeasons(new Set());
-      setSelectedEpisodes(new Set());
-      setSelectAllSeasons(true);
-      setExpandedSeasons(new Set());
-      setTrailerKey(null);
-      setEpisodeShowingTorrents(null);
-      setEpisodeTorrents(new Map());
-      setLoadingEpisodeTorrents(new Map());
-      setDownloadingTorrents(new Set());
-      setDownloadTorrentSuccess(new Set());
-      setDownloadTorrentErrors(new Map());
-      setShowingCompleteSeriesTorrents(false);
-      setCompleteSeriesTorrents([]);
-      setLoadingCompleteSeriesTorrents(false);
-      setSelectedSeasonForComplete(null);
-      setSeasonShowingTorrents(null);
-      setSeasonTorrents(new Map());
-      setLoadingSeasonTorrents(new Map());
-      setDownloadingEpisodes(new Map());
-      setDownloadedEpisodes(new Set());
-      setDownloadErrors(new Map());
-      setIsFavorited(false);
+    if (isOpen && media && media.id) {
+      // Prevent double-fetching for the same media
+      if (fetchedMediaIdRef.current === media.id && isFetchingRef.current) {
+        return;
+      }
       
-      // Then fetch new data
-      fetchTVShowDetails();
-      checkIfFavorited();
-      checkRequirements();
-    } else if (!isOpen) {
-      // Only reset when closing if not already reset
+      // If this is a different media than last time, reset everything
+      if (fetchedMediaIdRef.current !== media.id) {
       setTvShowDetails(null);
       setSeasons([]);
       setSelectedSeasons(new Set());
@@ -349,8 +335,53 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
       setDownloadedEpisodes(new Set());
       setDownloadErrors(new Map());
       setIsFavorited(false);
+      setIsHidden(false);
+      }
+      
+      // Mark as fetching for this media
+      fetchedMediaIdRef.current = media.id;
+      isFetchingRef.current = true;
+      
+      // Fetch new data
+      Promise.all([
+        fetchTVShowDetails(),
+        checkIfFavorited(),
+        checkIfHidden(),
+        checkRequirements(),
+      ]).finally(() => {
+        isFetchingRef.current = false;
+      });
+    } else if (!isOpen) {
+      // Reset when closing
+      fetchedMediaIdRef.current = null;
+      isFetchingRef.current = false;
+      setTvShowDetails(null);
+      setSeasons([]);
+      setSelectedSeasons(new Set());
+      setSelectedEpisodes(new Set());
+      setSelectAllSeasons(true);
+      setExpandedSeasons(new Set());
+      setTrailerKey(null);
+      setEpisodeShowingTorrents(null);
+      setEpisodeTorrents(new Map());
+      setLoadingEpisodeTorrents(new Map());
+      setDownloadingTorrents(new Set());
+      setDownloadTorrentSuccess(new Set());
+      setDownloadTorrentErrors(new Map());
+      setShowingCompleteSeriesTorrents(false);
+      setCompleteSeriesTorrents([]);
+      setLoadingCompleteSeriesTorrents(false);
+      setSelectedSeasonForComplete(null);
+      setSeasonShowingTorrents(null);
+      setSeasonTorrents(new Map());
+      setLoadingSeasonTorrents(new Map());
+      setDownloadingEpisodes(new Map());
+      setDownloadedEpisodes(new Set());
+      setDownloadErrors(new Map());
+      setIsFavorited(false);
+      setIsHidden(false);
     }
-  }, [isOpen, media?.id]); // Changed dependency to media?.id to trigger on media change
+  }, [isOpen, media?.id]);
 
   // When select all seasons changes, update individual season selections
   useEffect(() => {
@@ -1143,6 +1174,81 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
     }
   };
 
+  const checkIfHidden = async () => {
+    if (!user || !media) return;
+    
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await axios.get(
+        `${API_BASE_URL}/api/HiddenMedia`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      
+      if (response.data.success && response.data.hiddenIds?.series) {
+        setIsHidden(response.data.hiddenIds.series.includes(media.id));
+      }
+    } catch (error) {
+      console.error('Error checking hidden status:', error);
+    }
+  };
+
+  const toggleHidden = async () => {
+    if (!user || !media) {
+      showNotification('Login Required', 'Please log in to hide content', 'warning');
+      return;
+    }
+
+    setIsHiding(true);
+    
+    try {
+      const token = localStorage.getItem('accessToken');
+      
+      if (isHidden) {
+        // Unhide
+        await axios.post(
+          `${API_BASE_URL}/api/HiddenMedia/unhide`,
+          {
+            tmdbId: media.id,
+            mediaType: 'series',
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        
+        setIsHidden(false);
+        showNotification('Success', 'Series unhidden', 'success');
+      } else {
+        // Hide
+        const posterPath = media.poster_path || null;
+
+        await axios.post(
+          `${API_BASE_URL}/api/HiddenMedia/hide`,
+          {
+            tmdbId: media.id,
+            mediaType: 'series',
+            title: media.name || media.title || '',
+            posterPath,
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        
+        setIsHidden(true);
+        showNotification('Success', 'Series hidden from discover pages', 'success');
+      }
+    } catch (error: any) {
+      console.error('Error toggling hidden:', error);
+      const errorMsg = error.response?.data?.error || error.message || "Failed to update hidden status";
+      showNotification('Error', errorMsg, 'error');
+    } finally {
+      setIsHiding(false);
+    }
+  };
+
   const getYear = (dateString?: string) => {
     if (!dateString) return '';
     return new Date(dateString).getFullYear();
@@ -1225,22 +1331,42 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
               </div>
               <div className="flex gap-2">
                 {user && (
-                  <Button
-                    size="sm"
-                    variant="flat"
-                    color={isFavorited ? "danger" : "default"}
-                    startContent={
-                      isFavoriting ? (
-                        <Spinner size="sm" className="w-4 h-4" />
-                      ) : (
-                        <Heart size={16} className={isFavorited ? 'fill-current' : ''} />
-                      )
-                    }
-                    onPress={toggleFavorite}
-                    isDisabled={isFavoriting}
-                  >
-                    {isFavorited ? 'Unfavorite' : 'Favorite'}
-                  </Button>
+                  <>
+                    <Button
+                      size="sm"
+                      variant="flat"
+                      color={isHidden ? "warning" : "default"}
+                      startContent={
+                        isHiding ? (
+                          <Spinner size="sm" className="w-4 h-4" />
+                        ) : isHidden ? (
+                          <EyeOff size={16} />
+                        ) : (
+                          <Eye size={16} />
+                        )
+                      }
+                      onPress={toggleHidden}
+                      isDisabled={isHiding}
+                    >
+                      {isHidden ? 'Unhide' : 'Hide'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="flat"
+                      color={isFavorited ? "danger" : "default"}
+                      startContent={
+                        isFavoriting ? (
+                          <Spinner size="sm" className="w-4 h-4" />
+                        ) : (
+                          <Heart size={16} className={isFavorited ? 'fill-current' : ''} />
+                        )
+                      }
+                      onPress={toggleFavorite}
+                      isDisabled={isFavoriting}
+                    >
+                      {isFavorited ? 'Unfavorite' : 'Favorite'}
+                    </Button>
+                  </>
                 )}
                 <Button
                   as="a"
@@ -1407,6 +1533,19 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                             Official Site
                           </Button>
                         )}
+                        <Button
+                          as="a"
+                          href={`http://localhost:3012/pages/search?q=${encodeURIComponent(media.name || media.title || '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          size="sm"
+                          variant="flat"
+                          color="secondary"
+                          startContent={<Search size={14} />}
+                          className="text-xs"
+                        >
+                          Search Torrents
+                        </Button>
                       </div>
                     </div>
                   )}

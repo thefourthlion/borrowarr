@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, Film, Tv, Heart, Download, Check } from 'lucide-react';
+import { ArrowRight, Film, Tv, Heart, Download, Check, Eye, EyeOff } from 'lucide-react';
 import { Spinner } from '@nextui-org/spinner';
 import { Chip } from '@nextui-org/chip';
 import { Button } from '@nextui-org/button';
@@ -88,6 +88,10 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favoritingIds, setFavoritingIds] = useState<Set<number>>(new Set());
   
+  // Hidden media state
+  const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
+  const [hidingIds, setHidingIds] = useState<Set<number>>(new Set());
+  
   // Download state
   const [downloading, setDownloading] = useState<Set<number>>(new Set());
   const [downloadSuccess, setDownloadSuccess] = useState<Set<number>>(new Set());
@@ -117,6 +121,7 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
   useEffect(() => {
     if (user) {
       fetchFavorites();
+      fetchHiddenMedia();
     }
   }, [user]);
 
@@ -175,6 +180,28 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
       }
     } catch (error) {
       console.error("Error fetching favorites:", error);
+    }
+  };
+
+  const fetchHiddenMedia = async () => {
+    if (!user) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get(`${API_BASE_URL}/api/HiddenMedia`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.data.success && response.data.hiddenIds) {
+        // Combine both movies and series hidden IDs
+        const allHiddenIds = [
+          ...response.data.hiddenIds.movies,
+          ...response.data.hiddenIds.series
+        ];
+        setHiddenIds(new Set(allHiddenIds));
+      }
+    } catch (error) {
+      console.error("Error fetching hidden media:", error);
     }
   };
 
@@ -375,6 +402,73 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
     }
   };
 
+  const toggleHidden = async (item: TMDBMedia, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!user) {
+      showNotification('Login Required', 'Please log in to hide content', 'warning');
+      return;
+    }
+
+    const isTV = item.media_type === 'tv' || !!item.first_air_date || !!item.name;
+    const mediaType = isTV ? 'series' : 'movie';
+    const isHidden = hiddenIds.has(item.id);
+    
+    setHidingIds((prev) => new Set(prev).add(item.id));
+
+    try {
+      const token = localStorage.getItem("token");
+      
+      if (isHidden) {
+        // Unhide
+        await axios.post(
+          `${API_BASE_URL}/api/HiddenMedia/unhide`,
+          {
+            tmdbId: item.id,
+            mediaType,
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        
+        setHiddenIds((prev) => {
+          const next = new Set(prev);
+          next.delete(item.id);
+          return next;
+        });
+      } else {
+        // Hide
+        const posterPath = item.poster_path || null;
+
+        await axios.post(
+          `${API_BASE_URL}/api/HiddenMedia/hide`,
+          {
+            tmdbId: item.id,
+            mediaType,
+            title: item.title || item.name || '',
+            posterPath,
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        
+        setHiddenIds((prev) => new Set(prev).add(item.id));
+      }
+    } catch (error: any) {
+      console.error('Error toggling hidden:', error);
+      const errorMsg = error.response?.data?.error || error.message || "Failed to update hidden status";
+      showNotification('Error', errorMsg, 'error');
+    } finally {
+      setHidingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+    }
+  };
+
   const getMediaTitle = (item: TMDBMedia) => item.title || item.name || 'Unknown';
   const getMediaYear = (item: TMDBMedia) => {
     const date = item.release_date || item.first_air_date;
@@ -389,6 +483,8 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
     const isDownloaded = downloadSuccess.has(item.id);
     const isFavorited = favoriteIds.has(`${item.id}-${isTV ? 'tv' : 'movie'}`);
     const isFavoriting = favoritingIds.has(item.id);
+    const isHidden = hiddenIds.has(item.id);
+    const isHiding = hidingIds.has(item.id);
 
     return (
       <div
@@ -428,6 +524,34 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
                 ⭐ {item.vote_average.toFixed(1)}
               </span>
             </div>
+          )}
+
+          {/* Hide Button - Bottom Right (left of favorite) */}
+          {user && (
+            <button
+              onClick={(e) => toggleHidden(item, e)}
+              disabled={isHiding}
+              className={`absolute bottom-1 right-[4.5rem] z-10 p-1.5 rounded-full backdrop-blur-md transition-all duration-200 ${
+                isHidden
+                  ? 'bg-warning/90 hover:bg-warning'
+                  : 'bg-default-500/60 hover:bg-default-500/80'
+              } ${isHiding ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={isHidden ? 'Unhide' : 'Hide (never show again)'}
+            >
+              {isHiding ? (
+                <Spinner size="sm" color="white" className="w-4 h-4" />
+              ) : isHidden ? (
+                <EyeOff 
+                  size={16} 
+                  className="text-white" 
+                />
+              ) : (
+                <Eye 
+                  size={16} 
+                  className="text-white" 
+                />
+              )}
+            </button>
           )}
 
           {/* Favorite Button - Bottom Right (left of download) */}
@@ -552,7 +676,7 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
                 className="w-full"
               >
                 <CarouselContent className="-ml-2 sm:-ml-3">
-                  {items.map((item) => (
+                  {items.filter(item => !hiddenIds.has(item.id)).map((item) => (
                     <CarouselItem 
                       key={`${item.media_type || 'movie'}-${item.id}`}
                       className="pl-2 sm:pl-3 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/5 xl:basis-1/6 2xl:basis-1/7 3xl:basis-1/8 4xl:basis-1/10 5xl:basis-1/12"

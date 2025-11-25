@@ -1,13 +1,17 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@nextui-org/button";
 import { Input } from "@nextui-org/input";
 import { Card, CardBody } from "@nextui-org/card";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
-import { Mail, Lock, User, AlertCircle } from "lucide-react";
+import { Mail, Lock, User, AlertCircle, ShieldX } from "lucide-react";
+import { Spinner } from "@nextui-org/spinner";
+import axios from "axios";
 import "../../../styles/Register.scss";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 
 const Register = () => {
   const router = useRouter();
@@ -18,6 +22,25 @@ const Register = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checkingRegistration, setCheckingRegistration] = useState(true);
+  const [registrationEnabled, setRegistrationEnabled] = useState(true);
+
+  useEffect(() => {
+    const checkRegistrationStatus = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/Settings/public-registration-status`);
+        setRegistrationEnabled(response.data.enabled);
+      } catch (error) {
+        console.error("Error checking registration status:", error);
+        // Default to enabled if there's an error
+        setRegistrationEnabled(true);
+      } finally {
+        setCheckingRegistration(false);
+      }
+    };
+
+    checkRegistrationStatus();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,6 +103,48 @@ const Register = () => {
       setLoading(false);
     }
   };
+
+  if (checkingRegistration) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-4">
+          <Spinner size="lg" color="secondary" />
+          <p className="text-foreground/60">Checking registration status...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!registrationEnabled) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <Card className="border border-secondary/20 shadow-xl shadow-secondary/10">
+            <CardBody className="p-6 sm:p-8 text-center">
+              <div className="flex justify-center mb-4">
+                <div className="p-4 rounded-full bg-danger/10">
+                  <ShieldX className="w-12 h-12 text-danger" />
+                </div>
+              </div>
+              <h1 className="text-2xl font-bold mb-2">Registration Disabled</h1>
+              <p className="text-foreground/60 mb-6">
+                Public registration is currently disabled. Please contact your administrator to create an account.
+              </p>
+              <Button
+                as={Link}
+                href="/pages/login"
+                color="secondary"
+                className="btn-glow"
+                size="lg"
+              >
+                Go to Login
+              </Button>
+            </CardBody>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">

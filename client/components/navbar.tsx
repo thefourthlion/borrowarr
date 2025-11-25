@@ -18,7 +18,7 @@ import { ThemeSwitch } from "@/components/theme-switch";
 import { Logo } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { Search, User, Film, ChevronDown, Tv, Sparkles, Settings, BarChart3, Database, Server, Heart, Clock } from "lucide-react";
+import { Search, User, Film, ChevronDown, Tv, Sparkles, Settings, BarChart3, Database, Server, Heart, Clock, Users, EyeOff } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { Select, SelectItem } from "@nextui-org/select";
 import axios from "axios";
@@ -179,6 +179,15 @@ export const Navbar = () => {
                       <Search size={18} />
                       Search Indexers
                     </NextLink>
+                    <div className="border-t border-secondary/20 my-1 mx-1"></div>
+                    <NextLink
+                      href="/pages/featuredlists"
+                      className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      onClick={() => setDiscoverDropdownOpen(false)}
+                    >
+                      <Sparkles size={18} />
+                      Featured Lists
+                    </NextLink>
                   </div>
                 </div>
               )}
@@ -239,6 +248,19 @@ export const Navbar = () => {
                     >
                       <Server size={18} />
                       System
+                    </NextLink>
+                    <NextLink
+                      href={user ? "/pages/users" : "/pages/login"}
+                      className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      onClick={() => {
+                        setSettingsDropdownOpen(false);
+                        if (!user) {
+                          router.push('/pages/login');
+                        }
+                      }}
+                    >
+                      <Users size={18} />
+                      Users
                     </NextLink>
                     <NextLink
                       href={user ? "/pages/plexconnection" : "/pages/login"}
@@ -315,6 +337,19 @@ export const Navbar = () => {
                       Favorites
                     </NextLink>
                     <NextLink
+                      href={user ? "/pages/hiddenmedia" : "/pages/login"}
+                      className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      onClick={() => {
+                        setAccountDropdownOpen(false);
+                        if (!user) {
+                          router.push('/pages/login');
+                        }
+                      }}
+                    >
+                      <EyeOff size={18} />
+                      Hidden Media
+                    </NextLink>
+                    <NextLink
                       href={user ? "/pages/history" : "/pages/login"}
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
                       onClick={() => {
@@ -327,19 +362,7 @@ export const Navbar = () => {
                       <Clock size={18} />
                       History
                     </NextLink>
-                    <NextLink
-                      href={user ? "/pages/stats" : "/pages/login"}
-                      className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
-                      onClick={() => {
-                        setAccountDropdownOpen(false);
-                        if (!user) {
-                          router.push('/pages/login');
-                        }
-                      }}
-                    >
-                      <BarChart3 size={18} />
-                      Stats
-                    </NextLink>
+          
                     <NextLink
                       href={user ? "/pages/account" : "/pages/login"}
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
@@ -444,15 +467,17 @@ export const Navbar = () => {
             { label: "Discover Movies", href: "/pages/discover/movies" },
             { label: "Discover Series", href: "/pages/discover/series" },
             { label: "Search Indexers", href: "/pages/search" },
+            { label: "Featured Lists", href: "/pages/featuredlists" },
             { label: "Indexers", href: user ? "/pages/indexers" : "/pages/login", requiresAuth: true },
             { label: "Download Clients", href: user ? "/pages/settings/downloadclients" : "/pages/login", requiresAuth: true },
             { label: "System", href: user ? "/pages/system" : "/pages/login", requiresAuth: true },
+            { label: "Users", href: user ? "/pages/users" : "/pages/login", requiresAuth: true },
             { label: "Plex Connection", href: user ? "/pages/plexconnection" : "/pages/login", requiresAuth: true },
             { label: "Media Library", href: user ? "/pages/medialibrary" : "/pages/login", requiresAuth: true },
             { label: "Monitored", href: user ? "/pages/monitored" : "/pages/login", requiresAuth: true },
             { label: "Favorites", href: user ? "/pages/favorites" : "/pages/login", requiresAuth: true },
+            { label: "Hidden Media", href: user ? "/pages/hiddenmedia" : "/pages/login", requiresAuth: true },
             { label: "History", href: user ? "/pages/history" : "/pages/login", requiresAuth: true },
-            { label: "Stats", href: user ? "/pages/stats" : "/pages/login", requiresAuth: true },
             { label: "Account", href: user ? "/pages/account" : "/pages/login", requiresAuth: true },
             { 
               label: user ? "Logout" : "Login", 

@@ -18,6 +18,8 @@ import {
   Download,
   Check,
   Heart,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import axios from "axios";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -75,6 +77,21 @@ const MoviesPage = () => {
   // Favorites state
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favoritingIds, setFavoritingIds] = useState<Set<number>>(new Set());
+  
+  // Hidden media state
+  const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
+  const [hidingIds, setHidingIds] = useState<Set<number>>(new Set());
+  
+  // Parental Guide data state
+  const [parentalGuideData, setParentalGuideData] = useState<Map<number, { 
+    hasNudity: boolean; 
+    nuditySeverity: string;
+    violence: string;
+    profanity: string;
+    alcohol: string;
+    frightening: string;
+  }>>(new Map());
+  const [loadingParentalGuideData, setLoadingParentalGuideData] = useState(false);
   
   // Modal state for notifications
   const [notificationModal, setNotificationModal] = useState<{
@@ -149,7 +166,7 @@ const MoviesPage = () => {
   const [releaseDateTo, setReleaseDateTo] = useState("");
   const [selectedGenres, setSelectedGenres] = useState<Set<number>>(new Set());
   const [keywords, setKeywords] = useState("");
-  const [originalLanguage, setOriginalLanguage] = useState("all");
+  const [originalLanguage, setOriginalLanguage] = useState("en");
   const [runtimeMin, setRuntimeMin] = useState("");
   const [runtimeMax, setRuntimeMax] = useState("");
   const [voteAverageMin, setVoteAverageMin] = useState("");
@@ -157,6 +174,13 @@ const MoviesPage = () => {
   const [voteCountMin, setVoteCountMin] = useState("");
   const [watchRegion, setWatchRegion] = useState("US");
   const [selectedProviders, setSelectedProviders] = useState<Set<number>>(new Set());
+  
+  // Parental Guide Filters
+  const [nudityFilter, setNudityFilter] = useState("all"); // "all", "none", "mild", "moderate", "severe"
+  const [violenceFilter, setViolenceFilter] = useState("all");
+  const [profanityFilter, setProfanityFilter] = useState("all");
+  const [alcoholFilter, setAlcoholFilter] = useState("all");
+  const [frighteningFilter, setFrighteningFilter] = useState("all");
   
   const [genres, setGenres] = useState<Genre[]>([]);
   const [loadingGenres, setLoadingGenres] = useState(false);
@@ -254,6 +278,24 @@ const MoviesPage = () => {
     }
   }, [user]);
 
+  // Fetch hidden media
+  useEffect(() => {
+    if (user) {
+      const token = localStorage.getItem("token");
+      axios.get(`${API_BASE_URL}/api/HiddenMedia?mediaType=movie`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((response) => {
+          if (response.data.success && response.data.hiddenIds?.movies) {
+            setHiddenIds(new Set(response.data.hiddenIds.movies));
+          }
+        })
+        .catch((error) => {
+          console.error("Error fetching hidden media:", error);
+        });
+    }
+  }, [user]);
+
   // Count active filters
   useEffect(() => {
     let count = 0;
@@ -268,8 +310,13 @@ const MoviesPage = () => {
     if (voteAverageMax) count++;
     if (voteCountMin) count++;
     if (selectedProviders.size > 0) count++;
+    if (nudityFilter !== "all") count++;
+    if (violenceFilter !== "all") count++;
+    if (profanityFilter !== "all") count++;
+    if (alcoholFilter !== "all") count++;
+    if (frighteningFilter !== "all") count++;
     setActiveFilters(count);
-  }, [releaseDateFrom, releaseDateTo, selectedGenres, keywords, originalLanguage, runtimeMin, runtimeMax, voteAverageMin, voteAverageMax, voteCountMin, selectedProviders]);
+  }, [releaseDateFrom, releaseDateTo, selectedGenres, keywords, originalLanguage, runtimeMin, runtimeMax, voteAverageMin, voteAverageMax, voteCountMin, selectedProviders, nudityFilter, violenceFilter, profanityFilter, alcoholFilter, frighteningFilter]);
 
   // Fetch movies
   const fetchMovies = useCallback(async (page = 1, append = false) => {
@@ -344,7 +391,128 @@ const MoviesPage = () => {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [debouncedSearchQuery, sortBy, releaseDateFrom, releaseDateTo, selectedGenres, originalLanguage, runtimeMin, runtimeMax, voteAverageMin, voteAverageMax, voteCountMin, keywords, watchRegion, selectedProviders, searchParams]);
+  }, [debouncedSearchQuery, sortBy, releaseDateFrom, releaseDateTo, selectedGenres, originalLanguage, runtimeMin, runtimeMax, voteAverageMin, voteAverageMax, voteCountMin, keywords, watchRegion, selectedProviders, nudityFilter, violenceFilter, profanityFilter, alcoholFilter, frighteningFilter, searchParams]);
+
+  // Fetch parental guide data for visible movies when any content filter is active
+  useEffect(() => {
+    const hasActiveFilter = nudityFilter !== "all" || violenceFilter !== "all" || 
+                           profanityFilter !== "all" || alcoholFilter !== "all" || 
+                           frighteningFilter !== "all";
+    
+    if (!hasActiveFilter || media.length === 0) {
+      return;
+    }
+
+    const fetchParentalGuideData = async () => {
+      setLoadingParentalGuideData(true);
+      console.log('🔍 Starting parental guide data fetch...');
+      try {
+        // Get IMDb IDs for current movies that we don't have data for yet
+        const moviesNeedingData = media.filter(movie => !parentalGuideData.has(movie.id));
+        console.log(`📊 Movies needing parental guide data: ${moviesNeedingData.length}`);
+        
+        if (moviesNeedingData.length === 0) {
+          console.log('✅ All movies already have parental guide data');
+          setLoadingParentalGuideData(false);
+          return;
+        }
+
+        // Fetch movie details to get IMDb IDs (in batches)
+        const batchSize = 10;
+        const imdbIdMap = new Map<number, string>();
+        
+        for (let i = 0; i < moviesNeedingData.length; i += batchSize) {
+          const batch = moviesNeedingData.slice(i, i + batchSize);
+          console.log(`📦 Fetching IMDb IDs for batch ${Math.floor(i/batchSize) + 1} (${batch.length} movies)`);
+          const detailsPromises = batch.map(movie =>
+            axios.get(`${API_BASE_URL}/api/TMDB/movie/${movie.id}`)
+              .then(res => ({
+                tmdbId: movie.id,
+                title: movie.title,
+                imdbId: res.data.movie?.imdb_id,
+              }))
+              .catch(() => ({ tmdbId: movie.id, title: movie.title, imdbId: null }))
+          );
+          
+          const results = await Promise.all(detailsPromises);
+          results.forEach(({ tmdbId, title, imdbId }) => {
+            if (imdbId) {
+              console.log(`  ✓ ${title} (TMDb:${tmdbId}) → ${imdbId}`);
+              imdbIdMap.set(tmdbId, imdbId);
+            } else {
+              console.log(`  ✗ ${title} (TMDb:${tmdbId}) - No IMDb ID`);
+            }
+          });
+        }
+        
+        console.log(`📊 Total movies with IMDb IDs: ${imdbIdMap.size}`);
+
+        if (imdbIdMap.size === 0) {
+          setLoadingParentalGuideData(false);
+          return;
+        }
+
+        // Fetch parental guide data
+        const items = Array.from(imdbIdMap.entries()).map(([tmdbId, imdbId]) => ({
+          imdbId,
+          tmdbId,
+          mediaType: 'movie',
+        }));
+
+        console.log(`🌐 Querying parental guide API with ${items.length} items...`);
+        const response = await axios.post(`${API_BASE_URL}/api/ParentalGuide/check-batch`, {
+          items,
+        }).catch(err => {
+          console.warn("❌ Parental guide API error:", err.message);
+          return { data: { success: true, nudityMap: {} } };
+        });
+
+        console.log(`✅ Parental guide API response:`, response.data);
+
+        if (response.data.success && response.data.nudityMap) {
+          const newParentalGuideData = new Map(parentalGuideData);
+          let mappedCount = 0;
+          
+          // Map IMDb IDs back to TMDb IDs
+          Object.entries(response.data.nudityMap).forEach(([imdbId, data]: [string, any]) => {
+            // Find the TMDb ID for this IMDb ID
+            let tmdbId = null;
+            for (const [tid, iid] of imdbIdMap.entries()) {
+              if (iid === imdbId) {
+                tmdbId = tid;
+                break;
+              }
+            }
+            
+            if (tmdbId) {
+              const movieTitle = moviesNeedingData.find(m => m.id === tmdbId)?.title || 'Unknown';
+              console.log(`  ✓ ${movieTitle} (${imdbId}): Nudity=${data.severity}, Violence=${data.violence}, Profanity=${data.profanity}`);
+              newParentalGuideData.set(tmdbId, {
+                hasNudity: data.hasNudity,
+                nuditySeverity: data.severity,
+                violence: data.violence || 'None',
+                profanity: data.profanity || 'None',
+                alcohol: data.alcohol || 'None',
+                frightening: data.frightening || 'None',
+              });
+              mappedCount++;
+            } else {
+              console.warn(`  ⚠️ Could not map IMDb ID ${imdbId} back to TMDb ID`);
+            }
+          });
+          
+          console.log(`📊 Mapped ${mappedCount} movies with parental guide data`);
+          setParentalGuideData(newParentalGuideData);
+        }
+      } catch (error) {
+        console.warn("Error fetching parental guide data (this is normal if server was just started):", error);
+      } finally {
+        setLoadingParentalGuideData(false);
+      }
+    };
+
+    fetchParentalGuideData();
+  }, [media, nudityFilter, violenceFilter, profanityFilter, alcoholFilter, frighteningFilter]);
 
   useEffect(() => {
     setMedia([]);
@@ -548,6 +716,71 @@ const MoviesPage = () => {
     }
   };
 
+  const toggleHidden = async (item: TMDBMedia, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!user) {
+      showNotification('Login Required', 'Please log in to hide content', 'warning');
+      return;
+    }
+
+    const isHidden = hiddenIds.has(item.id);
+    
+    setHidingIds((prev) => new Set(prev).add(item.id));
+
+    try {
+      const token = localStorage.getItem("token");
+      
+      if (isHidden) {
+        // Unhide
+        await axios.post(
+          `${API_BASE_URL}/api/HiddenMedia/unhide`,
+          {
+            tmdbId: item.id,
+            mediaType: 'movie',
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        
+        setHiddenIds((prev) => {
+          const next = new Set(prev);
+          next.delete(item.id);
+          return next;
+        });
+      } else {
+        // Hide
+        const posterPath = item.poster_path || null;
+
+        await axios.post(
+          `${API_BASE_URL}/api/HiddenMedia/hide`,
+          {
+            tmdbId: item.id,
+            mediaType: 'movie',
+            title: item.title || item.name || '',
+            posterPath,
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        
+        setHiddenIds((prev) => new Set(prev).add(item.id));
+      }
+    } catch (error: any) {
+      console.error('Error toggling hidden:', error);
+      const errorMsg = error.response?.data?.error || error.message || "Failed to update hidden status";
+      showNotification('Error', errorMsg, 'error');
+    } finally {
+      setHidingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+    }
+  };
+
   const clearFilters = () => {
     setReleaseDateFrom("");
     setReleaseDateTo("");
@@ -582,6 +815,8 @@ const MoviesPage = () => {
     const isDownloaded = downloadSuccess.has(item.id);
     const isFavorited = favoriteIds.has(`${item.id}-movie`);
     const isFavoriting = favoritingIds.has(item.id);
+    const isHidden = hiddenIds.has(item.id);
+    const isHiding = hidingIds.has(item.id);
 
     return (
       <div
@@ -621,6 +856,34 @@ const MoviesPage = () => {
                 ⭐ {item.vote_average.toFixed(1)}
               </span>
             </div>
+          )}
+
+          {/* Hide Button - Bottom Right (left of favorite) */}
+          {user && (
+            <button
+              onClick={(e) => toggleHidden(item, e)}
+              disabled={isHiding}
+              className={`absolute bottom-0.5 right-14 sm:bottom-1 sm:right-[4.5rem] z-10 p-1 sm:p-1.5 rounded-full backdrop-blur-md transition-all duration-200 ${
+                isHidden
+                  ? 'bg-warning/90 hover:bg-warning'
+                  : 'bg-default-500/60 hover:bg-default-500/80'
+              } ${isHiding ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={isHidden ? 'Unhide' : 'Hide (never show again)'}
+            >
+              {isHiding ? (
+                <Spinner size="sm" color="white" className="w-3 h-3 sm:w-4 sm:h-4" />
+              ) : isHidden ? (
+                <EyeOff 
+                  size={14} 
+                  className="sm:w-4 sm:h-4 text-white" 
+                />
+              ) : (
+                <Eye 
+                  size={14} 
+                  className="sm:w-4 sm:h-4 text-white" 
+                />
+              )}
+            </button>
           )}
 
           {/* Favorite Button - Bottom Right (left of download) */}
@@ -919,6 +1182,127 @@ const MoviesPage = () => {
                   </Select>
                 </div>
 
+                {/* Parental Guide Filters */}
+                <div className="space-y-4 col-span-full">
+                  <h3 className="text-sm font-semibold text-foreground">Content Filters (IMDb Parental Guide)</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Sex & Nudity Filter */}
+                    <div className="space-y-2">
+                      <label className="text-xs sm:text-sm font-medium text-foreground">Sex & Nudity</label>
+                      <Select
+                        aria-label="Filter by nudity content"
+                        selectedKeys={new Set([nudityFilter])}
+                        onSelectionChange={(keys) => {
+                          const selected = Array.from(keys)[0] as string;
+                          setNudityFilter(selected || "all");
+                        }}
+                        size="sm"
+                        classNames={{
+                          trigger: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                        }}
+                      >
+                        <SelectItem key="all" value="all">All</SelectItem>
+                        <SelectItem key="none" value="none">None Only</SelectItem>
+                        <SelectItem key="mild" value="mild">Mild or Less</SelectItem>
+                        <SelectItem key="moderate" value="moderate">Moderate or Less</SelectItem>
+                        <SelectItem key="severe" value="severe">Include Severe</SelectItem>
+                      </Select>
+                    </div>
+
+                    {/* Violence & Gore Filter */}
+                    <div className="space-y-2">
+                      <label className="text-xs sm:text-sm font-medium text-foreground">Violence & Gore</label>
+                      <Select
+                        aria-label="Filter by violence content"
+                        selectedKeys={new Set([violenceFilter])}
+                        onSelectionChange={(keys) => {
+                          const selected = Array.from(keys)[0] as string;
+                          setViolenceFilter(selected || "all");
+                        }}
+                        size="sm"
+                        classNames={{
+                          trigger: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                        }}
+                      >
+                        <SelectItem key="all" value="all">All</SelectItem>
+                        <SelectItem key="none" value="none">None Only</SelectItem>
+                        <SelectItem key="mild" value="mild">Mild or Less</SelectItem>
+                        <SelectItem key="moderate" value="moderate">Moderate or Less</SelectItem>
+                        <SelectItem key="severe" value="severe">Include Severe</SelectItem>
+                      </Select>
+                    </div>
+
+                    {/* Profanity Filter */}
+                    <div className="space-y-2">
+                      <label className="text-xs sm:text-sm font-medium text-foreground">Profanity</label>
+                      <Select
+                        aria-label="Filter by profanity content"
+                        selectedKeys={new Set([profanityFilter])}
+                        onSelectionChange={(keys) => {
+                          const selected = Array.from(keys)[0] as string;
+                          setProfanityFilter(selected || "all");
+                        }}
+                        size="sm"
+                        classNames={{
+                          trigger: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                        }}
+                      >
+                        <SelectItem key="all" value="all">All</SelectItem>
+                        <SelectItem key="none" value="none">None Only</SelectItem>
+                        <SelectItem key="mild" value="mild">Mild or Less</SelectItem>
+                        <SelectItem key="moderate" value="moderate">Moderate or Less</SelectItem>
+                        <SelectItem key="severe" value="severe">Include Severe</SelectItem>
+                      </Select>
+                    </div>
+
+                    {/* Alcohol, Drugs & Smoking Filter */}
+                    <div className="space-y-2">
+                      <label className="text-xs sm:text-sm font-medium text-foreground">Alcohol, Drugs & Smoking</label>
+                      <Select
+                        aria-label="Filter by alcohol/drugs content"
+                        selectedKeys={new Set([alcoholFilter])}
+                        onSelectionChange={(keys) => {
+                          const selected = Array.from(keys)[0] as string;
+                          setAlcoholFilter(selected || "all");
+                        }}
+                        size="sm"
+                        classNames={{
+                          trigger: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                        }}
+                      >
+                        <SelectItem key="all" value="all">All</SelectItem>
+                        <SelectItem key="none" value="none">None Only</SelectItem>
+                        <SelectItem key="mild" value="mild">Mild or Less</SelectItem>
+                        <SelectItem key="moderate" value="moderate">Moderate or Less</SelectItem>
+                        <SelectItem key="severe" value="severe">Include Severe</SelectItem>
+                      </Select>
+                    </div>
+
+                    {/* Frightening & Intense Scenes Filter */}
+                    <div className="space-y-2">
+                      <label className="text-xs sm:text-sm font-medium text-foreground">Frightening & Intense Scenes</label>
+                      <Select
+                        aria-label="Filter by frightening content"
+                        selectedKeys={new Set([frighteningFilter])}
+                        onSelectionChange={(keys) => {
+                          const selected = Array.from(keys)[0] as string;
+                          setFrighteningFilter(selected || "all");
+                        }}
+                        size="sm"
+                        classNames={{
+                          trigger: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                        }}
+                      >
+                        <SelectItem key="all" value="all">All</SelectItem>
+                        <SelectItem key="none" value="none">None Only</SelectItem>
+                        <SelectItem key="mild" value="mild">Mild or Less</SelectItem>
+                        <SelectItem key="moderate" value="moderate">Moderate or Less</SelectItem>
+                        <SelectItem key="severe" value="severe">Include Severe</SelectItem>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Runtime */}
                 <div className="space-y-2">
                   <label className="text-xs sm:text-sm font-medium text-foreground">Runtime (minutes)</label>
@@ -1095,7 +1479,94 @@ const MoviesPage = () => {
               Showing {media.length} of {totalResults} results
             </div>
             <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 3xl:grid-cols-10 4xl:grid-cols-12 5xl:grid-cols-14 gap-2 sm:gap-3 md:gap-4 relative z-0">
-              {media.map((item) => (
+              {media.filter(item => {
+                // Filter out hidden items
+                if (hiddenIds.has(item.id)) return false;
+                
+                // Check if any parental guide filter is active
+                const hasActiveFilter = nudityFilter !== "all" || violenceFilter !== "all" || 
+                                       profanityFilter !== "all" || alcoholFilter !== "all" || 
+                                       frighteningFilter !== "all";
+                
+                // If no filters active, show everything
+                if (!hasActiveFilter) return true;
+                
+                // Check parental guide filters
+                const itemData = parentalGuideData.get(item.id);
+                
+                // If we don't have data yet, HIDE the item when filters are active
+                // This ensures we only show items we've verified meet the criteria
+                if (!itemData) {
+                  console.log(`Hiding ${item.title || item.name} - no parental guide data yet`);
+                  return false;
+                }
+                
+                // Helper function to check severity filter
+                const checkSeverity = (severity: string, filter: string): boolean => {
+                  if (filter === "all") return true;
+                  
+                  // Normalize severity to handle variations
+                  const normalizedSeverity = (severity || "None").trim();
+                  
+                  switch (filter) {
+                    case "none":
+                      return normalizedSeverity === "None";
+                    case "mild":
+                      return normalizedSeverity === "None" || normalizedSeverity === "Mild";
+                    case "moderate":
+                      return normalizedSeverity === "None" || normalizedSeverity === "Mild" || normalizedSeverity === "Moderate";
+                    case "severe":
+                      return true; // Include all
+                    default:
+                      return true;
+                  }
+                };
+                
+                // Check each active filter - ALL must pass
+                if (nudityFilter !== "all") {
+                  const passes = checkSeverity(itemData.nuditySeverity, nudityFilter);
+                  if (!passes) {
+                    console.log(`Filtering out ${item.title || item.name} - nudity: ${itemData.nuditySeverity}, filter: ${nudityFilter}`);
+                    return false;
+                  }
+                }
+                
+                if (violenceFilter !== "all") {
+                  const passes = checkSeverity(itemData.violence, violenceFilter);
+                  if (!passes) {
+                    console.log(`Filtering out ${item.title || item.name} - violence: ${itemData.violence}, filter: ${violenceFilter}`);
+                    return false;
+                  }
+                }
+                
+                if (profanityFilter !== "all") {
+                  const passes = checkSeverity(itemData.profanity, profanityFilter);
+                  if (!passes) {
+                    console.log(`Filtering out ${item.title || item.name} - profanity: ${itemData.profanity}, filter: ${profanityFilter}`);
+                    return false;
+                  }
+                }
+                
+                if (alcoholFilter !== "all") {
+                  const passes = checkSeverity(itemData.alcohol, alcoholFilter);
+                  if (!passes) {
+                    console.log(`Filtering out ${item.title || item.name} - alcohol: ${itemData.alcohol}, filter: ${alcoholFilter}`);
+                    return false;
+                  }
+                }
+                
+                if (frighteningFilter !== "all") {
+                  const passes = checkSeverity(itemData.frightening, frighteningFilter);
+                  if (!passes) {
+                    console.log(`Filtering out ${item.title || item.name} - frightening: ${itemData.frightening}, filter: ${frighteningFilter}`);
+                    return false;
+                  }
+                }
+                
+                // All filters passed!
+                console.log(`✅ Showing ${item.title || item.name} - passes all filters`);
+                return true;
+              }).map((item) => (
                 <React.Fragment key={item.id}>
                   {renderMediaCard(item)}
                 </React.Fragment>

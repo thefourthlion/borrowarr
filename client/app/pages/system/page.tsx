@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { Spinner } from "@nextui-org/spinner";
+import { ChevronDown, ChevronRight, Settings as SettingsIcon } from "lucide-react";
 import DirectoryPicker from "../../../components/DirectoryPicker";
 import "../../../styles/System.scss";
 
@@ -156,11 +157,33 @@ const System = () => {
 
   if (loading) {
     return (
-      <div className="System page">
-        <div className="container">
-          <h1 className="content-header">System Settings</h1>
-          <div className="content-body">
-            <p>Loading settings...</p>
+      <div className="min-h-screen bg-background">
+        {/* Header */}
+        <div className="border-b border-secondary/20 sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
+          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-secondary/10">
+                <SettingsIcon className="w-6 h-6 text-secondary" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent truncate">
+                  System Settings
+                </h1>
+                <p className="text-xs sm:text-sm text-foreground/60 mt-1">
+                  Configure your media directories, naming, quality, and automation.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Loading state */}
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+          <div className="flex flex-col items-center justify-center py-16 rounded-xl border border-secondary/20 bg-content1 shadow-lg">
+            <Spinner size="lg" color="secondary" />
+            <p className="mt-4 text-sm sm:text-base text-foreground/60">
+              Loading system settings...
+            </p>
           </div>
         </div>
       </div>
@@ -168,10 +191,30 @@ const System = () => {
   }
 
   return (
-    <div className="System page">
-      <div className="container">
-        <h1 className="content-header">System Settings</h1>
-        
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <div className="border-b border-secondary/20 sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-secondary/10">
+              <SettingsIcon className="w-6 h-6 text-secondary" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent truncate">
+                System Settings
+              </h1>
+              <p className="text-xs sm:text-sm text-foreground/60 mt-1">
+                Configure media paths, file naming, quality limits, and automation behaviour.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
+        <div className="System">
+          <div className="container">
         {message && (
           <div className={`message message-${message.type}`}>
             {message.text}
@@ -752,6 +795,8 @@ const System = () => {
             >
               {saving ? 'Saving...' : 'Save Settings'}
             </button>
+          </div>
+        </div>
           </div>
         </div>
       </div>

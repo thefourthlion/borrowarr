@@ -1,1 +1,21 @@
-const express = require("express"); const router = express.Router(); const { createUsers, readUsers, readUsersFromID, updateUsers, deleteUsers } = require("../controllers/Users"); router.route("/create").post(createUsers); router.route("/read").get(readUsers); router.route("/read/:id").get(readUsersFromID); router.route("/update/:id").put(updateUsers); router.route("/delete/:id").delete(deleteUsers); module.exports = router;
+const express = require("express");
+const router = express.Router();
+const {
+  createUsers,
+  readUsers,
+  readUsersFromID,
+  updateUsers,
+  deleteUsers,
+} = require("../controllers/Users");
+const { authenticateToken } = require("../middleware/auth");
+
+// All routes require authentication
+router.use(authenticateToken);
+
+router.route("/create").post(createUsers);
+router.route("/read").get(readUsers);
+router.route("/read/:id").get(readUsersFromID);
+router.route("/update/:id").put(updateUsers);
+router.route("/delete/:id").delete(deleteUsers);
+
+module.exports = router;

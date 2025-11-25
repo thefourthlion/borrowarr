@@ -3,7 +3,10 @@ const router = express.Router();
 const settingsController = require('../controllers/Settings');
 const { authenticateToken } = require('../middleware/auth');
 
-// All routes require authentication
+// Public route - no authentication required
+router.get('/public-registration-status', settingsController.getPublicRegistrationStatus);
+
+// All routes below require authentication
 router.use(authenticateToken);
 
 // Get user settings

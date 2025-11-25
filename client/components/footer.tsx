@@ -8,6 +8,7 @@ import {
   Tv, 
   Settings, 
   User, 
+  Users,
   BarChart3, 
   Database, 
   Server, 
@@ -15,7 +16,8 @@ import {
   Heart, 
   Clock, 
   Coffee, 
-  Bitcoin 
+  Bitcoin,
+  EyeOff
 } from "lucide-react";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from "@nextui-org/modal";
 import { Button } from "@nextui-org/button";
@@ -215,9 +217,21 @@ const Footer = () => {
               </Link>
             </li>
             <li>
+              <Link href="/pages/users" className="footer-link">
+                <Users size={16} />
+                <span>Users</span>
+              </Link>
+            </li>
+            <li>
               <Link href="/pages/favorites" className="footer-link">
                 <Heart size={16} />
                 <span>Favorites</span>
+              </Link>
+            </li>
+            <li>
+              <Link href="/pages/hiddenmedia" className="footer-link">
+                <EyeOff size={16} />
+                <span>Hidden Media</span>
               </Link>
             </li>
           </ul>

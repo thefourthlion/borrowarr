@@ -46,6 +46,17 @@ const User = sequelize.define(
       allowNull: true,
       field: "avatar_url",
     },
+    permissions: {
+      type: DataTypes.JSON,
+      allowNull: false,
+      defaultValue: {
+        admin: false,
+        manage_users: false,
+        request: true,
+        auto_approve: false,
+        manage_requests: false,
+      },
+    },
     createdAt: {
       type: DataTypes.DATE,
       allowNull: false,

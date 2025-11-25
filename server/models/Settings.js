@@ -61,6 +61,11 @@ const Settings = sequelize.define('Settings', {
     allowNull: false,
     defaultValue: 60, // minutes
   },
+  publicRegistrationEnabled: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: true,
+  },
 }, {
   tableName: 'Settings',
   timestamps: true,

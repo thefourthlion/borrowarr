@@ -48,6 +48,9 @@ require("./models/Settings");
 require("./models/Favorites");
 require("./models/History");
 require("./models/PlexConnection");
+require("./models/FeaturedLists");
+require("./models/HiddenMedia");
+require("./models/ParentalGuide");
 
 // Connect to database (this will sync all loaded models)
 connectDB();
@@ -76,6 +79,9 @@ app.use("/api/Settings", require("./routes/Settings"));
 app.use("/api/Favorites", require("./routes/Favorites"));
 app.use("/api/History", require("./routes/History"));
 app.use("/api/PlexConnection", require("./routes/PlexConnection"));
+app.use("/api/FeaturedLists", require("./routes/FeaturedLists"));
+app.use("/api/HiddenMedia", require("./routes/HiddenMedia"));
+app.use("/api/ParentalGuide", require("./routes/ParentalGuide"));
 
 app.listen(PORT, () => {
   console.log("✅ Listening on port " + PORT);

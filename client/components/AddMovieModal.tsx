@@ -31,6 +31,9 @@ import {
   Maximize2,
   Heart,
   ShoppingCart,
+  Search,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
@@ -161,6 +164,10 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
   const [isFavorited, setIsFavorited] = useState(false);
   const [isFavoriting, setIsFavoriting] = useState(false);
   
+  // Hidden state
+  const [isHidden, setIsHidden] = useState(false);
+  const [isHiding, setIsHiding] = useState(false);
+  
   // Validation state
   const [hasIndexers, setHasIndexers] = useState(false);
   const [hasDownloadClients, setHasDownloadClients] = useState(false);
@@ -178,6 +185,10 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
     message: '',
     type: 'info',
   });
+
+  // Ref to track if we've already fetched data for this media
+  const fetchedMediaIdRef = useRef<number | null>(null);
+  const isFetchingRef = useRef(false);
 
   const showNotification = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
     setNotificationModal({
@@ -261,12 +272,19 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
 
   // Fetch movie details when modal opens or media changes
   useEffect(() => {
-    if (isOpen && media) {
-      // Reset all state first to ensure clean slate for new media
+    if (isOpen && media && media.id) {
+      // Prevent double-fetching for the same media
+      if (fetchedMediaIdRef.current === media.id && isFetchingRef.current) {
+        return;
+      }
+      
+      // If this is a different media than last time, reset everything
+      if (fetchedMediaIdRef.current !== media.id) {
       setMovieDetails(null);
       setTorrents([]);
       setTrailerKey(null);
       setIsFavorited(false);
+      setIsHidden(false);
       setDownloading(new Set());
       setDownloadSuccess(new Set());
       setDownloadError(new Map());
@@ -274,18 +292,31 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
       setMonitor("movieOnly");
       setMinAvailability("released");
       setQualityProfile("any");
+      }
       
-      // Then fetch new data
-      fetchMovieDetails();
-      fetchTorrents();
-      checkIfFavorited();
-      checkRequirements();
+      // Mark as fetching for this media
+      fetchedMediaIdRef.current = media.id;
+      isFetchingRef.current = true;
+      
+      // Fetch new data
+      Promise.all([
+        fetchMovieDetails(),
+        fetchTorrents(),
+        checkIfFavorited(),
+        checkIfHidden(),
+        checkRequirements(),
+      ]).finally(() => {
+        isFetchingRef.current = false;
+      });
     } else if (!isOpen) {
-      // Only reset when closing
+      // Reset when closing
+      fetchedMediaIdRef.current = null;
+      isFetchingRef.current = false;
       setMovieDetails(null);
       setTorrents([]);
       setTrailerKey(null);
       setIsFavorited(false);
+      setIsHidden(false);
       setDownloading(new Set());
       setDownloadSuccess(new Set());
       setDownloadError(new Map());
@@ -294,7 +325,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
       setMinAvailability("released");
       setQualityProfile("any");
     }
-  }, [isOpen, media?.id]); // Changed dependency to media?.id to trigger on media change
+  }, [isOpen, media?.id]);
 
   const fetchMovieDetails = async () => {
     if (!media) return;
@@ -689,6 +720,81 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
     }
   };
 
+  const checkIfHidden = async () => {
+    if (!user || !media) return;
+    
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await axios.get(
+        `${API_BASE_URL}/api/HiddenMedia`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      
+      if (response.data.success && response.data.hiddenIds?.movies) {
+        setIsHidden(response.data.hiddenIds.movies.includes(media.id));
+      }
+    } catch (error) {
+      console.error('Error checking hidden status:', error);
+    }
+  };
+
+  const toggleHidden = async () => {
+    if (!user || !media) {
+      showNotification('Login Required', 'Please log in to hide content', 'warning');
+      return;
+    }
+
+    setIsHiding(true);
+    
+    try {
+      const token = localStorage.getItem('accessToken');
+      
+      if (isHidden) {
+        // Unhide
+        await axios.post(
+          `${API_BASE_URL}/api/HiddenMedia/unhide`,
+          {
+            tmdbId: media.id,
+            mediaType: 'movie',
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        
+        setIsHidden(false);
+        showNotification('Success', 'Movie unhidden', 'success');
+      } else {
+        // Hide
+        const posterPath = media.poster_path || null;
+
+        await axios.post(
+          `${API_BASE_URL}/api/HiddenMedia/hide`,
+          {
+            tmdbId: media.id,
+            mediaType: 'movie',
+            title: media.title || media.name || '',
+            posterPath,
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        
+        setIsHidden(true);
+        showNotification('Success', 'Movie hidden from discover pages', 'success');
+      }
+    } catch (error: any) {
+      console.error('Error toggling hidden:', error);
+      const errorMsg = error.response?.data?.error || error.message || "Failed to update hidden status";
+      showNotification('Error', errorMsg, 'error');
+    } finally {
+      setIsHiding(false);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       setOpenSelects(new Set());
@@ -832,22 +938,42 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
               </div>
               <div className="flex gap-2">
                 {user && (
-                  <Button
-                    size="sm"
-                    variant="flat"
-                    color={isFavorited ? "danger" : "default"}
-                    startContent={
-                      isFavoriting ? (
-                        <Spinner size="sm" className="w-4 h-4" />
-                      ) : (
-                        <Heart size={16} className={isFavorited ? 'fill-current' : ''} />
-                      )
-                    }
-                    onPress={toggleFavorite}
-                    isDisabled={isFavoriting}
-                  >
-                    {isFavorited ? 'Unfavorite' : 'Favorite'}
-                  </Button>
+                  <>
+                    <Button
+                      size="sm"
+                      variant="flat"
+                      color={isHidden ? "warning" : "default"}
+                      startContent={
+                        isHiding ? (
+                          <Spinner size="sm" className="w-4 h-4" />
+                        ) : isHidden ? (
+                          <EyeOff size={16} />
+                        ) : (
+                          <Eye size={16} />
+                        )
+                      }
+                      onPress={toggleHidden}
+                      isDisabled={isHiding}
+                    >
+                      {isHidden ? 'Unhide' : 'Hide'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="flat"
+                      color={isFavorited ? "danger" : "default"}
+                      startContent={
+                        isFavoriting ? (
+                          <Spinner size="sm" className="w-4 h-4" />
+                        ) : (
+                          <Heart size={16} className={isFavorited ? 'fill-current' : ''} />
+                        )
+                      }
+                      onPress={toggleFavorite}
+                      isDisabled={isFavoriting}
+                    >
+                      {isFavorited ? 'Unfavorite' : 'Favorite'}
+                    </Button>
+                  </>
                 )}
                 <Button
                   as="a"
@@ -1018,6 +1144,19 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
                             Official Site
                           </Button>
                         )}
+                        <Button
+                          as="a"
+                          href={`http://localhost:3012/pages/search?q=${encodeURIComponent(media.title || media.name || '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          size="sm"
+                          variant="flat"
+                          color="secondary"
+                          startContent={<Search size={14} />}
+                          className="text-xs"
+                        >
+                          Search Torrents
+                        </Button>
                       </div>
                     </div>
                   )}

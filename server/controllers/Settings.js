@@ -27,6 +27,23 @@ exports.getSettings = async (req, res) => {
 };
 
 /**
+ * Get public registration status (no auth required)
+ */
+exports.getPublicRegistrationStatus = async (req, res) => {
+  try {
+    // Get the first user's settings (admin settings) or default
+    const settings = await Settings.findOne({ order: [['createdAt', 'ASC']] });
+    
+    res.json({ 
+      enabled: settings ? settings.publicRegistrationEnabled : true 
+    });
+  } catch (error) {
+    console.error('Error fetching registration status:', error);
+    res.status(500).json({ error: 'Failed to fetch registration status' });
+  }
+};
+
+/**
  * Update user settings
  */
 exports.updateSettings = async (req, res) => {

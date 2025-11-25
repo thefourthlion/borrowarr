@@ -97,3 +97,4 @@ const ParentalGuide = sequelize.define('ParentalGuide', {
 
 module.exports = ParentalGuide;
 
+

@@ -236,3 +236,4 @@ TMDb Movie → Fetch Details → IMDb ID → Query API → Severity Data → App
 **Version**: 1.0.0
 **Status**: ✅ Backend 100% Working, Frontend Debugging Enhanced
 
+

@@ -476,13 +476,12 @@ const MoviesPage = () => {
           // Map IMDb IDs back to TMDb IDs
           Object.entries(response.data.nudityMap).forEach(([imdbId, data]: [string, any]) => {
             // Find the TMDb ID for this IMDb ID
-            let tmdbId = null;
-            for (const [tid, iid] of imdbIdMap.entries()) {
-              if (iid === imdbId) {
+            let tmdbId: number | null = null;
+            imdbIdMap.forEach((iid, tid) => {
+              if (iid === imdbId && tmdbId === null) {
                 tmdbId = tid;
-                break;
               }
-            }
+            });
             
             if (tmdbId) {
               const movieTitle = moviesNeedingData.find(m => m.id === tmdbId)?.title || 'Unknown';

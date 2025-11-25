@@ -328,7 +328,7 @@ const FeaturedListDetail = () => {
       });
       
       const favorites = response.data.favorites || [];
-      const ids = new Set(favorites.map((fav: any) => `${fav.mediaType}-${fav.tmdbId}`));
+      const ids = new Set<string>(favorites.map((fav: any) => `${fav.mediaType}-${fav.tmdbId}`));
       setFavoriteIds(ids);
     } catch (error) {
       console.error('Error fetching favorites:', error);

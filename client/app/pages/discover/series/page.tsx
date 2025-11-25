@@ -423,24 +423,32 @@ const SeriesPage = () => {
         
         for (let i = 0; i < seriesNeedingData.length; i += batchSize) {
           const batch = seriesNeedingData.slice(i, i + batchSize);
+          console.log(`📦 Fetching IMDb IDs for batch ${Math.floor(i/batchSize) + 1} (${batch.length} series)`);
           const detailsPromises = batch.map(series =>
             axios.get(`${API_BASE_URL}/api/TMDB/tv/${series.id}`)
               .then(res => ({
                 tmdbId: series.id,
+                name: series.name,
                 imdbId: res.data.tv?.external_ids?.imdb_id,
               }))
-              .catch(() => ({ tmdbId: series.id, imdbId: null }))
+              .catch(() => ({ tmdbId: series.id, name: series.name, imdbId: null }))
           );
           
           const results = await Promise.all(detailsPromises);
-          results.forEach(({ tmdbId, imdbId }) => {
+          results.forEach(({ tmdbId, name, imdbId }) => {
             if (imdbId) {
+              console.log(`  ✓ ${name} (TMDb:${tmdbId}) → ${imdbId}`);
               imdbIdMap.set(tmdbId, imdbId);
+            } else {
+              console.log(`  ✗ ${name} (TMDb:${tmdbId}) - No IMDb ID`);
             }
           });
         }
+        
+        console.log(`📊 Total series with IMDb IDs: ${imdbIdMap.size}`);
 
         if (imdbIdMap.size === 0) {
+          console.log('⚠️ No series have IMDb IDs - cannot fetch parental guide data');
           setLoadingParentalGuideData(false);
           return;
         }
@@ -452,18 +460,33 @@ const SeriesPage = () => {
           mediaType: 'tv',
         }));
 
+        console.log(`🌐 Querying parental guide API with ${items.length} items...`);
         const response = await axios.post(`${API_BASE_URL}/api/ParentalGuide/check-batch`, {
           items,
         }).catch(err => {
-          console.warn("Parental guide API not available yet:", err.message);
-          return { data: { success: true, parentalGuideMap: {} } };
+          console.warn("❌ Parental guide API error:", err.message);
+          return { data: { success: true, nudityMap: {} } };
         });
+
+        console.log(`✅ Parental guide API response:`, response.data);
 
         if (response.data.success && response.data.nudityMap) {
           const newParentalGuideData = new Map(parentalGuideData);
+          let mappedCount = 0;
+          
+          // Map IMDb IDs back to TMDb IDs
           Object.entries(response.data.nudityMap).forEach(([imdbId, data]: [string, any]) => {
-            const tmdbId = data.tmdbId;
+            // Find the TMDb ID for this IMDb ID
+            let tmdbId: number | null = null;
+            imdbIdMap.forEach((iid, tid) => {
+              if (iid === imdbId && tmdbId === null) {
+                tmdbId = tid;
+              }
+            });
+            
             if (tmdbId) {
+              const seriesTitle = seriesNeedingData.find(s => s.id === tmdbId)?.name || 'Unknown';
+              console.log(`  ✓ ${seriesTitle} (${imdbId}): Nudity=${data.severity}, Violence=${data.violence}, Profanity=${data.profanity}`);
               newParentalGuideData.set(tmdbId, {
                 hasNudity: data.hasNudity,
                 nuditySeverity: data.severity,
@@ -472,8 +495,13 @@ const SeriesPage = () => {
                 alcohol: data.alcohol || 'None',
                 frightening: data.frightening || 'None',
               });
+              mappedCount++;
+            } else {
+              console.warn(`  ⚠️ Could not map IMDb ID ${imdbId} back to TMDb ID`);
             }
           });
+          
+          console.log(`📊 Mapped ${mappedCount} series with parental guide data`);
           setParentalGuideData(newParentalGuideData);
         }
       } catch (error) {

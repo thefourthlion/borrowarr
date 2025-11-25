@@ -50,3 +50,4 @@ const HiddenMedia = sequelize.define('HiddenMedia', {
 
 module.exports = HiddenMedia;
 
+

@@ -1,5 +1,5 @@
 const FeaturedList = require("../models/FeaturedLists");
-const { scraper } = require("../../services/letter-box-scrapper");
+const { scraper } = require("../services/letter-box-scrapper");
 const { Op } = require("sequelize");
 
 /**

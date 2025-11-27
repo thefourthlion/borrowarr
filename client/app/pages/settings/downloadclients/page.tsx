@@ -607,23 +607,29 @@ const DownloadClients = () => {
                      
 
                       
-                      <Switch
-                        size="sm"
-                        color="secondary"
-                        isSelected={client.enabled}
-                        onValueChange={async (enabled) => {
-                          try {
-                            await axios.put(`${API_BASE_URL}/api/DownloadClients/update/${client.id}`, {
-                              ...client,
-                              enabled,
-                            });
-                            fetchClients();
-                          } catch (error) {
-                            console.error("Error updating client:", error);
-                          }
-                        }}
+                      <div 
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
                         className="flex-shrink-0"
-                      />
+                      >
+                        <Switch
+                          size="sm"
+                          color="secondary"
+                          isSelected={client.enabled}
+                          onValueChange={async (enabled) => {
+                            try {
+                              await axios.put(`${API_BASE_URL}/api/DownloadClients/update/${client.id}`, {
+                                ...client,
+                                enabled,
+                              });
+                              fetchClients();
+                            } catch (error) {
+                              console.error("Error updating client:", error);
+                            }
+                          }}
+                        />
+                      </div>
                     </div>
                       </div>
                         </CardBody>

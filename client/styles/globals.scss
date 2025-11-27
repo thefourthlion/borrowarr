@@ -299,6 +299,7 @@ body {
     background: linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(139, 92, 246, 0.05));
     opacity: 0;
     transition: opacity 0.3s ease;
+    pointer-events: none; // Allow clicks to pass through the overlay
   }
   
   &:hover {

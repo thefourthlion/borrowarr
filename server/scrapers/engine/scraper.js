@@ -82,30 +82,53 @@ class Scraper {
   /**
    * Build search URL with query
    */
-  buildSearchURL(query, categoryId = null) {
+  buildSearchURL(query, categoryId = null, categoryIds = []) {
     const searchConfig = this.definition.search;
     const pathTemplate = searchConfig.paths[0].path;
     
     // Apply keywords filters first
     let processedQuery = this.applyKeywordsFilters(query);
     
+    // First handle conditional blocks {{ if .Keywords }}...{{ else }}...{{ end }}
+    // This needs to happen first as it may contain other template variables
+    let url = pathTemplate.replace(/\{\{\s*if\s+\.Keywords\s*\}\}([\s\S]*?)\{\{\s*else\s*\}\}([\s\S]*?)\{\{\s*end\s*\}\}/gi, (match, ifBlock, elseBlock) => {
+      return processedQuery ? ifBlock.trim() : elseBlock.trim();
+    });
+    
+    // Handle simple {{ if .Keywords }}...{{ end }} without else
+    url = url.replace(/\{\{\s*if\s+\.Keywords\s*\}\}([\s\S]*?)\{\{\s*end\s*\}\}/gi, (match, ifBlock) => {
+      return processedQuery ? ifBlock.trim() : '';
+    });
+    
     // Replace template variables
-    let url = pathTemplate.replace(/\{\{\s*\.Keywords\s*\}\}/g, encodeURIComponent(processedQuery));
+    url = url.replace(/\{\{\s*\.Keywords\s*\}\}/g, encodeURIComponent(processedQuery));
     url = url.replace(/\{\{\s*\.Query\s*\}\}/g, encodeURIComponent(processedQuery));
+    
+    // Handle {{ join .Categories "," }} or {{ join .Categories "" }}
+    url = url.replace(/\{\{\s*join\s+\.Categories\s*"([^"]*)"\s*\}\}/gi, (match, separator) => {
+      if (categoryIds && categoryIds.length > 0) {
+        return categoryIds.join(separator);
+      }
+      // Fallback to single categoryId if categoryIds not provided
+      return categoryId ? String(categoryId) : '';
+    });
     
     // Handle .Config variables
     url = url.replace(/\{\{\s*\.Config\.(\w+)\s*\}\}/g, (match, configKey) => {
       return this.config[configKey] || '';
     });
     
-    // Handle conditional blocks {{ if .Keywords }}...{{ else }}...{{ end }}
-    url = url.replace(/\{\{\s*if\s+\.Keywords\s*\}\}([^{]*?)\{\{\s*else\s*\}\}([^{]*?)\{\{\s*end\s*\}\}/g, (match, ifBlock, elseBlock) => {
-      return processedQuery ? ifBlock : elseBlock;
-    });
-    
     // Handle category
-    if (categoryId && pathTemplate.includes('{{.Category}}')) {
-      url = url.replace(/\{\{\s*\.Category\s*\}\}/g, categoryId);
+    if (categoryId) {
+      url = url.replace(/\{\{\s*\.Category\s*\}\}/g, String(categoryId));
+    }
+    
+    // Clean up any remaining whitespace/newlines from multiline templates
+    url = url.replace(/\s+/g, ' ').trim();
+    
+    // If the path is already a full URL (starts with http), don't prepend baseUrl
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
     }
     
     return this.baseUrl + url;
@@ -156,7 +179,7 @@ class Scraper {
         this.baseUrl = currentBaseUrl;
         
         try {
-          const searchURL = this.buildSearchURL(query, options.categoryId);
+          const searchURL = this.buildSearchURL(query, options.categoryId, options.categoryIds);
           
           if (linkIndex === 0) {
             console.log(`🔍 Searching ${this.definition.name}: ${searchURL}`);
@@ -583,6 +606,22 @@ class Scraper {
    * Format result into standardized structure
    */
   formatResult(data) {
+    // Build magnet link from infohash if download/magnet not provided
+    if (!data.download && !data.magnet && data.infohash) {
+      const trackers = [
+        'udp://tracker.opentrackr.org:1337',
+        'udp://open.stealth.si:80/announce',
+        'udp://tracker.torrent.eu.org:451/announce',
+        'udp://tracker.bittor.pw:1337/announce',
+        'udp://public.popcorn-tracker.org:6969/announce',
+        'udp://tracker.dler.org:6969/announce',
+        'udp://exodus.desync.com:6969',
+        'udp://open.demonii.com:1337/announce',
+      ];
+      const trackerParams = trackers.map(t => `&tr=${encodeURIComponent(t)}`).join('');
+      data.magnet = `magnet:?xt=urn:btih:${data.infohash}&dn=${encodeURIComponent(data.title || '')}${trackerParams}`;
+    }
+    
     // Skip if no title or download URL
     if (!data.title || (!data.download && !data.magnet)) {
       console.warn(`   ⚠️  Skipping result: missing title or download URL`);

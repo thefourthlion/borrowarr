@@ -147,6 +147,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [loadingTorrents, setLoadingTorrents] = useState(false);
   const [torrents, setTorrents] = useState<TorrentResult[]>([]);
+  const [hasSearchedTorrents, setHasSearchedTorrents] = useState(false);
   const [downloading, setDownloading] = useState<Set<string>>(new Set());
   const [downloadSuccess, setDownloadSuccess] = useState<Set<string>>(new Set());
   const [downloadError, setDownloadError] = useState<Map<string, string>>(new Map());
@@ -186,9 +187,10 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
     type: 'info',
   });
 
-  // Ref to track if we've already fetched data for this media
-  const fetchedMediaIdRef = useRef<number | null>(null);
-  const isFetchingRef = useRef(false);
+  // Ref to track the last successfully fetched media ID
+  const lastFetchedMediaIdRef = useRef<number | null>(null);
+  // Track if a fetch is currently in progress
+  const fetchAbortControllerRef = useRef<AbortController | null>(null);
 
   const showNotification = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
     setNotificationModal({
@@ -272,48 +274,24 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
 
   // Fetch movie details when modal opens or media changes
   useEffect(() => {
-    if (isOpen && media && media.id) {
-      // Prevent double-fetching for the same media
-      if (fetchedMediaIdRef.current === media.id && isFetchingRef.current) {
-        return;
-      }
-      
-      // If this is a different media than last time, reset everything
-      if (fetchedMediaIdRef.current !== media.id) {
+    // Skip if modal is not open or no media
+    if (!isOpen || !media || !media.id) {
+      return;
+    }
+
+    // Cancel any previous fetch
+    if (fetchAbortControllerRef.current) {
+      fetchAbortControllerRef.current.abort();
+    }
+
+    // Check if we already fetched this media and have cached data
+    const isSameMedia = lastFetchedMediaIdRef.current === media.id;
+    
+    // Always reset state when opening modal for a different media
+    if (!isSameMedia) {
       setMovieDetails(null);
       setTorrents([]);
-      setTrailerKey(null);
-      setIsFavorited(false);
-      setIsHidden(false);
-      setDownloading(new Set());
-      setDownloadSuccess(new Set());
-      setDownloadError(new Map());
-      setOpenSelects(new Set());
-      setMonitor("movieOnly");
-      setMinAvailability("released");
-      setQualityProfile("any");
-      }
-      
-      // Mark as fetching for this media
-      fetchedMediaIdRef.current = media.id;
-      isFetchingRef.current = true;
-      
-      // Fetch new data
-      Promise.all([
-        fetchMovieDetails(),
-        fetchTorrents(),
-        checkIfFavorited(),
-        checkIfHidden(),
-        checkRequirements(),
-      ]).finally(() => {
-        isFetchingRef.current = false;
-      });
-    } else if (!isOpen) {
-      // Reset when closing
-      fetchedMediaIdRef.current = null;
-      isFetchingRef.current = false;
-      setMovieDetails(null);
-      setTorrents([]);
+      setHasSearchedTorrents(false);
       setTrailerKey(null);
       setIsFavorited(false);
       setIsHidden(false);
@@ -325,7 +303,65 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
       setMinAvailability("released");
       setQualityProfile("any");
     }
+    
+    // Create abort controller for this fetch
+    const abortController = new AbortController();
+    fetchAbortControllerRef.current = abortController;
+    
+    // Fetch movie details when modal opens (torrents loaded on demand)
+    const doFetch = async () => {
+      try {
+        await Promise.all([
+          fetchMovieDetails(),
+          checkIfFavorited(),
+          checkIfHidden(),
+          checkRequirements(),
+        ]);
+        
+        // Mark as successfully fetched only if not aborted
+        if (!abortController.signal.aborted) {
+          lastFetchedMediaIdRef.current = media.id;
+        }
+      } catch (error) {
+        // Ignore abort errors
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Error fetching modal data:', error);
+        }
+      }
+    };
+    
+    doFetch();
+    
+    // Cleanup function
+    return () => {
+      abortController.abort();
+    };
   }, [isOpen, media?.id]);
+
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      // Small delay to allow closing animation
+      const timer = setTimeout(() => {
+        lastFetchedMediaIdRef.current = null;
+        setMovieDetails(null);
+        setTorrents([]);
+        setHasSearchedTorrents(false);
+        setTrailerKey(null);
+        setIsFavorited(false);
+        setIsHidden(false);
+        setDownloading(new Set());
+        setDownloadSuccess(new Set());
+        setDownloadError(new Map());
+        setOpenSelects(new Set());
+        setMonitor("movieOnly");
+        setMinAvailability("released");
+        setQualityProfile("any");
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
 
   const fetchMovieDetails = async () => {
     if (!media) return;
@@ -364,6 +400,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
     if (!media) return;
     
     setLoadingTorrents(true);
+    setHasSearchedTorrents(true);
     
     try {
       const token = localStorage.getItem('accessToken');
@@ -392,7 +429,20 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
       );
 
       if (response.data.results) {
-        setTorrents(response.data.results || []);
+        // Sort by indexer priority first (lower = higher priority), then by seeders descending
+        const sortedResults = [...(response.data.results || [])].sort((a: TorrentResult, b: TorrentResult) => {
+          // First compare by indexer priority
+          const aPriority = a.indexerPriority ?? 25;
+          const bPriority = b.indexerPriority ?? 25;
+          if (aPriority !== bPriority) {
+            return aPriority - bPriority;
+          }
+          // Then sort by seeders (descending)
+          const aSeeders = a.seeders ?? 0;
+          const bSeeders = b.seeders ?? 0;
+          return bSeeders - aSeeders;
+        });
+        setTorrents(sortedResults);
       }
     } catch (error) {
       console.error("Error fetching torrents:", error);
@@ -439,7 +489,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
         leechers: torrent.leechers,
         quality: quality,
         source: 'AddMovieModal',
-        mediaType: 'movie',
+        mediaType: 'movies', // Must match category name in download client settings
         mediaTitle: media?.title || media?.name || '',
         tmdbId: media?.id || null,
       };
@@ -606,7 +656,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
         leechers: bestTorrent.leechers,
         quality: quality,
         source: 'AddMovieModal',
-        mediaType: 'movie',
+        mediaType: 'movies', // Must match category name in download client settings
         mediaTitle: title,
         tmdbId: media.id,
       };
@@ -1434,7 +1484,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-xl font-semibold">Available Torrents</h3>
-                  {torrents.length > 0 && (
+                  {hasSearchedTorrents && torrents.length > 0 && (
                     <Chip size="sm" variant="flat" color="secondary">
                       {torrents.length} result{torrents.length !== 1 ? 's' : ''}
                     </Chip>
@@ -1442,9 +1492,40 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
                 </div>
                 
                 {loadingTorrents ? (
-                  <div className="flex justify-center items-center py-8">
-                    <Spinner />
-                  </div>
+                  <Card className="bg-gradient-to-br from-secondary/20 via-primary/10 to-secondary/20 border border-secondary/30">
+                    <CardBody className="py-12 px-6">
+                      <div className="flex flex-col items-center justify-center text-center space-y-4">
+                        <Spinner size="lg" color="secondary" />
+                        <p className="text-sm text-default-500">Searching indexers for torrents...</p>
+                      </div>
+                    </CardBody>
+                  </Card>
+                ) : !hasSearchedTorrents ? (
+                  <Card className="bg-gradient-to-br from-secondary/20 via-primary/10 to-secondary/20 border border-secondary/30">
+                    <CardBody className="py-10 px-6">
+                      <div className="flex flex-col items-center justify-center text-center space-y-4">
+                        <div className="w-16 h-16 rounded-full bg-secondary/20 flex items-center justify-center">
+                          <Search size={32} className="text-secondary" />
+                        </div>
+                        <div>
+                          <h4 className="text-lg font-semibold text-foreground mb-1">Search for Torrents</h4>
+                          <p className="text-sm text-default-500 max-w-sm">
+                            Click the button below to search indexers for available downloads
+                          </p>
+                        </div>
+                        <Button
+                          size="lg"
+                          color="secondary"
+                          variant="shadow"
+                          className="mt-2 px-8 py-6 text-lg font-semibold bg-gradient-to-r from-secondary to-primary hover:opacity-90 transition-all duration-200 hover:scale-105"
+                          startContent={<Search size={24} />}
+                          onPress={fetchTorrents}
+                        >
+                          Search Indexers
+                        </Button>
+                      </div>
+                    </CardBody>
+                  </Card>
                 ) : torrents.length > 0 ? (
                   <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
                     {torrents.map((torrent) => (
@@ -1458,10 +1539,12 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
                                   {torrent.indexer}
                                 </Chip>
                                 <span>{torrent.sizeFormatted}</span>
-                                <span className="flex items-center gap-1">
-                                  🌱 <span className="font-semibold">{torrent.seeders || 0}</span>
-                                </span>
-                                {torrent.leechers !== null && (
+                                {torrent.protocol === "torrent" && (
+                                  <span className="flex items-center gap-1">
+                                    🌱 <span className="font-semibold">{torrent.seeders || 0}</span>
+                                  </span>
+                                )}
+                                {torrent.protocol === "torrent" && torrent.leechers !== null && (
                                   <span className="flex items-center gap-1">
                                     📥 {torrent.leechers}
                                   </span>
@@ -1498,6 +1581,17 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
                   <Card className="bg-default-50">
                     <CardBody className="text-center py-8">
                       <p className="text-default-500">No torrents found for this movie</p>
+                      <Button
+                        size="sm"
+                        color="secondary"
+                        variant="flat"
+                        className="mt-4"
+                        startContent={<Search size={16} />}
+                        onPress={fetchTorrents}
+                        isLoading={loadingTorrents}
+                      >
+                        Search Again
+                      </Button>
                     </CardBody>
                   </Card>
                 )}

@@ -421,17 +421,31 @@ exports.grabRelease = async (req, res) => {
     const dbProtocol = determinedProtocol === "nzb" ? "usenet" : determinedProtocol;
     console.log(`[grabRelease] Protocol: ${determinedProtocol} (DB: ${dbProtocol}), UserId: ${req.userId}, MediaType: ${mediaType}`);
 
-    // Get client
+    // Get client - select by priority (lowest number = highest priority)
     let client;
     if (clientId) {
+      console.log(`[grabRelease] Using specific client ID: ${clientId}`);
       client = await DownloadClients.findOne({
         where: { id: clientId, userId: req.userId },
       });
     } else {
-      client = await DownloadClients.findOne({
+      // Find all enabled clients of this protocol to log for debugging
+      const allClients = await DownloadClients.findAll({
         where: { enabled: true, protocol: dbProtocol, userId: req.userId },
         order: [["priority", "ASC"]],
       });
+      console.log(`[grabRelease] Found ${allClients.length} enabled ${dbProtocol} clients:`);
+      allClients.forEach(c => {
+        const cd = c.toJSON();
+        console.log(`  - ${cd.name} (ID: ${cd.id}, Priority: ${cd.priority})`);
+      });
+      
+      // Select the first one (lowest priority number = highest priority)
+      client = allClients[0] || null;
+      if (client) {
+        const cd = client.toJSON();
+        console.log(`[grabRelease] Selected client: ${cd.name} (Priority: ${cd.priority})`);
+      }
     }
 
     if (!client) {
@@ -445,26 +459,39 @@ exports.grabRelease = async (req, res) => {
     const settings = clientData.settings || {};
     
     // Determine category to use based on mediaType and client configuration
+    // Priority: universal > movies/tv > none
     let categoryToUse = null;
+    console.log(`[grabRelease] Checking categories for client "${clientData.name}", mediaType: ${mediaType || 'not specified'}`);
+    console.log(`[grabRelease] Client categories config:`, JSON.stringify(clientData.categories || []));
+    
     if (clientData.categories && Array.isArray(clientData.categories)) {
       // Check for universal category first (overrides all)
       const universalCategory = clientData.categories.find(c => c.category === 'universal');
       if (universalCategory && universalCategory.clientCategory) {
         categoryToUse = universalCategory.clientCategory;
-        console.log(`[grabRelease] Using universal category: ${categoryToUse}`);
+        console.log(`[grabRelease] ✅ Using UNIVERSAL category: "${categoryToUse}" (overrides movies/tv)`);
       } else if (mediaType) {
-        // Check for media-specific category
+        // Check for media-specific category (movies or tv)
         const mediaCategory = clientData.categories.find(c => c.category === mediaType);
         if (mediaCategory && mediaCategory.clientCategory) {
           categoryToUse = mediaCategory.clientCategory;
-          console.log(`[grabRelease] Using ${mediaType} category: ${categoryToUse}`);
+          console.log(`[grabRelease] ✅ Using ${mediaType.toUpperCase()} category: "${categoryToUse}"`);
+        } else {
+          console.log(`[grabRelease] ⚠️ No category configured for mediaType "${mediaType}"`);
         }
+      } else {
+        console.log(`[grabRelease] ⚠️ No mediaType specified and no universal category set`);
       }
+    } else {
+      console.log(`[grabRelease] ⚠️ No categories configured for this client`);
     }
     
     // Apply category to settings if found
     if (categoryToUse) {
       settings.category = categoryToUse;
+      console.log(`[grabRelease] 📁 Final category applied to download: "${categoryToUse}"`);
+    } else {
+      console.log(`[grabRelease] 📁 No category will be applied to download`);
     }
     
     const clientProxy = getClientProxy(clientData.implementation, settings);

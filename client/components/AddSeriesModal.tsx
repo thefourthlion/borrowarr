@@ -217,9 +217,10 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
     type: 'info',
   });
 
-  // Ref to track if we've already fetched data for this media
-  const fetchedMediaIdRef = useRef<number | null>(null);
-  const isFetchingRef = useRef(false);
+  // Ref to track the last successfully fetched media ID
+  const lastFetchedMediaIdRef = useRef<number | null>(null);
+  // Track if a fetch is currently in progress
+  const fetchAbortControllerRef = useRef<AbortController | null>(null);
 
   const showNotification = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
     setNotificationModal({
@@ -303,58 +304,21 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
 
   // Reset state when modal opens/closes or media changes
   useEffect(() => {
-    if (isOpen && media && media.id) {
-      // Prevent double-fetching for the same media
-      if (fetchedMediaIdRef.current === media.id && isFetchingRef.current) {
-        return;
-      }
-      
-      // If this is a different media than last time, reset everything
-      if (fetchedMediaIdRef.current !== media.id) {
-      setTvShowDetails(null);
-      setSeasons([]);
-      setSelectedSeasons(new Set());
-      setSelectedEpisodes(new Set());
-      setSelectAllSeasons(true);
-      setExpandedSeasons(new Set());
-      setTrailerKey(null);
-      setEpisodeShowingTorrents(null);
-      setEpisodeTorrents(new Map());
-      setLoadingEpisodeTorrents(new Map());
-      setDownloadingTorrents(new Set());
-      setDownloadTorrentSuccess(new Set());
-      setDownloadTorrentErrors(new Map());
-      setShowingCompleteSeriesTorrents(false);
-      setCompleteSeriesTorrents([]);
-      setLoadingCompleteSeriesTorrents(false);
-      setSelectedSeasonForComplete(null);
-      setSeasonShowingTorrents(null);
-      setSeasonTorrents(new Map());
-      setLoadingSeasonTorrents(new Map());
-      setDownloadingEpisodes(new Map());
-      setDownloadedEpisodes(new Set());
-      setDownloadErrors(new Map());
-      setIsFavorited(false);
-      setIsHidden(false);
-      }
-      
-      // Mark as fetching for this media
-      fetchedMediaIdRef.current = media.id;
-      isFetchingRef.current = true;
-      
-      // Fetch new data
-      Promise.all([
-        fetchTVShowDetails(),
-        checkIfFavorited(),
-        checkIfHidden(),
-        checkRequirements(),
-      ]).finally(() => {
-        isFetchingRef.current = false;
-      });
-    } else if (!isOpen) {
-      // Reset when closing
-      fetchedMediaIdRef.current = null;
-      isFetchingRef.current = false;
+    // Skip if modal is not open or no media
+    if (!isOpen || !media || !media.id) {
+      return;
+    }
+
+    // Cancel any previous fetch
+    if (fetchAbortControllerRef.current) {
+      fetchAbortControllerRef.current.abort();
+    }
+
+    // Check if we already fetched this media
+    const isSameMedia = lastFetchedMediaIdRef.current === media.id;
+    
+    // Always reset state when opening modal for a different media
+    if (!isSameMedia) {
       setTvShowDetails(null);
       setSeasons([]);
       setSelectedSeasons(new Set());
@@ -381,7 +345,77 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
       setIsFavorited(false);
       setIsHidden(false);
     }
+    
+    // Create abort controller for this fetch
+    const abortController = new AbortController();
+    fetchAbortControllerRef.current = abortController;
+    
+    // Always fetch data when modal opens
+    const doFetch = async () => {
+      try {
+        await Promise.all([
+          fetchTVShowDetails(),
+          checkIfFavorited(),
+          checkIfHidden(),
+          checkRequirements(),
+        ]);
+        
+        // Mark as successfully fetched only if not aborted
+        if (!abortController.signal.aborted) {
+          lastFetchedMediaIdRef.current = media.id;
+        }
+      } catch (error) {
+        // Ignore abort errors
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Error fetching modal data:', error);
+        }
+      }
+    };
+    
+    doFetch();
+    
+    // Cleanup function
+    return () => {
+      abortController.abort();
+    };
   }, [isOpen, media?.id]);
+
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      // Small delay to allow closing animation
+      const timer = setTimeout(() => {
+        lastFetchedMediaIdRef.current = null;
+        setTvShowDetails(null);
+        setSeasons([]);
+        setSelectedSeasons(new Set());
+        setSelectedEpisodes(new Set());
+        setSelectAllSeasons(true);
+        setExpandedSeasons(new Set());
+        setTrailerKey(null);
+        setEpisodeShowingTorrents(null);
+        setEpisodeTorrents(new Map());
+        setLoadingEpisodeTorrents(new Map());
+        setDownloadingTorrents(new Set());
+        setDownloadTorrentSuccess(new Set());
+        setDownloadTorrentErrors(new Map());
+        setShowingCompleteSeriesTorrents(false);
+        setCompleteSeriesTorrents([]);
+        setLoadingCompleteSeriesTorrents(false);
+        setSelectedSeasonForComplete(null);
+        setSeasonShowingTorrents(null);
+        setSeasonTorrents(new Map());
+        setLoadingSeasonTorrents(new Map());
+        setDownloadingEpisodes(new Map());
+        setDownloadedEpisodes(new Set());
+        setDownloadErrors(new Map());
+        setIsFavorited(false);
+        setIsHidden(false);
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
 
   // When select all seasons changes, update individual season selections
   useEffect(() => {
@@ -614,9 +648,22 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
       );
 
       if (torrentResponse.data.results) {
+        // Sort by indexer priority first (lower = higher priority), then by seeders descending
+        const sortedResults = [...(torrentResponse.data.results || [])].sort((a: TorrentResult, b: TorrentResult) => {
+          // First compare by indexer priority
+          const aPriority = (a as any).indexerPriority ?? 25;
+          const bPriority = (b as any).indexerPriority ?? 25;
+          if (aPriority !== bPriority) {
+            return aPriority - bPriority;
+          }
+          // Then sort by seeders (descending)
+          const aSeeders = a.seeders ?? 0;
+          const bSeeders = b.seeders ?? 0;
+          return bSeeders - aSeeders;
+        });
         setEpisodeTorrents(prev => {
           const next = new Map(prev);
-          next.set(episodeKey, torrentResponse.data.results || []);
+          next.set(episodeKey, sortedResults);
           return next;
         });
       } else {
@@ -1836,10 +1883,12 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                                                     {torrent.indexer}
                                                   </Chip>
                                                   <span>{torrent.sizeFormatted}</span>
-                                                  <span className="flex items-center gap-1">
-                                                    🌱 <span className="font-semibold">{torrent.seeders || 0}</span>
-                                                  </span>
-                                                  {torrent.leechers !== null && (
+                                                  {torrent.protocol === "torrent" && (
+                                                    <span className="flex items-center gap-1">
+                                                      🌱 <span className="font-semibold">{torrent.seeders || 0}</span>
+                                                    </span>
+                                                  )}
+                                                  {torrent.protocol === "torrent" && torrent.leechers !== null && (
                                                     <span className="flex items-center gap-1">
                                                       📥 {torrent.leechers}
                                                     </span>
@@ -1974,10 +2023,12 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                                                               {torrent.indexer}
                                                             </Chip>
                                                             <span>{torrent.sizeFormatted}</span>
-                                                            <span className="flex items-center gap-1">
-                                                              🌱 <span className="font-semibold">{torrent.seeders || 0}</span>
-                                                            </span>
-                                                            {torrent.leechers !== null && (
+                                                            {torrent.protocol === "torrent" && (
+                                                              <span className="flex items-center gap-1">
+                                                                🌱 <span className="font-semibold">{torrent.seeders || 0}</span>
+                                                              </span>
+                                                            )}
+                                                            {torrent.protocol === "torrent" && torrent.leechers !== null && (
                                                               <span className="flex items-center gap-1">
                                                                 📥 {torrent.leechers}
                                                               </span>

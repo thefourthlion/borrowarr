@@ -587,6 +587,7 @@ class CardigannParser {
 
     return {
       title: data.title,
+      protocol: 'torrent', // Cardigann scrapers are always torrent-based
       size: sizeBytes,
       sizeFormatted: this.formatSize(sizeBytes),
       publishDate: publishDate,
@@ -611,14 +612,24 @@ class CardigannParser {
     if (!sizeStr) return 0;
     if (typeof sizeStr === 'number') return sizeStr;
     
-    const str = String(sizeStr).toUpperCase().trim();
+    const str = String(sizeStr).trim();
+    
+    // First try to parse as plain number (bytes without unit)
+    // This handles APIs like TPB that return raw byte counts
+    const plainNumber = parseFloat(str.replace(/,/g, ''));
+    if (!isNaN(plainNumber) && /^[\d,]+$/.test(str.replace(/,/g, ''))) {
+      return Math.round(plainNumber);
+    }
     
     // Extract number and unit
-    const match = str.match(/([\d.,]+)\s*([KMGT]?B)/i);
-    if (!match) return 0;
+    const match = str.match(/([\d.,]+)\s*([KMGT]?i?B)/i);
+    if (!match) {
+      // Last resort: try parsing as plain number
+      return isNaN(plainNumber) ? 0 : Math.round(plainNumber);
+    }
     
     const value = parseFloat(match[1].replace(/,/g, ''));
-    const unit = match[2].toUpperCase();
+    const unit = match[2].toUpperCase().replace('I', ''); // Handle GiB, MiB etc
     
     const multipliers = {
       'B': 1,

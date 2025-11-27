@@ -545,24 +545,29 @@ const Indexers = () => {
                 </div>
                       )}
                 </div>
-                    <Switch
-                      size="sm"
-                      color="secondary"
-                      isSelected={indexer.enabled}
-                      onValueChange={async (enabled) => {
-                        try {
-                          await axios.put(`${API_BASE_URL}/api/Indexers/update/${indexer.id}`, {
-                            ...indexer,
-                            enabled,
-                          });
-                          fetchIndexers();
-                        } catch (error) {
-                          console.error("Error updating indexer:", error);
-                        }
-                      }}
+                    <div 
                       onClick={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
                       className="flex-shrink-0"
-                    />
+                    >
+                      <Switch
+                        size="sm"
+                        color="secondary"
+                        isSelected={indexer.enabled}
+                        onValueChange={async (enabled) => {
+                          try {
+                            await axios.put(`${API_BASE_URL}/api/Indexers/update/${indexer.id}`, {
+                              ...indexer,
+                              enabled,
+                            });
+                            fetchIndexers();
+                          } catch (error) {
+                            console.error("Error updating indexer:", error);
+                          }
+                        }}
+                      />
+                    </div>
               </div>
                 </CardBody>
               </Card>

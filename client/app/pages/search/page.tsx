@@ -43,6 +43,7 @@ interface SearchResult {
   seeders: number | null;
   leechers: number | null;
   downloadUrl: string;
+  categories?: number[]; // Category IDs: 2000=Movies, 5000=TV
 }
 
 interface Indexer {
@@ -133,8 +134,15 @@ const Search = () => {
     const cached = getCached(cacheKey);
     if (cached) {
       let results = cached.results || [];
-      // Backend already handles search filtering, so we just sort by seeders
+      // Sort by indexer priority first (lower = higher priority), then by seeders descending
       results.sort((a: SearchResult, b: SearchResult) => {
+        // First compare by indexer priority
+        const aPriority = (a as any).indexerPriority ?? 25;
+        const bPriority = (b as any).indexerPriority ?? 25;
+        if (aPriority !== bPriority) {
+          return aPriority - bPriority;
+        }
+        // Then sort by seeders (descending)
         const aSeeders = a.seeders !== null && a.seeders !== undefined ? a.seeders : 0;
         const bSeeders = b.seeders !== null && b.seeders !== undefined ? b.seeders : 0;
         return bSeeders - aSeeders;
@@ -185,8 +193,15 @@ const Search = () => {
           });
         }
 
-        // Backend already handles search filtering, so we just sort by seeders
+        // Sort by indexer priority first (lower = higher priority), then by seeders descending
         results.sort((a: SearchResult, b: SearchResult) => {
+          // First compare by indexer priority
+          const aPriority = (a as any).indexerPriority ?? 25;
+          const bPriority = (b as any).indexerPriority ?? 25;
+          if (aPriority !== bPriority) {
+            return aPriority - bPriority;
+          }
+          // Then sort by seeders (descending)
           const aSeeders = a.seeders !== null && a.seeders !== undefined ? a.seeders : 0;
           const bSeeders = b.seeders !== null && b.seeders !== undefined ? b.seeders : 0;
           return bSeeders - aSeeders;
@@ -301,8 +316,43 @@ const Search = () => {
     });
 
     try {
+      // Extract quality from title
+      const titleLower = result.title.toLowerCase();
+      let quality = 'SD';
+      if (titleLower.includes('2160p') || titleLower.includes('4k') || titleLower.includes('uhd')) {
+        quality = '2160p';
+      } else if (titleLower.includes('1080p')) {
+        quality = '1080p';
+      } else if (titleLower.includes('720p')) {
+        quality = '720p';
+      }
+
+      // Determine mediaType from categories (2xxx = movies, 5xxx = TV)
+      // This must match category names in download client settings: 'movies', 'tv', 'universal'
+      let mediaType: string | undefined = undefined;
+      if (result.categories && result.categories.length > 0) {
+        const categoryId = result.categories[0];
+        if (categoryId >= 2000 && categoryId < 3000) {
+          mediaType = 'movies'; // Movie categories (2000-2999)
+        } else if (categoryId >= 5000 && categoryId < 6000) {
+          mediaType = 'tv'; // TV categories (5000-5999)
+        }
+      }
+
       const response = await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, {
         downloadUrl: result.downloadUrl,
+        protocol: result.protocol, // Pass protocol so backend selects correct client by priority
+        mediaType: mediaType, // For category selection: 'movies', 'tv', or undefined
+        // History information
+        releaseName: result.title,
+        indexer: result.indexer,
+        indexerId: result.indexerId,
+        size: result.size,
+        sizeFormatted: result.sizeFormatted,
+        seeders: result.seeders,
+        leechers: result.leechers,
+        quality: quality,
+        source: 'SearchPage',
       });
 
       if (response.data.success) {
@@ -693,7 +743,7 @@ const Search = () => {
                       <Chip size="sm" variant="flat" className="text-xs">
                         {result.ageFormatted}
                       </Chip>
-                      {result.seeders !== null && result.seeders !== undefined && (
+                      {result.protocol === "torrent" && result.seeders !== null && result.seeders !== undefined && (
                         <Chip 
                           size="sm" 
                           variant="flat" 
@@ -703,7 +753,7 @@ const Search = () => {
                           🌱 {result.seeders.toLocaleString()}
                         </Chip>
                       )}
-                      {result.leechers !== null && result.leechers !== undefined && (
+                      {result.protocol === "torrent" && result.leechers !== null && result.leechers !== undefined && (
                         <Chip size="sm" variant="flat" className="text-xs hidden sm:inline-flex">
                           📥 {result.leechers.toLocaleString()}
                         </Chip>

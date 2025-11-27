@@ -135,11 +135,24 @@ class FilterEngine {
    * Re_replace filter - regexp replace (re_replace(pattern, replacement))
    */
   re_replaceFilter(value, args) {
-    const [pattern, replacement] = args;
+    let [pattern, replacement] = args;
     if (typeof value !== 'string') return value;
     
     try {
-      const regex = new RegExp(pattern, 'g');
+      // Handle inline flags like (?i) at the start - convert to JavaScript regex flags
+      let flags = 'g';
+      if (pattern.startsWith('(?i)')) {
+        flags = 'gi';
+        pattern = pattern.substring(4);
+      } else if (pattern.startsWith('(?im)') || pattern.startsWith('(?mi)')) {
+        flags = 'gim';
+        pattern = pattern.substring(5);
+      } else if (pattern.startsWith('(?m)')) {
+        flags = 'gm';
+        pattern = pattern.substring(4);
+      }
+      
+      const regex = new RegExp(pattern, flags);
       return value.replace(regex, replacement || '');
     } catch (error) {
       console.error(`Re_replace filter error: ${error.message}`);

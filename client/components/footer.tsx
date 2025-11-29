@@ -17,7 +17,9 @@ import {
   Clock, 
   Coffee, 
   Bitcoin,
-  EyeOff
+  EyeOff,
+  HardDrive,
+  Inbox
 } from "lucide-react";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from "@nextui-org/modal";
 import { Button } from "@nextui-org/button";
@@ -194,6 +196,37 @@ const Footer = () => {
           </ul>
         </div>
 
+        {/* Settings Section */}
+        <div className="footer-section">
+          <h4 className="section-title">Settings</h4>
+          <ul className="section-links">
+            <li>
+              <Link href="/pages/indexers" className="footer-link">
+                <Database size={16} />
+                <span>Indexers</span>
+              </Link>
+            </li>
+            <li>
+              <Link href="/pages/settings/downloadclients" className="footer-link">
+                <Settings size={16} />
+                <span>Download Clients</span>
+              </Link>
+            </li>
+            <li>
+              <Link href="/pages/system" className="footer-link">
+                <Server size={16} />
+                <span>System</span>
+              </Link>
+            </li>
+            <li>
+              <Link href="/pages/filemanagement" className="footer-link">
+                <HardDrive size={16} />
+                <span>File Management</span>
+              </Link>
+            </li>
+          </ul>
+        </div>
+
         {/* Account Section */}
         <div className="footer-section">
           <h4 className="section-title">Account</h4>
@@ -220,6 +253,12 @@ const Footer = () => {
               <Link href="/pages/users" className="footer-link">
                 <Users size={16} />
                 <span>Users</span>
+              </Link>
+            </li>
+            <li>
+              <Link href="/pages/requests" className="footer-link">
+                <Inbox size={16} />
+                <span>Requests</span>
               </Link>
             </li>
             <li>

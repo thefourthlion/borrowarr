@@ -5,6 +5,15 @@ const { importMoviesFromDirectory } = require('../services/libraryImporter');
 const { importSeriesFromDirectory } = require('../services/seriesImporter');
 const { previewMovieRenames, executeMovieRenames, previewSeriesRenames, executeSeriesRenames } = require('../services/fileRenamer');
 
+// Lazy load auto-rename service to avoid circular dependency issues
+let autoRenameService = null;
+const getAutoRenameService = () => {
+  if (!autoRenameService) {
+    autoRenameService = require('../services/autoRenameService');
+  }
+  return autoRenameService;
+};
+
 /**
  * Get user settings
  */
@@ -77,10 +86,32 @@ exports.updateSettings = async (req, res) => {
     // Find or create settings
     let settings = await Settings.findOne({ where: { userId } });
     
+    // Track if auto-rename settings changed
+    const autoRenameChanged = settings && (
+      settings.autoRename !== updates.autoRename ||
+      settings.autoRenameInterval !== updates.autoRenameInterval
+    );
+    
     if (!settings) {
       settings = await Settings.create({ userId, ...updates });
     } else {
       await settings.update(updates);
+    }
+
+    // Update auto-rename service if settings changed
+    if (autoRenameChanged || (!settings && updates.autoRename)) {
+      try {
+        const { updateUserAutoRename } = getAutoRenameService();
+        await updateUserAutoRename(
+          userId, 
+          settings.autoRename, 
+          settings.autoRenameInterval || 60
+        );
+        console.log(`🔄 [Settings] Auto-rename service updated for user ${userId}: enabled=${settings.autoRename}, interval=${settings.autoRenameInterval}min`);
+      } catch (autoRenameError) {
+        console.error('Error updating auto-rename service:', autoRenameError);
+        // Don't fail the request, just log the error
+      }
     }
 
     res.json(settings);
@@ -324,5 +355,48 @@ exports.executeRenames = async (req, res) => {
   } catch (error) {
     console.error('Error executing renames:', error);
     res.status(500).json({ error: error.message || 'Failed to execute renames' });
+  }
+};
+
+/**
+ * Get auto-rename service status for user
+ */
+exports.getAutoRenameStatus = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { getUserAutoRenameStatus } = getAutoRenameService();
+    const status = getUserAutoRenameStatus(userId);
+    
+    res.json({
+      success: true,
+      ...status,
+    });
+  } catch (error) {
+    console.error('Error getting auto-rename status:', error);
+    res.status(500).json({ error: 'Failed to get auto-rename status' });
+  }
+};
+
+/**
+ * Trigger manual auto-rename run for user
+ */
+exports.triggerAutoRename = async (req, res) => {
+  try {
+    const userId = req.userId;
+    
+    console.log(`🔄 [Settings] Manual auto-rename trigger for user ${userId}`);
+    
+    const { triggerManualRun } = getAutoRenameService();
+    const results = await triggerManualRun(userId);
+    
+    res.json({
+      success: results.success,
+      results: results.results,
+      duration: results.duration,
+      error: results.error,
+    });
+  } catch (error) {
+    console.error('Error triggering auto-rename:', error);
+    res.status(500).json({ error: error.message || 'Failed to trigger auto-rename' });
   }
 };

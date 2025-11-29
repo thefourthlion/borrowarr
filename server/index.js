@@ -51,6 +51,7 @@ require("./models/PlexConnection");
 require("./models/FeaturedLists");
 require("./models/HiddenMedia");
 require("./models/ParentalGuide");
+require("./models/MediaRequest");
 
 // Connect to database (this will sync all loaded models)
 connectDB();
@@ -60,6 +61,12 @@ setTimeout(() => {
   const { startMonitoringScheduler } = require('./services/monitoringService');
   startMonitoringScheduler();
 }, 10000); // Wait 10 seconds after server starts
+
+// Start auto-rename service (after database connection)
+setTimeout(() => {
+  const { startAutoRenameService } = require('./services/autoRenameService');
+  startAutoRenameService();
+}, 15000); // Wait 15 seconds after server starts
 
 app.get("/", (req, res) => {
   res.json({ app: "running" });
@@ -82,6 +89,8 @@ app.use("/api/PlexConnection", require("./routes/PlexConnection"));
 app.use("/api/FeaturedLists", require("./routes/FeaturedLists"));
 app.use("/api/HiddenMedia", require("./routes/HiddenMedia"));
 app.use("/api/ParentalGuide", require("./routes/ParentalGuide"));
+app.use("/api/MediaRequests", require("./routes/MediaRequests"));
+app.use("/api/CuratedLists", require("./routes/CuratedLists"));
 
 app.listen(PORT, () => {
   console.log("✅ Listening on port " + PORT);

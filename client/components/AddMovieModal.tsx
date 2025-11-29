@@ -157,6 +157,13 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
   const [minAvailability, setMinAvailability] = useState("released");
   const [qualityProfile, setQualityProfile] = useState("any");
   const [addingMovie, setAddingMovie] = useState(false);
+  
+  // User settings from system page
+  const [userSettings, setUserSettings] = useState<{
+    minQuality: string;
+    maxQuality: string;
+    autoDownload: boolean;
+  } | null>(null);
   const [openSelects, setOpenSelects] = useState<Set<string>>(new Set());
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [isVideoFullscreen, setIsVideoFullscreen] = useState(false);
@@ -272,6 +279,73 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
     return true;
   };
 
+  // Fetch user's quality settings from system page
+  const fetchUserSettings = async () => {
+    if (!user) return;
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await axios.get(`${API_BASE_URL}/api/Settings`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.data) {
+        setUserSettings({
+          minQuality: response.data.minQuality || '720p',
+          maxQuality: response.data.maxQuality || '1080p',
+          autoDownload: response.data.autoDownload ?? true,
+        });
+        console.log('[AddMovieModal] User settings loaded:', response.data.minQuality, response.data.maxQuality);
+      }
+    } catch (error) {
+      console.error('Error fetching user settings:', error);
+    }
+  };
+
+  // Quality ranking for comparison (higher number = higher quality)
+  const getQualityRank = (quality: string): number => {
+    const qualityLower = quality.toLowerCase();
+    if (qualityLower.includes('2160p') || qualityLower.includes('4k') || qualityLower.includes('uhd')) return 4;
+    if (qualityLower.includes('1080p')) return 3;
+    if (qualityLower.includes('720p')) return 2;
+    if (qualityLower.includes('480p') || qualityLower.includes('sd')) return 1;
+    return 0; // Unknown
+  };
+
+  // Detect quality from filename
+  const detectQualityFromFilename = (filename: string): string => {
+    const lower = filename.toLowerCase();
+    if (lower.includes('2160p') || lower.includes('4k') || lower.includes('uhd')) return '2160p';
+    if (lower.includes('1080p')) return '1080p';
+    if (lower.includes('720p')) return '720p';
+    if (lower.includes('480p')) return '480p';
+    return 'SD';
+  };
+
+  // Check if existing file meets the minimum quality threshold
+  const fileMeetsQualityThreshold = (existingQuality: string, minQuality: string): boolean => {
+    const existingRank = getQualityRank(existingQuality);
+    const minRank = getQualityRank(minQuality);
+    return existingRank >= minRank;
+  };
+
+  // Get the best torrent by seeders count (prioritize seeders over indexer priority for auto-download)
+  const getBestTorrentBySeeders = (torrents: TorrentResult[]): TorrentResult | null => {
+    if (torrents.length === 0) return null;
+    
+    return torrents.reduce((best, current) => {
+      const bestSeeders = best.seeders || 0;
+      const currentSeeders = current.seeders || 0;
+      
+      // Prioritize by seeders first
+      if (currentSeeders > bestSeeders) return current;
+      if (currentSeeders < bestSeeders) return best;
+      
+      // If seeders are equal, use indexer priority as tiebreaker
+      const bestPriority = (best as any).indexerPriority ?? 25;
+      const currentPriority = (current as any).indexerPriority ?? 25;
+      return currentPriority < bestPriority ? current : best;
+    });
+  };
+
   // Fetch movie details when modal opens or media changes
   useEffect(() => {
     // Skip if modal is not open or no media
@@ -316,6 +390,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
           checkIfFavorited(),
           checkIfHidden(),
           checkRequirements(),
+          fetchUserSettings(),
         ]);
         
         // Mark as successfully fetched only if not aborted
@@ -396,11 +471,14 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
     }
   };
 
-  const fetchTorrents = async () => {
-    if (!media) return;
+  const fetchTorrents = async (retryCount = 0): Promise<TorrentResult[]> => {
+    if (!media) return [];
     
     setLoadingTorrents(true);
     setHasSearchedTorrents(true);
+    
+    const MAX_RETRIES = 2;
+    const RETRY_DELAY = 1500; // 1.5 seconds between retries
     
     try {
       const token = localStorage.getItem('accessToken');
@@ -412,7 +490,10 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
       // Build search query: "Movie Title year"
       const searchQuery = year ? `${title} ${year}` : title;
       
+      console.log(`[AddMovieModal] Searching for: "${searchQuery}" (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`);
+      
       // Use the Search API endpoint to search for torrents - fetch all results
+      // Add fresh=true on first attempt to bypass cache and get fresh results
       const response = await axios.get(
         `${API_BASE_URL}/api/Search`,
         {
@@ -420,35 +501,60 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
             query: searchQuery,
             categoryIds: media.media_type === 'tv' ? '5000' : '2000',
             limit: 1000, // Large limit to get all results
+            fresh: retryCount === 0 ? 'true' : undefined, // Force fresh results on first attempt
           },
           headers: token ? {
             Authorization: `Bearer ${token}`,
           } : undefined,
-          timeout: 30000,
+          timeout: 45000, // Increased timeout for slower indexers
         }
       );
 
-      if (response.data.results) {
-        // Sort by indexer priority first (lower = higher priority), then by seeders descending
-        const sortedResults = [...(response.data.results || [])].sort((a: TorrentResult, b: TorrentResult) => {
-          // First compare by indexer priority
-          const aPriority = a.indexerPriority ?? 25;
-          const bPriority = b.indexerPriority ?? 25;
-          if (aPriority !== bPriority) {
-            return aPriority - bPriority;
-          }
-          // Then sort by seeders (descending)
-          const aSeeders = a.seeders ?? 0;
-          const bSeeders = b.seeders ?? 0;
-          return bSeeders - aSeeders;
-        });
-        setTorrents(sortedResults);
+      const results = response.data.results || [];
+      console.log(`[AddMovieModal] Search returned ${results.length} results (attempt ${retryCount + 1})`);
+
+      // If no results and we haven't exceeded retries, wait and try again
+      // This handles cases where indexers are slow to respond on first query
+      if (results.length === 0 && retryCount < MAX_RETRIES) {
+        console.log(`[AddMovieModal] No results, retrying in ${RETRY_DELAY}ms...`);
+        setLoadingTorrents(true); // Keep loading state
+        
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        
+        // Recursive retry
+        return fetchTorrents(retryCount + 1);
       }
+
+      // Sort by seeders first (highest seeders = best), then by indexer priority as tiebreaker
+      const sortedResults = [...results].sort((a: TorrentResult, b: TorrentResult) => {
+        // Prioritize by seeders (descending - most seeders first)
+        const aSeeders = a.seeders ?? 0;
+        const bSeeders = b.seeders ?? 0;
+        if (aSeeders !== bSeeders) {
+          return bSeeders - aSeeders;
+        }
+        // If seeders are equal, use indexer priority (lower number = higher priority)
+        const aPriority = a.indexerPriority ?? 25;
+        const bPriority = b.indexerPriority ?? 25;
+        return aPriority - bPriority;
+      });
+      
+      setTorrents(sortedResults);
+      setLoadingTorrents(false);
+      return sortedResults;
     } catch (error) {
       console.error("Error fetching torrents:", error);
+      
+      // Retry on error if we haven't exceeded retries
+      if (retryCount < MAX_RETRIES) {
+        console.log(`[AddMovieModal] Error occurred, retrying in ${RETRY_DELAY}ms...`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        return fetchTorrents(retryCount + 1);
+      }
+      
       setTorrents([]);
-    } finally {
       setLoadingTorrents(false);
+      return [];
     }
   };
 
@@ -557,8 +663,8 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
       return;
     }
 
-    if (!media || torrents.length === 0) {
-      showNotification('No Torrents', 'No torrents available for this media', 'warning');
+    if (!media) {
+      showNotification('No Media', 'No media selected', 'warning');
       return;
     }
 
@@ -571,25 +677,6 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
     setAddingMovie(true);
 
     try {
-      const filteredTorrents = filterTorrentsByQuality(torrents, qualityProfile);
-
-      if (filteredTorrents.length === 0) {
-        throw new Error(`No torrents found matching quality profile: ${qualityProfile}`);
-      }
-
-      const bestTorrent = filteredTorrents.reduce((best, current) => {
-        // First compare by indexer priority (lower number = higher priority)
-        const bestPriority = (best as any).indexerPriority ?? 25;
-        const currentPriority = (current as any).indexerPriority ?? 25;
-        if (currentPriority < bestPriority) return current;
-        if (currentPriority > bestPriority) return best;
-        
-        // If priorities are equal, prefer higher seeders
-        const bestSeeders = best.seeders || 0;
-        const currentSeeders = current.seeders || 0;
-        return currentSeeders > bestSeeders ? current : best;
-      });
-
       const posterUrl = media.poster_path 
         ? `${TMDB_IMAGE_BASE_URL}${media.poster_path}` 
         : (media.posterUrl || null);
@@ -597,6 +684,77 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
       const title = media.title || media.name || '';
       const releaseDate = media.release_date || null;
 
+      // Check if user has auto_approve permission
+      const hasAutoApprove = user?.permissions?.auto_approve || user?.permissions?.admin;
+
+      // If user doesn't have auto_approve, create a request instead
+      if (!hasAutoApprove) {
+        console.log('[AddMovieModal] User does not have auto_approve permission, creating request...');
+        
+        const requestResponse = await axios.post(`${API_BASE_URL}/api/MediaRequests`, {
+          mediaType: 'movie',
+          tmdbId: media.id,
+          title: title,
+          overview: media.overview,
+          posterPath: media.poster_path,
+          backdropPath: movieDetails?.backdrop_path || null,
+          releaseDate: releaseDate,
+          qualityProfile,
+        });
+
+        if (requestResponse.data.autoApproved) {
+          // Request was auto-approved (shouldn't happen but handle it)
+          showNotification('✅ Request Approved', 'Your request has been auto-approved and added to monitoring!', 'success');
+        } else {
+          showNotification('📨 Request Submitted', 'Your request has been submitted for admin approval. You\'ll be notified when it\'s reviewed.', 'info');
+        }
+
+        setTimeout(() => {
+          onClose();
+          if (onAddMovie) onAddMovie();
+        }, 500);
+        return;
+      }
+
+      // User has auto_approve - proceed with normal monitoring flow
+      // Get minimum quality from user settings (system page) or use modal selection as fallback
+      const effectiveMinQuality = userSettings?.minQuality || qualityProfile;
+      console.log('[AddMovieModal] Using quality threshold:', effectiveMinQuality, '(from user settings:', userSettings?.minQuality, ')');
+
+      // Check if file already exists - if so, check if it meets quality threshold
+      let fileAlreadyExists = false;
+      let existingFileInfo: { fileName: string; fileSizeFormatted: string } | null = null;
+      let existingFileMeetsQuality = false;
+      let existingFileQuality = 'unknown';
+      
+      try {
+        console.log('[AddMovieModal] Checking if file exists for:', { userId: user!.id, title, releaseDate });
+        const checkExistsResponse = await axios.post(`${API_BASE_URL}/api/MonitoredMovies/check-exists`, {
+          userId: user!.id,
+          title: title,
+          releaseDate: releaseDate,
+          tmdbId: media.id,
+        });
+
+        console.log('[AddMovieModal] Check exists response:', checkExistsResponse.data);
+
+        if (checkExistsResponse.data.exists) {
+          fileAlreadyExists = true;
+          existingFileInfo = checkExistsResponse.data.fileInfo;
+          
+          // Detect quality of existing file
+          existingFileQuality = detectQualityFromFilename(existingFileInfo?.fileName || '');
+          existingFileMeetsQuality = fileMeetsQualityThreshold(existingFileQuality, effectiveMinQuality);
+          
+          console.log('[AddMovieModal] File already exists:', existingFileInfo);
+          console.log('[AddMovieModal] Existing file quality:', existingFileQuality, 'Meets threshold:', existingFileMeetsQuality);
+        }
+      } catch (error: any) {
+        console.error('[AddMovieModal] Error checking for existing file:', error?.response?.data || error?.message || error);
+        // Continue if check fails (directory might not be configured)
+      }
+
+      // Save movie to monitoring list and get user's autoDownload setting
       const saveMovieResponse = await axios.post(`${API_BASE_URL}/api/MonitoredMovies`, {
         userId: user!.id,
         tmdbId: media.id,
@@ -607,29 +765,103 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
         qualityProfile,
         minAvailability,
         monitor,
+        status: fileAlreadyExists ? 'downloaded' : 'monitoring', // Set status based on file existence
       });
 
       const isUpdate = saveMovieResponse.data.isUpdate;
       const movieId = saveMovieResponse.data.movie?.id;
+      const autoDownload = saveMovieResponse.data.autoDownload ?? true;
 
-      // Check if file already exists before downloading
-      if (movieId) {
-        try {
-          const checkResponse = await axios.post(`${API_BASE_URL}/api/MonitoredMovies/${movieId}/check-file`);
-          if (checkResponse.data.result.status === 'found') {
-            // File already exists!
-            setTimeout(() => {
-              onClose();
-              showNotification('Already in Library', `Movie already exists in your library! Found: ${checkResponse.data.result.fileInfo.fileName}`, 'info');
-              if (onAddMovie) onAddMovie();
-            }, 1000);
-            return;
-          }
-        } catch (error) {
-          console.error('Error checking for existing file:', error);
-          // Continue with download if check fails
-        }
+      console.log(`[AddMovieModal] Movie saved. autoDownload: ${autoDownload}, fileAlreadyExists: ${fileAlreadyExists}, existingFileMeetsQuality: ${existingFileMeetsQuality}`);
+
+      // If file already exists AND meets quality threshold, show success and close
+      if (fileAlreadyExists && existingFileMeetsQuality) {
+        setTimeout(() => {
+          onClose();
+          const message = isUpdate 
+            ? `Movie monitoring updated! File already exists in library:\n${existingFileInfo?.fileName} (${existingFileQuality})`
+            : `Movie added to monitoring! Already downloaded:\n${existingFileInfo?.fileName} (${existingFileInfo?.fileSizeFormatted}, ${existingFileQuality})`;
+          showNotification('✅ Success', message, 'success');
+          if (onAddMovie) onAddMovie();
+        }, 500);
+        return;
       }
+
+      // If file exists but doesn't meet quality threshold, log and continue to download better version
+      if (fileAlreadyExists && !existingFileMeetsQuality) {
+        console.log(`[AddMovieModal] Existing file quality (${existingFileQuality}) is below threshold (${effectiveMinQuality}). Will download better quality.`);
+      }
+
+      // If autoDownload is disabled, just add to monitoring without downloading
+      if (!autoDownload) {
+        setTimeout(() => {
+          onClose();
+          const message = isUpdate 
+            ? `Movie monitoring updated! Will check for file periodically.`
+            : `Movie added to monitoring! Auto-download is disabled - will check for file periodically.`;
+          showNotification('Success', message, 'success');
+          if (onAddMovie) onAddMovie();
+        }, 500);
+        return;
+      }
+
+      // autoDownload is enabled - search for torrents if not already searched
+      let availableTorrents = torrents;
+      
+      if (availableTorrents.length === 0) {
+        // No torrents searched yet - use the robust search with retry logic
+        console.log('[AddMovieModal] Auto-download enabled, searching for torrents with retry logic...');
+        availableTorrents = await fetchTorrents();
+      }
+      
+      if (availableTorrents.length === 0) {
+        // No torrents found - add to monitoring for periodic checks
+        setTimeout(() => {
+          onClose();
+          const message = isUpdate 
+            ? `Movie monitoring updated! No downloads found yet - will check periodically.`
+            : `Movie added to monitoring! No downloads available now - will check periodically.`;
+          showNotification('Success', message, 'info');
+          if (onAddMovie) onAddMovie();
+        }, 500);
+        return;
+      }
+
+      // Filter torrents by quality - use user settings minQuality from system page
+      const effectiveQualityFilter = effectiveMinQuality === 'any' ? 'any' : 
+                                      effectiveMinQuality.includes('1080') ? 'hd-1080p' :
+                                      effectiveMinQuality.includes('720') ? 'hd-720p' :
+                                      effectiveMinQuality.includes('2160') || effectiveMinQuality.includes('4k') ? 'ultra-hd' :
+                                      qualityProfile; // fallback to modal selection
+      
+      const filteredTorrents = filterTorrentsByQuality(availableTorrents, effectiveQualityFilter);
+
+      if (filteredTorrents.length === 0) {
+        // No torrents matching quality - will be downloaded on next check
+        const qualityMessage = fileAlreadyExists && !existingFileMeetsQuality
+          ? `Movie added to monitoring! Current file (${existingFileQuality}) is below your quality threshold (${effectiveMinQuality}). No higher quality torrents found yet - will check periodically.`
+          : `Movie added to monitoring! No torrents matching quality profile "${effectiveMinQuality}" - will download when available.`;
+        setTimeout(() => {
+          onClose();
+          showNotification('Success', qualityMessage, 'info');
+          if (onAddMovie) onAddMovie();
+        }, 500);
+        return;
+      }
+
+      // Get the best torrent - prioritize by SEEDERS first (most seeders = best), then indexer priority as tiebreaker
+      const bestTorrent = getBestTorrentBySeeders(filteredTorrents);
+      
+      if (!bestTorrent) {
+        setTimeout(() => {
+          onClose();
+          showNotification('Success', 'Movie added to monitoring! No suitable torrents found.', 'info');
+          if (onAddMovie) onAddMovie();
+        }, 500);
+        return;
+      }
+      
+      console.log(`[AddMovieModal] Selected best torrent with ${bestTorrent.seeders} seeders: ${bestTorrent.title}`);
 
       // Extract quality from torrent title
       const titleLower = bestTorrent.title.toLowerCase();
@@ -679,9 +911,14 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
       
       setTimeout(() => {
         onClose();
-        const message = isUpdate 
-          ? `Updating monitored media! Downloading: ${bestTorrent.title}`
-          : `Movie added to monitoring! Downloading: ${bestTorrent.title}`;
+        let message;
+        if (fileAlreadyExists && !existingFileMeetsQuality) {
+          message = `Upgrading quality! Your ${existingFileQuality} file will be replaced with ${quality}.\nDownloading: ${bestTorrent.title}`;
+        } else {
+          message = isUpdate 
+            ? `Updating monitored media! Downloading: ${bestTorrent.title}`
+            : `Movie added to monitoring! Downloading: ${bestTorrent.title}`;
+        }
         showNotification('Success', message, 'success');
         if (onAddMovie) onAddMovie();
       }, 1000);
@@ -1474,7 +1711,9 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
                   </div>
                   <div className="mt-4">
                     <p className="text-xs text-default-500">
-                      💡 Click &quot;Add Movie&quot; to automatically download the best torrent matching your quality profile, or manually select a specific torrent below.
+                      {user?.permissions?.auto_approve || user?.permissions?.admin 
+                        ? '💡 Click "Monitor Movie" to add this movie to your library. If auto-download is enabled and torrents are found, the best torrent matching your quality profile will be downloaded automatically.'
+                        : '💡 Click "Request Movie" to submit a request for admin approval. Once approved, it will be added to your monitored list.'}
                     </p>
                   </div>
                 </CardBody>
@@ -1519,7 +1758,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
                           variant="shadow"
                           className="mt-2 px-8 py-6 text-lg font-semibold bg-gradient-to-r from-secondary to-primary hover:opacity-90 transition-all duration-200 hover:scale-105"
                           startContent={<Search size={24} />}
-                          onPress={fetchTorrents}
+                          onPress={() => fetchTorrents()}
                         >
                           Search Indexers
                         </Button>
@@ -1587,7 +1826,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
                         variant="flat"
                         className="mt-4"
                         startContent={<Search size={16} />}
-                        onPress={fetchTorrents}
+                        onPress={() => fetchTorrents()}
                         isLoading={loadingTorrents}
                       >
                         Search Again
@@ -1610,7 +1849,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
               isDisabled={true}
               title="TV show monitoring not yet implemented"
             >
-              Add TV Show (Coming Soon)
+              Monitor TV Show (Coming Soon)
             </Button>
           ) : (
             <Button 
@@ -1618,9 +1857,9 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
               startContent={<Plus size={20} />}
               onPress={handleAddMovie}
               isLoading={addingMovie}
-              isDisabled={!media || torrents.length === 0 || loadingTorrents}
+              isDisabled={!media || loadingDetails}
             >
-              Add Movie
+              {user?.permissions?.auto_approve || user?.permissions?.admin ? 'Monitor Movie' : 'Request Movie'}
             </Button>
           )}
         </ModalFooter>

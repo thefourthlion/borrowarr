@@ -55,6 +55,7 @@ exports.search = async (req, res) => {
       sortOrder = "desc",
       limit = 100,
       offset = 0,
+      fresh, // If 'true', bypass cache for fresh results
     } = req.query;
 
     if (!query || query.trim() === "") {
@@ -65,10 +66,18 @@ exports.search = async (req, res) => {
       });
     }
 
-    // Check cache first
+    // Check cache first (unless fresh=true is passed)
     const cacheKey = getCacheKey(query, indexerIds, categoryIds);
+    const skipCache = fresh === 'true';
+    
+    if (skipCache) {
+      // Clear the cache for this query to force fresh results
+      cache.delete(cacheKey);
+      console.log(`[Search] Fresh search requested for "${query}", cache cleared`);
+    }
+    
     const cached = getCached(cacheKey);
-    if (cached) {
+    if (cached && !skipCache) {
       console.log(`[Search] Cache hit for "${query}" (${Date.now() - startTime}ms)`);
       
       // Still need to sort and paginate cached results

@@ -33,4 +33,10 @@ router.post('/preview-renames', settingsController.previewRenames);
 // Execute file renames
 router.post('/execute-renames', settingsController.executeRenames);
 
+// Auto-rename service status
+router.get('/auto-rename/status', settingsController.getAutoRenameStatus);
+
+// Trigger manual auto-rename
+router.post('/auto-rename/trigger', settingsController.triggerAutoRename);
+
 module.exports = router;

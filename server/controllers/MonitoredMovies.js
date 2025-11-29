@@ -1,5 +1,7 @@
 const MonitoredMovies = require("../models/MonitoredMovies");
+const Settings = require("../models/Settings");
 const { checkMonitoredMovie, checkUserMonitoredMovies } = require("../services/monitoringService");
+const { findMovieFile, getUserMovieDirectory } = require("../services/fileScanner");
 
 /**
  * Get all monitored movies for a user
@@ -39,6 +41,7 @@ exports.addMonitoredMovie = async (req, res) => {
       qualityProfile,
       minAvailability,
       monitor,
+      status, // Optional: frontend can pass 'downloaded' if file already exists
     } = req.body;
 
     if (!userId || !tmdbId || !title) {
@@ -47,6 +50,10 @@ exports.addMonitoredMovie = async (req, res) => {
       });
     }
 
+    // Get user's settings to check autoDownload preference
+    const settings = await Settings.findOne({ where: { userId } });
+    const autoDownload = settings?.autoDownload ?? true;
+
     // Check if movie is already monitored by this user
     const existing = await MonitoredMovies.findOne({
       where: { userId, tmdbId },
@@ -54,6 +61,13 @@ exports.addMonitoredMovie = async (req, res) => {
 
     let movie;
     let isUpdate = false;
+
+    // Determine status: if frontend says 'downloaded', use that; otherwise keep existing or default to 'monitoring'
+    const determineStatus = (existingMovie) => {
+      if (status === 'downloaded') return 'downloaded';
+      if (existingMovie && existingMovie.status === 'downloaded') return 'downloaded';
+      return 'monitoring';
+    };
 
     if (existing) {
       // Update existing movie instead of creating duplicate
@@ -66,8 +80,7 @@ exports.addMonitoredMovie = async (req, res) => {
         qualityProfile: qualityProfile || "any",
         minAvailability: minAvailability || "released",
         monitor: monitor || "movieOnly",
-        // Don't reset status if it's already downloaded
-        status: existing.status === "downloaded" ? "downloaded" : "monitoring",
+        status: determineStatus(existing),
       });
       movie = existing;
     } else {
@@ -82,11 +95,17 @@ exports.addMonitoredMovie = async (req, res) => {
         qualityProfile: qualityProfile || "any",
         minAvailability: minAvailability || "released",
         monitor: monitor || "movieOnly",
-        status: "monitoring",
+        status: status === 'downloaded' ? 'downloaded' : 'monitoring',
       });
     }
 
-    res.json({ success: true, movie, isUpdate });
+    // Return movie with autoDownload setting so frontend knows whether to download
+    res.json({ 
+      success: true, 
+      movie, 
+      isUpdate, 
+      autoDownload, // Include user's autoDownload setting
+    });
   } catch (error) {
     console.error("Error adding monitored movie:", error);
     res.status(500).json({ error: "Failed to add monitored movie" });
@@ -206,6 +225,64 @@ exports.checkAllMovieFiles = async (req, res) => {
   } catch (error) {
     console.error("Error checking all movie files:", error);
     res.status(500).json({ error: "Failed to check movie files" });
+  }
+};
+
+/**
+ * Check if a movie file exists BEFORE adding to monitored list
+ * This allows checking for existing files without creating a monitored entry
+ */
+exports.checkFileExists = async (req, res) => {
+  try {
+    const { userId, title, releaseDate, tmdbId } = req.body;
+
+    if (!userId || !title) {
+      return res.status(400).json({ error: "userId and title are required" });
+    }
+
+    // Get user's movie directory
+    const movieDirectory = await getUserMovieDirectory(userId);
+    
+    if (!movieDirectory) {
+      return res.json({ 
+        success: true, 
+        exists: false, 
+        message: "Movie directory not configured" 
+      });
+    }
+
+    // Create a mock movie object for the file finder
+    const mockMovie = {
+      title,
+      releaseDate,
+      tmdbId,
+    };
+
+    // Check if file exists
+    const fileInfo = await findMovieFile(mockMovie, movieDirectory);
+
+    if (fileInfo && fileInfo.found) {
+      return res.json({
+        success: true,
+        exists: true,
+        fileInfo: {
+          fileName: fileInfo.fileName,
+          filePath: fileInfo.filePath,
+          fileSize: fileInfo.fileSize,
+          fileSizeFormatted: fileInfo.fileSizeFormatted,
+        },
+        message: `File already exists: ${fileInfo.fileName}`,
+      });
+    }
+
+    return res.json({
+      success: true,
+      exists: false,
+      message: "File not found in library",
+    });
+  } catch (error) {
+    console.error("Error checking file existence:", error);
+    res.status(500).json({ error: "Failed to check file existence" });
   }
 };
 

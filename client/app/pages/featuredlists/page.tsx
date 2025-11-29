@@ -1,16 +1,25 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Spinner } from "@nextui-org/spinner";
-import { Card, CardBody } from "@nextui-org/card";
-import { Chip } from "@nextui-org/chip";
-import { Sparkles, Film } from "lucide-react";
+import { Button } from "@nextui-org/button";
+import { Input } from "@nextui-org/input";
+import { 
+  Sparkles, 
+  Film, 
+  RefreshCw, 
+  Search,
+  TrendingUp,
+  Star,
+  Heart,
+  Play,
+  ChevronRight,
+  Layers,
+  Zap,
+} from "lucide-react";
 import axios from "axios";
-import "@/styles/FeaturedLists.scss";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
-const TMDB_API_KEY = "1f8c588ce20d993183c247936bc138e9";
-const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w185";
 
 interface LetterboxdList {
   id: string;
@@ -34,144 +43,53 @@ const FeaturedLists = () => {
   const router = useRouter();
   const [lists, setLists] = useState<LetterboxdList[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingPosters, setLoadingPosters] = useState(false);
+  const [scraping, setScraping] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeCategory, setActiveCategory] = useState("all");
+  const heroRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchLetterboxdLists();
   }, []);
 
+  // Parallax effect for hero
+  useEffect(() => {
+    const handleScroll = () => {
+      if (heroRef.current) {
+        const scrolled = window.scrollY;
+        heroRef.current.style.transform = `translateY(${scrolled * 0.3}px)`;
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   const fetchLetterboxdLists = async () => {
     setLoading(true);
-    
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/FeaturedLists`, {
-        params: {
-          featured: true,
-          limit: 100,
-        },
+      const response = await axios.get(`${API_BASE_URL}/api/FeaturedLists/enriched`, {
+        params: { featured: true, limit: 100 },
       });
-      
-      const fetchedLists = response.data.lists || [];
-      setLists(fetchedLists);
-      
-      // Fetch TMDb posters for each list
-      fetchTMDbPostersForLists(fetchedLists);
-    } catch (error) {
-      console.error('Error fetching Letterboxd lists:', error);
+      setLists(response.data.lists || []);
+    } catch (err) {
+      console.error('Error fetching lists:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchTMDbPostersForLists = async (lists: LetterboxdList[]) => {
-    setLoadingPosters(true);
-    
+  const handleScrape = async () => {
+    setScraping(true);
     try {
-      // Process lists in batches to avoid overwhelming the API
-      const updatedLists = await Promise.all(
-        lists.map(async (list) => {
-          try {
-            // Extract keywords from the list title to search TMDb
-            const searchQuery = getSearchQueryFromTitle(list.title);
-            const posters = await fetchTMDbPosters(searchQuery);
-            
-            return {
-              ...list,
-              tmdbPosters: posters,
-            };
-          } catch (error) {
-            console.error(`Error fetching posters for ${list.title}:`, error);
-            return list;
-          }
-        })
-      );
-      
-      setLists(updatedLists);
-    } catch (error) {
-      console.error('Error fetching TMDb posters:', error);
+      const token = localStorage.getItem("accessToken");
+      await axios.post(`${API_BASE_URL}/api/FeaturedLists/scrape`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await fetchLetterboxdLists();
+    } catch (err) {
+      console.error('Error scraping:', err);
     } finally {
-      setLoadingPosters(false);
-    }
-  };
-
-  const getSearchQueryFromTitle = (title: string): string => {
-    // Extract main keywords for searching
-    // Remove common list words and numbers
-    let query = title
-      .replace(/Top \d+/gi, '')
-      .replace(/Official/gi, '')
-      .replace(/Films?/gi, '')
-      .replace(/Movies?/gi, '')
-      .replace(/Feature/gi, '')
-      .replace(/Narrative/gi, '')
-      .replace(/Directors?/gi, '')
-      .replace(/Award/gi, '')
-      .replace(/Best/gi, '')
-      .replace(/\d+/g, '')
-      .trim();
-    
-    // For specific genres or categories, use those
-    if (title.toLowerCase().includes('horror')) return 'horror';
-    if (title.toLowerCase().includes('sci-fi') || title.toLowerCase().includes('science fiction')) return 'science fiction';
-    if (title.toLowerCase().includes('animated') || title.toLowerCase().includes('animation')) return 'animation';
-    if (title.toLowerCase().includes('documentary')) return 'documentary';
-    if (title.toLowerCase().includes('western')) return 'western';
-    if (title.toLowerCase().includes('silent')) return 'silent film';
-    if (title.toLowerCase().includes('women directors')) return 'women director';
-    if (title.toLowerCase().includes('black directors')) return 'black director';
-    
-    // Default to popular movies if we can't determine
-    return query || 'popular';
-  };
-
-  const fetchTMDbPosters = async (searchQuery: string): Promise<string[]> => {
-    try {
-      // Search for movies matching the query
-      const response = await axios.get(
-        `https://api.themoviedb.org/3/search/movie`,
-        {
-          params: {
-            api_key: TMDB_API_KEY,
-            query: searchQuery,
-            language: 'en-US',
-            page: 1,
-          },
-        }
-      );
-
-      const results = response.data.results || [];
-      
-      // Get first 5 movie posters
-      const posters = results
-        .slice(0, 5)
-        .filter((movie: any) => movie.poster_path)
-        .map((movie: any) => `${TMDB_IMAGE_BASE_URL}${movie.poster_path}`);
-      
-      // If we don't have enough, fetch popular movies
-      if (posters.length < 5) {
-        const popularResponse = await axios.get(
-          `https://api.themoviedb.org/3/movie/popular`,
-          {
-            params: {
-              api_key: TMDB_API_KEY,
-              language: 'en-US',
-              page: 1,
-            },
-          }
-        );
-        
-        const popularPosters = popularResponse.data.results
-          .slice(0, 5 - posters.length)
-          .filter((movie: any) => movie.poster_path)
-          .map((movie: any) => `${TMDB_IMAGE_BASE_URL}${movie.poster_path}`);
-        
-        posters.push(...popularPosters);
-      }
-      
-      return posters.slice(0, 5);
-    } catch (error) {
-      console.error('Error fetching TMDb posters:', error);
-      return [];
+      setScraping(false);
     }
   };
 
@@ -179,174 +97,342 @@ const FeaturedLists = () => {
     router.push(`/pages/featuredlists/${slug}`);
   };
 
+  // Get unique categories
+  const categories = ["all", ...Array.from(new Set(lists.map(l => {
+    const title = l.title.toLowerCase();
+    if (title.includes('horror')) return 'horror';
+    if (title.includes('sci-fi') || title.includes('science')) return 'sci-fi';
+    if (title.includes('documentary')) return 'documentary';
+    if (title.includes('animated') || title.includes('animation')) return 'animation';
+    if (title.includes('comedy')) return 'comedy';
+    if (title.includes('drama')) return 'drama';
+    if (title.includes('thriller')) return 'thriller';
+    if (title.includes('romance')) return 'romance';
+    return 'featured';
+  })))];
+
+  // Filter lists
+  const filteredLists = lists.filter(list => {
+    const matchesSearch = list.title.toLowerCase().includes(searchQuery.toLowerCase());
+    if (activeCategory === 'all') return matchesSearch;
+    
+    const title = list.title.toLowerCase();
+    if (activeCategory === 'horror') return matchesSearch && title.includes('horror');
+    if (activeCategory === 'sci-fi') return matchesSearch && (title.includes('sci-fi') || title.includes('science'));
+    if (activeCategory === 'documentary') return matchesSearch && title.includes('documentary');
+    if (activeCategory === 'animation') return matchesSearch && (title.includes('animated') || title.includes('animation'));
+    if (activeCategory === 'comedy') return matchesSearch && title.includes('comedy');
+    if (activeCategory === 'drama') return matchesSearch && title.includes('drama');
+    if (activeCategory === 'thriller') return matchesSearch && title.includes('thriller');
+    if (activeCategory === 'romance') return matchesSearch && title.includes('romance');
+    return matchesSearch;
+  });
+
+  // Get featured lists for hero
+  const heroLists = lists.slice(0, 5);
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
-        {/* Header */}
-        <div className="border-b border-secondary/20 sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
-          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-secondary/10">
-                <Sparkles className="w-6 h-6 text-secondary" />
-              </div>
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent">
-                  Featured Lists
-                </h1>
-                <p className="text-xs sm:text-sm text-foreground/60 mt-1">
-                  a starter pack from the community and beyond
-                </p>
-              </div>
-            </div>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <div className="relative">
+            <div className="w-20 h-20 border-2 border-purple-500/30 rounded-full animate-ping absolute inset-0" />
+            <div className="w-20 h-20 border-2 border-t-purple-500 border-r-purple-500/50 border-b-purple-500/20 border-l-purple-500/10 rounded-full animate-spin" />
           </div>
-        </div>
-
-        {/* Loading */}
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-20">
-          <div className="flex flex-col items-center justify-center py-20">
-            <Spinner size="lg" color="secondary" />
-            <p className="mt-4 text-foreground/60">Loading featured lists...</p>
-          </div>
+          <p className="mt-8 text-white/60 tracking-[0.3em] uppercase text-xs font-light">Loading Collections</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="FeaturedLists min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-secondary/20 sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-secondary/10">
-                <Sparkles className="w-6 h-6 text-secondary" />
+    <div className="min-h-screen bg-black text-white overflow-x-hidden">
+      {/* Hero Section */}
+      <section className="relative h-[70vh] min-h-[500px] overflow-hidden">
+        {/* Animated Background Gradient */}
+        <div 
+          ref={heroRef}
+          className="absolute inset-0 bg-gradient-to-br from-purple-900/40 via-black to-indigo-900/30"
+        />
+        
+        {/* Floating Posters Background */}
+        <div className="absolute inset-0 overflow-hidden opacity-20">
+          <div className="absolute inset-0 flex flex-wrap gap-4 -rotate-12 scale-125 origin-center">
+            {heroLists.flatMap(list => list.tmdbPosters || list.posterUrls || []).slice(0, 20).map((poster, i) => (
+              <div 
+                key={i}
+                className="w-32 h-48 rounded-lg overflow-hidden"
+                style={{
+                  animation: `float ${10 + (i % 5) * 2}s ease-in-out infinite`,
+                  animationDelay: `${i * 0.5}s`,
+                }}
+              >
+                <img src={poster} alt="" className="w-full h-full object-cover" loading="lazy" />
               </div>
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent">
-                  Featured Lists
-                </h1>
-                <p className="text-xs sm:text-sm text-foreground/60 mt-1">
-                  a starter pack from the community and beyond
-                </p>
-              </div>
-            </div>
-            <Chip 
-              variant="flat" 
-              color="secondary"
-              startContent={<Film size={14} />}
-            >
-              {lists.length} Lists
-            </Chip>
+            ))}
           </div>
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {lists.length > 0 ? (
-          <div>
-            {loadingPosters && (
-              <div className="mb-6 text-center">
-                <Spinner size="sm" color="secondary" />
-                <p className="text-sm text-default-500 mt-2">Loading movie posters...</p>
+        {/* Glass Overlay */}
+        <div className="absolute inset-0 backdrop-blur-[2px] bg-gradient-to-t from-black via-black/80 to-transparent" />
+
+        {/* Hero Content */}
+        <div className="relative z-10 h-full flex flex-col justify-end pb-16 px-6 lg:px-16">
+          <div className="max-w-7xl mx-auto w-full">
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 backdrop-blur-xl border border-white/10 mb-6">
+              <Sparkles className="w-4 h-4 text-purple-400" />
+              <span className="text-xs tracking-[0.2em] uppercase text-white/80">Curated Collections</span>
+            </div>
+
+            {/* Main Title */}
+            <h1 className="text-5xl sm:text-6xl lg:text-8xl font-bold tracking-tight mb-4">
+              <span className="bg-gradient-to-r from-white via-purple-200 to-purple-400 bg-clip-text text-transparent">
+                Featured
+              </span>
+              <br />
+              <span className="text-white/90">Lists</span>
+            </h1>
+
+            {/* Subtitle */}
+            <p className="text-lg sm:text-xl text-white/50 max-w-xl font-light leading-relaxed mb-8">
+              Discover hand-picked collections from film enthusiasts, critics, and the community. 
+              Over {lists.length} curated lists to explore.
+            </p>
+
+            {/* Stats Row */}
+            <div className="flex flex-wrap gap-8 mb-8">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
+                  <Layers className="w-5 h-5 text-purple-400" />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold">{lists.length}</div>
+                  <div className="text-xs text-white/40 uppercase tracking-wider">Collections</div>
+                </div>
               </div>
-            )}
-            
-            <div className="list-grid">
-              {lists.map((list) => {
-                const posters = list.tmdbPosters && list.tmdbPosters.length > 0 
-                  ? list.tmdbPosters 
-                  : [];
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-pink-500/20 flex items-center justify-center">
+                  <Film className="w-5 h-5 text-pink-400" />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold">{lists.reduce((acc, l) => acc + (l.filmCount || 0), 0).toLocaleString()}</div>
+                  <div className="text-xs text-white/40 uppercase tracking-wider">Films</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                  <Heart className="w-5 h-5 text-red-400" />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold">{lists.reduce((acc, l) => acc + (l.likes || 0), 0).toLocaleString()}</div>
+                  <div className="text-xs text-white/40 uppercase tracking-wider">Likes</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Search Bar */}
+            <div className="flex flex-col sm:flex-row gap-4 max-w-2xl">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
+                <input
+                  type="text"
+                  placeholder="Search collections..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-12 pr-4 py-4 bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl text-white placeholder:text-white/30 focus:outline-none focus:border-purple-500/50 focus:bg-white/10 transition-all"
+                />
+              </div>
+              <Button
+                onPress={handleScrape}
+                isLoading={scraping}
+                className="px-6 py-4 h-auto bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-2xl font-medium transition-all shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${scraping ? 'animate-spin' : ''}`} />
+                {scraping ? 'Syncing...' : 'Sync Lists'}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Scroll Indicator */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-bounce">
+          <div className="w-6 h-10 rounded-full border-2 border-white/20 flex items-start justify-center p-1">
+            <div className="w-1.5 h-3 bg-white/40 rounded-full animate-pulse" />
+          </div>
+        </div>
+      </section>
+
+      {/* Category Pills */}
+      <section className="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/5">
+        <div className="max-w-7xl mx-auto px-6 lg:px-16 py-4">
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
+            {categories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                  activeCategory === cat
+                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-500/25'
+                    : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {cat.charAt(0).toUpperCase() + cat.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Lists Grid */}
+      <section className="py-16 px-6 lg:px-16">
+        <div className="max-w-7xl mx-auto">
+          {/* Section Header */}
+          <div className="flex items-center justify-between mb-12">
+            <div>
+              <h2 className="text-3xl font-bold mb-2">
+                {activeCategory === 'all' ? 'All Collections' : `${activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1)} Collections`}
+              </h2>
+              <p className="text-white/40">{filteredLists.length} lists available</p>
+            </div>
+          </div>
+
+          {/* Grid */}
+          {filteredLists.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filteredLists.map((list, index) => {
+                const posters = list.tmdbPosters?.length ? list.tmdbPosters : list.posterUrls?.filter(u => !u.includes('empty-poster')) || [];
                 
                 return (
-                  <div
+                  <article
                     key={list.id}
-                    className="list-stacked"
                     onClick={() => handleViewList(list.slug)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        handleViewList(list.slug);
-                      }
-                    }}
+                    className="group cursor-pointer"
+                    style={{ animationDelay: `${index * 50}ms` }}
                   >
-                    {/* Overlapping Poster Grid */}
-                    <div className="poster-list-overlapped">
-                      <div className="posterlist">
-                        {posters.length > 0 ? (
-                          posters.slice(0, 5).map((posterUrl, idx) => (
-                            <div key={idx} className="posteritem">
-                              <div className="film-poster">
-                                <img
-                                  src={posterUrl}
-                                  alt={`Film ${idx + 1}`}
-                                  className="poster-image"
-                                  loading="lazy"
-                                />
-                              </div>
+                    {/* Card */}
+                    <div className="relative bg-gradient-to-br from-white/[0.08] to-white/[0.02] rounded-3xl overflow-hidden border border-white/10 hover:border-purple-500/30 transition-all duration-500 hover:shadow-2xl hover:shadow-purple-500/10 hover:-translate-y-2">
+                      
+                      {/* Poster Stack */}
+                      <div className="relative h-48 overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent z-10" />
+                        
+                        {/* Stacked Posters Effect */}
+                        <div className="flex h-full">
+                          {posters.slice(0, 5).map((poster, idx) => (
+                            <div
+                              key={idx}
+                              className="relative flex-shrink-0 transition-all duration-500 group-hover:scale-105"
+                              style={{
+                                width: `${100 / Math.min(posters.length, 5)}%`,
+                                zIndex: 5 - idx,
+                                marginLeft: idx > 0 ? '-8%' : 0,
+                              }}
+                            >
+                              <img
+                                src={poster}
+                                alt=""
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                                onError={(e) => (e.currentTarget.style.display = 'none')}
+                              />
                             </div>
-                          ))
-                        ) : (
-                          Array.from({ length: 5 }).map((_, idx) => (
-                            <div key={idx} className="posteritem">
-                              <div className="film-poster empty-poster">
-                                <Film size={24} />
-                              </div>
+                          ))}
+                          {posters.length === 0 && (
+                            <div className="w-full h-full bg-gradient-to-br from-purple-900/50 to-indigo-900/50 flex items-center justify-center">
+                              <Film className="w-12 h-12 text-white/20" />
                             </div>
-                          ))
-                        )}
+                          )}
+                        </div>
+
+                        {/* Play Button Overlay */}
+                        <div className="absolute inset-0 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="w-14 h-14 rounded-full bg-white/90 backdrop-blur-xl flex items-center justify-center shadow-2xl transform scale-75 group-hover:scale-100 transition-transform">
+                            <Play className="w-6 h-6 text-black ml-1" fill="black" />
+                          </div>
+                        </div>
                       </div>
-                    </div>
 
-                    {/* List Info */}
-                    <div className="list-info">
-                      <h3 className="list-title">
-                        {list.title}
-                      </h3>
+                      {/* Content */}
+                      <div className="p-5">
+                        <h3 className="font-semibold text-lg mb-2 line-clamp-2 group-hover:text-purple-300 transition-colors">
+                          {list.title}
+                        </h3>
+                        
+                        {/* Author */}
+                        {list.author && (
+                          <p className="text-white/40 text-sm mb-4">
+                            by {list.author.replace('/', '')}
+                          </p>
+                        )}
 
-                      {/* Stats - Only show if we have data */}
-                      {(list.likes > 0 || list.comments > 0 || list.filmCount > 0) && (
-                        <div className="list-stats">
+                        {/* Stats */}
+                        <div className="flex items-center gap-4 text-sm text-white/50">
                           {list.filmCount > 0 && (
-                            <span className="stat-item">
-                              {list.filmCount.toLocaleString()} films
+                            <span className="flex items-center gap-1.5">
+                              <Film className="w-4 h-4" />
+                              {list.filmCount.toLocaleString()}
                             </span>
                           )}
                           {list.likes > 0 && (
-                            <span className="stat-item">
-                              ❤️ {list.likes.toLocaleString()}
-                            </span>
-                          )}
-                          {list.comments > 0 && (
-                            <span className="stat-item">
-                              💬 {list.comments}
+                            <span className="flex items-center gap-1.5">
+                              <Heart className="w-4 h-4 text-red-400" />
+                              {list.likes.toLocaleString()}
                             </span>
                           )}
                         </div>
-                      )}
+
+                        {/* Explore Button */}
+                        <div className="mt-5 flex items-center gap-2 text-purple-400 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span>Explore Collection</span>
+                          <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  </article>
                 );
               })}
             </div>
-          </div>
-        ) : (
-          <Card className="bg-content1">
-            <CardBody className="text-center py-20">
-              <Film size={64} className="mx-auto mb-4 text-default-300" />
-              <h3 className="text-xl font-semibold mb-2">No lists available</h3>
-              <p className="text-default-500 mb-4">
-                No featured lists have been scraped yet.
+          ) : (
+            <div className="text-center py-20">
+              <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-white/5 flex items-center justify-center">
+                <Film className="w-10 h-10 text-white/20" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">No Collections Found</h3>
+              <p className="text-white/40 mb-6">
+                {searchQuery ? `No results for "${searchQuery}"` : 'No featured lists available yet.'}
               </p>
-              <p className="text-sm text-default-400">
-                Run the scraper to populate lists: <code className="bg-content2 px-2 py-1 rounded">node scripts/scrapeLetterboxd.js featured</code>
-              </p>
-            </CardBody>
-          </Card>
-        )}
-      </div>
+              <Button
+                onPress={handleScrape}
+                isLoading={scraping}
+                className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl px-6 py-3"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${scraping ? 'animate-spin' : ''}`} />
+                Sync from Letterboxd
+              </Button>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Footer Gradient */}
+      <div className="h-32 bg-gradient-to-t from-purple-900/20 to-transparent" />
+
+      {/* Custom Styles */}
+      <style jsx>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          50% { transform: translateY(-20px) rotate(2deg); }
+        }
+        
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
     </div>
   );
 };

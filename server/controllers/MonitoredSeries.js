@@ -1,4 +1,6 @@
 const MonitoredSeries = require("../models/MonitoredSeries");
+const Settings = require("../models/Settings");
+const { findSeriesEpisodeFile, getUserSeriesDirectory } = require("../services/fileScanner");
 
 /**
  * Get all monitored series for a user
@@ -40,6 +42,7 @@ exports.addMonitoredSeries = async (req, res) => {
       monitor,
       selectedSeasons,
       selectedEpisodes,
+      status, // Optional: frontend can pass 'downloaded' if all files already exist
     } = req.body;
 
     if (!userId || !tmdbId || !title) {
@@ -48,6 +51,10 @@ exports.addMonitoredSeries = async (req, res) => {
       });
     }
 
+    // Get user's settings to check autoDownload preference
+    const settings = await Settings.findOne({ where: { userId } });
+    const autoDownload = settings?.autoDownload ?? true;
+
     // Check if series is already monitored by this user
     const existing = await MonitoredSeries.findOne({
       where: { userId, tmdbId },
@@ -55,6 +62,13 @@ exports.addMonitoredSeries = async (req, res) => {
 
     let series;
     let isUpdate = false;
+
+    // Determine status: if frontend says 'downloaded', use that; otherwise keep existing or default to 'monitoring'
+    const determineStatus = (existingSeries) => {
+      if (status === 'downloaded') return 'downloaded';
+      if (existingSeries && existingSeries.status === 'downloaded') return 'downloaded';
+      return 'monitoring';
+    };
 
     if (existing) {
       // Update existing series instead of creating duplicate
@@ -69,8 +83,7 @@ exports.addMonitoredSeries = async (req, res) => {
         monitor: monitor || "all",
         selectedSeasons: selectedSeasons ? JSON.stringify(selectedSeasons) : null,
         selectedEpisodes: selectedEpisodes ? JSON.stringify(selectedEpisodes) : null,
-        // Don't reset status if it's already downloaded
-        status: existing.status === "downloaded" ? "downloaded" : "monitoring",
+        status: determineStatus(existing),
       });
       series = existing;
     } else {
@@ -87,11 +100,17 @@ exports.addMonitoredSeries = async (req, res) => {
         monitor: monitor || "all",
         selectedSeasons: selectedSeasons ? JSON.stringify(selectedSeasons) : null,
         selectedEpisodes: selectedEpisodes ? JSON.stringify(selectedEpisodes) : null,
-        status: "monitoring",
+        status: status === 'downloaded' ? 'downloaded' : 'monitoring',
       });
     }
 
-    res.json({ success: true, series, isUpdate });
+    // Return series with autoDownload setting so frontend knows whether to download
+    res.json({ 
+      success: true, 
+      series, 
+      isUpdate, 
+      autoDownload, // Include user's autoDownload setting
+    });
   } catch (error) {
     console.error("Error adding monitored series:", error);
     res.status(500).json({ error: "Failed to add monitored series" });
@@ -177,6 +196,71 @@ exports.isSeriesMonitored = async (req, res) => {
   } catch (error) {
     console.error("Error checking if series is monitored:", error);
     res.status(500).json({ error: "Failed to check series status" });
+  }
+};
+
+/**
+ * Check if series episodes exist BEFORE adding to monitored list
+ * This allows checking for existing files without creating a monitored entry
+ */
+exports.checkEpisodesExist = async (req, res) => {
+  try {
+    const { userId, title, episodes } = req.body;
+
+    if (!userId || !title) {
+      return res.status(400).json({ error: "userId and title are required" });
+    }
+
+    // Get user's series directory
+    const seriesDirectory = await getUserSeriesDirectory(userId);
+    
+    if (!seriesDirectory) {
+      return res.json({ 
+        success: true, 
+        results: [],
+        message: "Series directory not configured" 
+      });
+    }
+
+    // Create a mock series object for the file finder
+    const mockSeries = { title };
+
+    // Check each episode
+    const results = [];
+    const episodesList = episodes || [];
+
+    for (const episode of episodesList) {
+      const { seasonNumber, episodeNumber } = episode;
+      
+      const fileInfo = await findSeriesEpisodeFile(mockSeries, seriesDirectory, seasonNumber, episodeNumber);
+      
+      results.push({
+        seasonNumber,
+        episodeNumber,
+        exists: !!(fileInfo && fileInfo.found),
+        fileInfo: fileInfo ? {
+          fileName: fileInfo.fileName,
+          filePath: fileInfo.filePath,
+          fileSize: fileInfo.fileSize,
+          fileSizeFormatted: fileInfo.fileSizeFormatted,
+        } : null,
+      });
+    }
+
+    const existingCount = results.filter(r => r.exists).length;
+
+    return res.json({
+      success: true,
+      results,
+      existingCount,
+      totalCount: episodesList.length,
+      message: existingCount > 0 
+        ? `${existingCount} of ${episodesList.length} episodes already exist` 
+        : "No episodes found in library",
+    });
+  } catch (error) {
+    console.error("Error checking episodes existence:", error);
+    res.status(500).json({ error: "Failed to check episodes existence" });
   }
 };
 

@@ -18,7 +18,7 @@ import { ThemeSwitch } from "@/components/theme-switch";
 import { Logo } from "@/components/icons";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { Search, User, Film, ChevronDown, Tv, Sparkles, Settings, BarChart3, Database, Server, Heart, Clock, Users, EyeOff } from "lucide-react";
+import { Search, User, Film, ChevronDown, Tv, Sparkles, Settings, BarChart3, Database, Server, Heart, Clock, Users, EyeOff, HardDrive, Inbox } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { Select, SelectItem } from "@nextui-org/select";
 import axios from "axios";
@@ -250,6 +250,19 @@ export const Navbar = () => {
                       System
                     </NextLink>
                     <NextLink
+                      href={user ? "/pages/filemanagement" : "/pages/login"}
+                      className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      onClick={() => {
+                        setSettingsDropdownOpen(false);
+                        if (!user) {
+                          router.push('/pages/login');
+                        }
+                      }}
+                    >
+                      <HardDrive size={18} />
+                      File Management
+                    </NextLink>
+                    <NextLink
                       href={user ? "/pages/users" : "/pages/login"}
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
                       onClick={() => {
@@ -322,6 +335,19 @@ export const Navbar = () => {
                     >
                       <Film size={18} />
                       Monitored
+                    </NextLink>
+                    <NextLink
+                      href={user ? "/pages/requests" : "/pages/login"}
+                      className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      onClick={() => {
+                        setAccountDropdownOpen(false);
+                        if (!user) {
+                          router.push('/pages/login');
+                        }
+                      }}
+                    >
+                      <Inbox size={18} />
+                      Requests
                     </NextLink>
                     <NextLink
                       href={user ? "/pages/favorites" : "/pages/login"}
@@ -471,10 +497,12 @@ export const Navbar = () => {
             { label: "Indexers", href: user ? "/pages/indexers" : "/pages/login", requiresAuth: true },
             { label: "Download Clients", href: user ? "/pages/settings/downloadclients" : "/pages/login", requiresAuth: true },
             { label: "System", href: user ? "/pages/system" : "/pages/login", requiresAuth: true },
+            { label: "File Management", href: user ? "/pages/filemanagement" : "/pages/login", requiresAuth: true },
             { label: "Users", href: user ? "/pages/users" : "/pages/login", requiresAuth: true },
             { label: "Plex Connection", href: user ? "/pages/plexconnection" : "/pages/login", requiresAuth: true },
             { label: "Media Library", href: user ? "/pages/medialibrary" : "/pages/login", requiresAuth: true },
             { label: "Monitored", href: user ? "/pages/monitored" : "/pages/login", requiresAuth: true },
+            { label: "Requests", href: user ? "/pages/requests" : "/pages/login", requiresAuth: true },
             { label: "Favorites", href: user ? "/pages/favorites" : "/pages/login", requiresAuth: true },
             { label: "Hidden Media", href: user ? "/pages/hiddenmedia" : "/pages/login", requiresAuth: true },
             { label: "History", href: user ? "/pages/history" : "/pages/login", requiresAuth: true },

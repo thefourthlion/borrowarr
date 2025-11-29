@@ -5,11 +5,20 @@ import axios from "axios";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 
+interface UserPermissions {
+  admin: boolean;
+  manage_users: boolean;
+  request: boolean;
+  auto_approve: boolean;
+  manage_requests: boolean;
+}
+
 interface User {
   id: string;
   username: string;
   email: string;
   avatarUrl?: string;
+  permissions?: UserPermissions;
   createdAt: string;
   updatedAt: string;
 }

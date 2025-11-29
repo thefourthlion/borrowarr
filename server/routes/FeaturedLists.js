@@ -5,6 +5,8 @@ const { authenticateToken } = require("../middleware/auth");
 
 // Public routes - anyone can view lists
 router.get("/", featuredListsController.getFeaturedLists);
+router.get("/enriched", featuredListsController.getEnrichedLists);
+router.get("/posters", featuredListsController.getListPosters);
 router.get("/search", featuredListsController.searchLists);
 router.get("/:slug", featuredListsController.getFeaturedListBySlug);
 

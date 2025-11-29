@@ -204,6 +204,13 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
   const [hasDownloadClients, setHasDownloadClients] = useState(false);
   const [checkingRequirements, setCheckingRequirements] = useState(false);
   
+  // User settings from system page
+  const [userSettings, setUserSettings] = useState<{
+    minQuality: string;
+    maxQuality: string;
+    autoDownload: boolean;
+  } | null>(null);
+  
   // Modal state for notifications
   const [notificationModal, setNotificationModal] = useState<{
     isOpen: boolean;
@@ -302,6 +309,86 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
     return true;
   };
 
+  // Fetch user's quality settings from system page
+  const fetchUserSettings = async () => {
+    if (!user) return;
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await axios.get(`${API_BASE_URL}/api/Settings`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.data) {
+        setUserSettings({
+          minQuality: response.data.minQuality || '720p',
+          maxQuality: response.data.maxQuality || '1080p',
+          autoDownload: response.data.autoDownload ?? true,
+        });
+        console.log('[AddSeriesModal] User settings loaded:', response.data.minQuality, response.data.maxQuality);
+      }
+    } catch (error) {
+      console.error('Error fetching user settings:', error);
+    }
+  };
+
+  // Quality ranking for comparison (higher number = higher quality)
+  const getQualityRank = (quality: string): number => {
+    const qualityLower = quality.toLowerCase();
+    if (qualityLower.includes('2160p') || qualityLower.includes('4k') || qualityLower.includes('uhd')) return 4;
+    if (qualityLower.includes('1080p')) return 3;
+    if (qualityLower.includes('720p')) return 2;
+    if (qualityLower.includes('480p') || qualityLower.includes('sd')) return 1;
+    return 0; // Unknown
+  };
+
+  // Detect quality from filename
+  const detectQualityFromFilename = (filename: string): string => {
+    const lower = filename.toLowerCase();
+    if (lower.includes('2160p') || lower.includes('4k') || lower.includes('uhd')) return '2160p';
+    if (lower.includes('1080p')) return '1080p';
+    if (lower.includes('720p')) return '720p';
+    if (lower.includes('480p')) return '480p';
+    return 'SD';
+  };
+
+  // Check if existing file meets the minimum quality threshold
+  const fileMeetsQualityThreshold = (existingQuality: string, minQuality: string): boolean => {
+    const existingRank = getQualityRank(existingQuality);
+    const minRank = getQualityRank(minQuality);
+    return existingRank >= minRank;
+  };
+
+  // Get the best torrent by seeders count (prioritize seeders over indexer priority for auto-download)
+  const getBestTorrentBySeeders = (torrents: TorrentResult[]): TorrentResult | null => {
+    if (torrents.length === 0) return null;
+    
+    return torrents.reduce((best, current) => {
+      const bestSeeders = best.seeders || 0;
+      const currentSeeders = current.seeders || 0;
+      
+      // Prioritize by seeders first
+      if (currentSeeders > bestSeeders) return current;
+      if (currentSeeders < bestSeeders) return best;
+      
+      // If seeders are equal, use indexer priority as tiebreaker
+      const bestPriority = (best as any).indexerPriority ?? 25;
+      const currentPriority = (current as any).indexerPriority ?? 25;
+      return currentPriority < bestPriority ? current : best;
+    });
+  };
+
+  // Filter torrents by quality - use user settings
+  const filterTorrentsByQuality = (torrents: TorrentResult[], minQuality: string): TorrentResult[] => {
+    if (!minQuality || minQuality === 'any') return torrents;
+
+    const minRank = getQualityRank(minQuality);
+    
+    return torrents.filter(torrent => {
+      const torrentQuality = detectQualityFromFilename(torrent.title);
+      const torrentRank = getQualityRank(torrentQuality);
+      return torrentRank >= minRank;
+    });
+  };
+
   // Reset state when modal opens/closes or media changes
   useEffect(() => {
     // Skip if modal is not open or no media
@@ -358,6 +445,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
           checkIfFavorited(),
           checkIfHidden(),
           checkRequirements(),
+          fetchUserSettings(),
         ]);
         
         // Mark as successfully fetched only if not aborted
@@ -616,10 +704,12 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
     });
   };
 
-  const fetchEpisodeTorrents = async (seasonNumber: number, episodeNumber: number) => {
+  const fetchEpisodeTorrents = async (seasonNumber: number, episodeNumber: number, retryCount = 0) => {
     if (!media) return;
 
     const episodeKey = `${seasonNumber}-${episodeNumber}`;
+    const MAX_RETRIES = 2;
+    const RETRY_DELAY = 1500;
     
     setLoadingEpisodeTorrents(prev => new Map(prev).set(episodeKey, true));
     setEpisodeShowingTorrents(episodeKey);
@@ -631,6 +721,8 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
       // Build search query: "Title S01E01"
       const searchQuery = `${title} S${String(seasonNumber).padStart(2, '0')}E${String(episodeNumber).padStart(2, '0')}`;
 
+      console.log(`[AddSeriesModal] Searching for: "${searchQuery}" (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`);
+
       // Use the Search API endpoint to search for torrents - fetch all results
       const torrentResponse = await axios.get(
         `${API_BASE_URL}/api/Search`,
@@ -639,41 +731,51 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
             query: searchQuery,
             categoryIds: '5000', // TV shows category
             limit: 1000, // Large limit to get all results
+            fresh: retryCount === 0 ? 'true' : undefined, // Force fresh results on first attempt
           },
           headers: token ? {
             Authorization: `Bearer ${token}`,
           } : undefined,
-          timeout: 30000,
+          timeout: 45000,
         }
       );
 
-      if (torrentResponse.data.results) {
-        // Sort by indexer priority first (lower = higher priority), then by seeders descending
-        const sortedResults = [...(torrentResponse.data.results || [])].sort((a: TorrentResult, b: TorrentResult) => {
-          // First compare by indexer priority
-          const aPriority = (a as any).indexerPriority ?? 25;
-          const bPriority = (b as any).indexerPriority ?? 25;
-          if (aPriority !== bPriority) {
-            return aPriority - bPriority;
-          }
-          // Then sort by seeders (descending)
-          const aSeeders = a.seeders ?? 0;
-          const bSeeders = b.seeders ?? 0;
-          return bSeeders - aSeeders;
-        });
-        setEpisodeTorrents(prev => {
-          const next = new Map(prev);
-          next.set(episodeKey, sortedResults);
-          return next;
-        });
-      } else {
-        setEpisodeTorrents(prev => {
-          const next = new Map(prev);
-          next.set(episodeKey, []);
-          return next;
-        });
+      const results = torrentResponse.data.results || [];
+      console.log(`[AddSeriesModal] Search returned ${results.length} results (attempt ${retryCount + 1})`);
+
+      // If no results and we haven't exceeded retries, wait and try again
+      if (results.length === 0 && retryCount < MAX_RETRIES) {
+        console.log(`[AddSeriesModal] No results, retrying in ${RETRY_DELAY}ms...`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        return fetchEpisodeTorrents(seasonNumber, episodeNumber, retryCount + 1);
       }
+
+      // Sort by seeders first (descending), then by indexer priority as tiebreaker
+      const sortedResults = [...results].sort((a: TorrentResult, b: TorrentResult) => {
+        // Prioritize by seeders (descending - most seeders first)
+        const aSeeders = a.seeders ?? 0;
+        const bSeeders = b.seeders ?? 0;
+        if (aSeeders !== bSeeders) {
+          return bSeeders - aSeeders;
+        }
+        // If seeders are equal, use indexer priority
+        const aPriority = (a as any).indexerPriority ?? 25;
+        const bPriority = (b as any).indexerPriority ?? 25;
+        return aPriority - bPriority;
+      });
+      
+      setEpisodeTorrents(prev => {
+        const next = new Map(prev);
+        next.set(episodeKey, sortedResults);
+        return next;
+      });
     } catch (error: any) {
+      // Retry on error if we haven't exceeded retries
+      if (retryCount < MAX_RETRIES) {
+        console.log(`[AddSeriesModal] Error occurred, retrying in ${RETRY_DELAY}ms...`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        return fetchEpisodeTorrents(seasonNumber, episodeNumber, retryCount + 1);
+      }
       console.error("Error fetching episode torrents:", error);
       setEpisodeTorrents(prev => {
         const next = new Map(prev);
@@ -777,8 +879,11 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
     }
   };
 
-  const fetchCompleteSeriesTorrents = async (seasonNumber?: number) => {
+  const fetchCompleteSeriesTorrents = async (seasonNumber?: number, retryCount = 0) => {
     if (!media) return;
+
+    const MAX_RETRIES = 2;
+    const RETRY_DELAY = 1500;
 
     setLoadingCompleteSeriesTorrents(true);
     setSelectedSeasonForComplete(seasonNumber || null);
@@ -802,6 +907,8 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
         searchQuery += ` ${year}`;
       }
 
+      console.log(`[AddSeriesModal] Searching complete series: "${searchQuery}" (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`);
+
       // Use the Search API endpoint to search for torrents - fetch all results
       const torrentResponse = await axios.get(
         `${API_BASE_URL}/api/Search`,
@@ -810,33 +917,45 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
             query: searchQuery,
             categoryIds: '5000', // TV shows category
             limit: 1000, // Large limit to get all results
+            fresh: retryCount === 0 ? 'true' : undefined,
           },
-          timeout: 30000,
+          timeout: 45000,
         }
       );
 
-      // Search API returns results directly, not wrapped in success
-      if (torrentResponse.data.results) {
-        const newResults = torrentResponse.data.results || [];
-        
-        // Sort by priority first (lower number = higher priority), then by seeders (descending)
-        const sortedResults = newResults.sort((a: TorrentResult, b: TorrentResult) => {
-          const aPriority = (a as any).indexerPriority ?? 25;
-          const bPriority = (b as any).indexerPriority ?? 25;
-          if (aPriority !== bPriority) {
-            return aPriority - bPriority;
-          }
-          const aSeeders = a.seeders || 0;
-          const bSeeders = b.seeders || 0;
-          return bSeeders - aSeeders;
-        });
-        
-        setCompleteSeriesTorrents(sortedResults);
-      } else {
-        setCompleteSeriesTorrents([]);
+      const results = torrentResponse.data.results || [];
+      console.log(`[AddSeriesModal] Complete series search returned ${results.length} results (attempt ${retryCount + 1})`);
+
+      // If no results and we haven't exceeded retries, wait and try again
+      if (results.length === 0 && retryCount < MAX_RETRIES) {
+        console.log(`[AddSeriesModal] No results, retrying in ${RETRY_DELAY}ms...`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        return fetchCompleteSeriesTorrents(seasonNumber, retryCount + 1);
       }
+
+      // Sort by seeders first (descending), then by indexer priority as tiebreaker
+      const sortedResults = [...results].sort((a: TorrentResult, b: TorrentResult) => {
+        const aSeeders = a.seeders || 0;
+        const bSeeders = b.seeders || 0;
+        if (aSeeders !== bSeeders) {
+          return bSeeders - aSeeders;
+        }
+        const aPriority = (a as any).indexerPriority ?? 25;
+        const bPriority = (b as any).indexerPriority ?? 25;
+        return aPriority - bPriority;
+      });
+      
+      setCompleteSeriesTorrents(sortedResults);
     } catch (error: any) {
       console.error("Error fetching complete series torrents:", error);
+      
+      // Retry on error if we haven't exceeded retries
+      if (retryCount < MAX_RETRIES) {
+        console.log(`[AddSeriesModal] Error occurred, retrying in ${RETRY_DELAY}ms...`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        return fetchCompleteSeriesTorrents(seasonNumber, retryCount + 1);
+      }
+      
       const errorMessage = error.response?.data?.error || error.message || "Failed to fetch torrents";
       console.error("Error details:", errorMessage);
       setCompleteSeriesTorrents([]);
@@ -849,8 +968,11 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
     }
   };
 
-  const fetchSeasonTorrents = async (seasonNumber: number) => {
+  const fetchSeasonTorrents = async (seasonNumber: number, retryCount = 0) => {
     if (!media) return;
+
+    const MAX_RETRIES = 2;
+    const RETRY_DELAY = 1500;
 
     setLoadingSeasonTorrents(prev => new Map(prev).set(seasonNumber, true));
     setSeasonShowingTorrents(seasonNumber);
@@ -865,6 +987,8 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
         searchQuery += ` ${year}`;
       }
 
+      console.log(`[AddSeriesModal] Searching season: "${searchQuery}" (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`);
+
       // Use the Search API endpoint to search for torrents - fetch all results
       const torrentResponse = await axios.get(
         `${API_BASE_URL}/api/Search`,
@@ -873,40 +997,47 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
             query: searchQuery,
             categoryIds: '5000', // TV shows category
             limit: 1000, // Large limit to get all results
+            fresh: retryCount === 0 ? 'true' : undefined,
           },
-          timeout: 30000,
+          timeout: 45000,
         }
       );
 
-      // Search API returns results directly, not wrapped in success
-      if (torrentResponse.data.results) {
-        const newResults = torrentResponse.data.results || [];
-        
-        // Sort by priority first (lower number = higher priority), then by seeders (descending)
-        const sortedResults = newResults.sort((a: TorrentResult, b: TorrentResult) => {
-          const aPriority = (a as any).indexerPriority ?? 25;
-          const bPriority = (b as any).indexerPriority ?? 25;
-          if (aPriority !== bPriority) {
-            return aPriority - bPriority;
-          }
-          const aSeeders = a.seeders || 0;
-          const bSeeders = b.seeders || 0;
-          return bSeeders - aSeeders;
-        });
-        
-        setSeasonTorrents(prev => {
-          const next = new Map(prev);
-          next.set(seasonNumber, sortedResults);
-          return next;
-        });
-      } else {
-        setSeasonTorrents(prev => {
-          const next = new Map(prev);
-          next.set(seasonNumber, []);
-          return next;
-        });
+      const results = torrentResponse.data.results || [];
+      console.log(`[AddSeriesModal] Season search returned ${results.length} results (attempt ${retryCount + 1})`);
+
+      // If no results and we haven't exceeded retries, wait and try again
+      if (results.length === 0 && retryCount < MAX_RETRIES) {
+        console.log(`[AddSeriesModal] No results, retrying in ${RETRY_DELAY}ms...`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        return fetchSeasonTorrents(seasonNumber, retryCount + 1);
       }
+
+      // Sort by seeders first (descending), then by indexer priority as tiebreaker
+      const sortedResults = [...results].sort((a: TorrentResult, b: TorrentResult) => {
+        const aSeeders = a.seeders || 0;
+        const bSeeders = b.seeders || 0;
+        if (aSeeders !== bSeeders) {
+          return bSeeders - aSeeders;
+        }
+        const aPriority = (a as any).indexerPriority ?? 25;
+        const bPriority = (b as any).indexerPriority ?? 25;
+        return aPriority - bPriority;
+      });
+      
+      setSeasonTorrents(prev => {
+        const next = new Map(prev);
+        next.set(seasonNumber, sortedResults);
+        return next;
+      });
     } catch (error: any) {
+      // Retry on error if we haven't exceeded retries
+      if (retryCount < MAX_RETRIES) {
+        console.log(`[AddSeriesModal] Error occurred, retrying in ${RETRY_DELAY}ms...`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        return fetchSeasonTorrents(seasonNumber, retryCount + 1);
+      }
+
       console.error("Error fetching season torrents:", error);
       const errorMessage = error.response?.data?.error || error.message || "Failed to fetch torrents";
       console.error("Error details:", errorMessage);
@@ -952,38 +1083,72 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
       // Build search query: "Title S01E01"
       const searchQuery = `${title} S${String(seasonNumber).padStart(2, '0')}E${String(episodeNumber).padStart(2, '0')}`;
 
-      // Use the Search API endpoint to search for torrents
-      const torrentResponse = await axios.get(
-        `${API_BASE_URL}/api/Search`,
-        {
-          params: {
-            query: searchQuery,
-            categoryIds: '5000', // TV shows category
-          },
-          headers: token ? {
-            Authorization: `Bearer ${token}`,
-          } : undefined,
-          timeout: 30000,
-        }
-      );
+      // Robust search with retry logic for reliable results
+      const MAX_RETRIES = 2;
+      const RETRY_DELAY = 1500;
+      let allResults: TorrentResult[] = [];
+      
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        console.log(`[AddSeriesModal] Auto-download searching for: "${searchQuery}" (attempt ${attempt + 1}/${MAX_RETRIES + 1})`);
+        
+        try {
+          const torrentResponse = await axios.get(
+            `${API_BASE_URL}/api/Search`,
+            {
+              params: {
+                query: searchQuery,
+                categoryIds: '5000', // TV shows category
+                limit: 1000,
+                fresh: attempt === 0 ? 'true' : undefined, // Fresh results on first attempt
+              },
+              headers: token ? {
+                Authorization: `Bearer ${token}`,
+              } : undefined,
+              timeout: 45000,
+            }
+          );
 
-      if (!torrentResponse.data.results || torrentResponse.data.results.length === 0) {
+          allResults = torrentResponse.data.results || [];
+          console.log(`[AddSeriesModal] Search returned ${allResults.length} results (attempt ${attempt + 1})`);
+          
+          // If we got results, break out of retry loop
+          if (allResults.length > 0) {
+            break;
+          }
+          
+          // No results - wait and retry if we haven't exhausted retries
+          if (attempt < MAX_RETRIES) {
+            console.log(`[AddSeriesModal] No results, retrying in ${RETRY_DELAY}ms...`);
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+          }
+        } catch (searchError) {
+          console.error(`[AddSeriesModal] Search attempt ${attempt + 1} failed:`, searchError);
+          if (attempt < MAX_RETRIES) {
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+          }
+        }
+      }
+
+      if (allResults.length === 0) {
         throw new Error(`No torrents found for ${title} S${String(seasonNumber).padStart(2, '0')}E${String(episodeNumber).padStart(2, '0')}`);
       }
 
-      // Get the best torrent (prefer higher priority indexers, then highest seeders)
-      const bestTorrent = torrentResponse.data.results.reduce((best: TorrentResult, current: TorrentResult) => {
-        // First compare by indexer priority (lower number = higher priority)
-        const bestPriority = (best as any).indexerPriority ?? 25;
-        const currentPriority = (current as any).indexerPriority ?? 25;
-        if (currentPriority < bestPriority) return current;
-        if (currentPriority > bestPriority) return best;
-        
-        // If priorities are equal, prefer higher seeders
-        const bestSeeders = best.seeders || 0;
-        const currentSeeders = current.seeders || 0;
-        return currentSeeders > bestSeeders ? current : best;
-      });
+      // Filter torrents by minimum quality from user settings
+      const effectiveMinQuality = userSettings?.minQuality || '720p';
+      const qualityFilteredTorrents = filterTorrentsByQuality(allResults, effectiveMinQuality);
+      
+      if (qualityFilteredTorrents.length === 0) {
+        throw new Error(`No torrents matching quality threshold (${effectiveMinQuality}) found for ${title} S${String(seasonNumber).padStart(2, '0')}E${String(episodeNumber).padStart(2, '0')}`);
+      }
+
+      // Get the best torrent - prioritize by SEEDERS first (most seeders = best)
+      const bestTorrent = getBestTorrentBySeeders(qualityFilteredTorrents);
+      
+      if (!bestTorrent) {
+        throw new Error(`No suitable torrents found for ${title} S${String(seasonNumber).padStart(2, '0')}E${String(episodeNumber).padStart(2, '0')}`);
+      }
+      
+      console.log(`[AddSeriesModal] Selected best torrent with ${bestTorrent.seeders} seeders: ${bestTorrent.title}`);
 
       // Extract quality from torrent title
       const titleLower = bestTorrent.title.toLowerCase();
@@ -1044,7 +1209,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
     }
 
     if (!media || selectedEpisodes.size === 0) {
-      showNotification('Selection Required', 'Please select at least one episode to download', 'warning');
+      showNotification('Selection Required', 'Please select at least one episode to monitor', 'warning');
       return;
     }
 
@@ -1075,12 +1240,113 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
         }
       });
 
-      // Save series to database
+      const title = media.name || media.title || '';
+
+      // Check if user has auto_approve permission
+      const hasAutoApprove = user?.permissions?.auto_approve || user?.permissions?.admin;
+
+      // If user doesn't have auto_approve, create a request instead
+      if (!hasAutoApprove) {
+        console.log('[AddSeriesModal] User does not have auto_approve permission, creating request...');
+        
+        const posterUrl = media.poster_path 
+          ? `${TMDB_IMAGE_BASE_URL}${media.poster_path}` 
+          : (media.posterUrl || null);
+
+        const requestResponse = await axios.post(`${API_BASE_URL}/api/MediaRequests`, {
+          mediaType: 'series',
+          tmdbId: media.id,
+          title: title,
+          overview: media.overview,
+          posterPath: media.poster_path,
+          backdropPath: seriesDetails?.backdrop_path || null,
+          releaseDate: media.first_air_date || null,
+          selectedSeasons: selectedSeasonsArray,
+          selectedEpisodes: selectedEpisodesArray,
+          qualityProfile: 'any',
+        });
+
+        if (requestResponse.data.autoApproved) {
+          showNotification('✅ Request Approved', 'Your request has been auto-approved and added to monitoring!', 'success');
+        } else {
+          const episodeCount = selectedEpisodesArray.length;
+          showNotification('📨 Request Submitted', `Your request for ${episodeCount} episode${episodeCount > 1 ? 's' : ''} has been submitted for admin approval.`, 'info');
+        }
+
+        setTimeout(() => {
+          onClose();
+          if (onAddSeries) onAddSeries();
+        }, 500);
+        return;
+      }
+
+      // User has auto_approve - proceed with normal monitoring flow
+
+      // Get minimum quality from user settings
+      const effectiveMinQuality = userSettings?.minQuality || '720p';
+      console.log('[AddSeriesModal] Using quality threshold:', effectiveMinQuality);
+
+      // Check which episodes already exist in library - also check if they meet quality threshold
+      let existingEpisodes: Set<string> = new Set();
+      let existingButBelowQuality: Set<string> = new Set();
+      let episodesToActuallyDownload = [...episodesToDownload];
+      let allEpisodesExist = false;
+      
+      try {
+        const checkExistsResponse = await axios.post(`${API_BASE_URL}/api/MonitoredSeries/check-exists`, {
+          userId: user!.id,
+          title: title,
+          episodes: episodesToDownload.map(ep => ({
+            seasonNumber: ep.seasonNumber,
+            episodeNumber: ep.episodeNumber,
+          })),
+        });
+
+        if (checkExistsResponse.data.success && checkExistsResponse.data.results) {
+          // Mark existing episodes and check quality
+          for (const result of checkExistsResponse.data.results) {
+            if (result.exists) {
+              const episodeKey = `${result.seasonNumber}-${result.episodeNumber}`;
+              const existingQuality = detectQualityFromFilename(result.fileInfo?.fileName || '');
+              const meetsQuality = fileMeetsQualityThreshold(existingQuality, effectiveMinQuality);
+              
+              if (meetsQuality) {
+                existingEpisodes.add(episodeKey);
+              } else {
+                // Episode exists but below quality threshold - needs re-download
+                existingButBelowQuality.add(episodeKey);
+                console.log(`[AddSeriesModal] Episode ${episodeKey} exists at ${existingQuality} but below threshold ${effectiveMinQuality}`);
+              }
+            }
+          }
+          
+          // Check if ALL episodes exist AND meet quality
+          allEpisodesExist = existingEpisodes.size === episodesToDownload.length;
+          
+          // Filter out only episodes that exist AND meet quality threshold
+          episodesToActuallyDownload = episodesToDownload.filter(
+            ep => !existingEpisodes.has(`${ep.seasonNumber}-${ep.episodeNumber}`)
+          );
+          
+          // Log info about episodes
+          if (existingEpisodes.size > 0) {
+            console.log(`[AddSeriesModal] ${existingEpisodes.size} episodes already exist at good quality`);
+          }
+          if (existingButBelowQuality.size > 0) {
+            console.log(`[AddSeriesModal] ${existingButBelowQuality.size} episodes exist but need quality upgrade`);
+          }
+          console.log(`[AddSeriesModal] ${episodesToActuallyDownload.length} episodes to download`);
+        }
+      } catch (error) {
+        console.log('[AddSeriesModal] Could not check for existing episodes, continuing with all...');
+        // Continue if check fails
+      }
+
+      // Save series to database and get user's autoDownload setting
       const posterUrl = media.poster_path 
         ? `${TMDB_IMAGE_BASE_URL}${media.poster_path}` 
         : (media.posterUrl || null);
 
-      const title = media.name || media.title || '';
       const firstAirDate = media.first_air_date || null;
 
       const saveSeriesResponse = await axios.post(`${API_BASE_URL}/api/MonitoredSeries`, {
@@ -1095,15 +1361,49 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
         monitor: "all", // Can be made configurable later
         selectedSeasons: selectedSeasonsArray,
         selectedEpisodes: selectedEpisodesArray,
+        status: allEpisodesExist ? 'downloaded' : 'monitoring', // Set status based on file existence
       });
 
       const seriesId = saveSeriesResponse.data.series?.id;
+      const isUpdate = saveSeriesResponse.data.isUpdate;
+      const autoDownload = saveSeriesResponse.data.autoDownload ?? true;
 
-      // Download episodes one by one
+      console.log(`[AddSeriesModal] Series saved. autoDownload: ${autoDownload}, allEpisodesExist: ${allEpisodesExist}`);
+
+      // If all episodes already exist, show success and close
+      if (allEpisodesExist) {
+        setTimeout(() => {
+          onClose();
+          const message = isUpdate 
+            ? `Series monitoring updated! All ${existingEpisodes.size} episodes already exist in library.`
+            : `Series added to monitoring! All ${existingEpisodes.size} episodes already downloaded.`;
+          showNotification('✅ Success', message, 'success');
+          if (onAddSeries) onAddSeries();
+        }, 500);
+        return;
+      }
+
+      // If autoDownload is disabled, just add to monitoring without downloading
+      if (!autoDownload) {
+        setTimeout(() => {
+          onClose();
+          let message = isUpdate 
+            ? `Series monitoring updated! Will check for files periodically.`
+            : `Series added to monitoring! Auto-download is disabled - will check for files periodically.`;
+          if (existingEpisodes.size > 0) {
+            message += `\n\n${existingEpisodes.size} episodes already exist in library.`;
+          }
+          showNotification('Success', message, 'success');
+          if (onAddSeries) onAddSeries();
+        }, 500);
+        return;
+      }
+
+      // autoDownload is enabled - proceed with downloading episodes (only missing ones)
       let successCount = 0;
       let failCount = 0;
 
-      for (const episode of episodesToDownload) {
+      for (const episode of episodesToActuallyDownload) {
         try {
           await downloadEpisode(episode.seasonNumber, episode.episodeNumber, episode.episodeName);
           successCount++;
@@ -1116,10 +1416,13 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
       }
 
       // Update series status if we have a seriesId
-      if (seriesId && successCount > 0) {
+      if (seriesId) {
         try {
+          const newStatus = existingEpisodes.size > 0 && episodesToActuallyDownload.length === 0 
+            ? "downloaded" 
+            : (successCount > 0 ? "downloading" : "monitoring");
           await axios.put(`${API_BASE_URL}/api/MonitoredSeries/${seriesId}`, {
-            status: "downloading",
+            status: newStatus,
           });
         } catch (error) {
           console.error("Error updating series status:", error);
@@ -1129,10 +1432,23 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
       // Close modal and show summary
       setTimeout(() => {
         onClose();
+        let summaryMessage = `Series added to monitoring!\n\n`;
+        if (existingEpisodes.size > 0) {
+          summaryMessage += `Already in library (${effectiveMinQuality}+): ${existingEpisodes.size} episodes\n`;
+        }
+        if (existingButBelowQuality.size > 0) {
+          summaryMessage += `Quality upgrade needed: ${existingButBelowQuality.size} episodes\n`;
+        }
+        if (episodesToActuallyDownload.length > 0) {
+          summaryMessage += `Successfully queued: ${successCount} episodes\nFailed: ${failCount} episodes`;
+        } else if (existingEpisodes.size === 0 && existingButBelowQuality.size === 0) {
+          summaryMessage += `Will search for downloads automatically.`;
+        }
+        
         showNotification(
           'Series Added',
-          `Series added to monitoring!\n\nSuccessfully queued: ${successCount} episodes\nFailed: ${failCount} episodes`,
-          successCount > 0 ? 'success' : 'warning'
+          summaryMessage,
+          successCount > 0 || existingEpisodes.size > 0 ? 'success' : 'info'
         );
         if (onAddSeries) onAddSeries();
       }, 1000);
@@ -2097,7 +2413,9 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
             isLoading={addingSeries}
             isDisabled={!media || selectedEpisodes.size === 0 || loadingSeasons}
           >
-            Add Series ({selectedEpisodesCount} episodes)
+            {user?.permissions?.auto_approve || user?.permissions?.admin 
+              ? `Monitor Series (${selectedEpisodesCount} episodes)`
+              : `Request Series (${selectedEpisodesCount} episodes)`}
           </Button>
         </ModalFooter>
       </ModalContent>

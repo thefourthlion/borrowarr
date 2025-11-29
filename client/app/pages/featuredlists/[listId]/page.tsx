@@ -6,22 +6,23 @@ import { Card, CardBody } from "@nextui-org/card";
 import { Chip } from "@nextui-org/chip";
 import { Spinner } from "@nextui-org/spinner";
 import { Input } from "@nextui-org/input";
-import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@nextui-org/modal";
+import { Select, SelectItem } from "@nextui-org/select";
 import {
   ChevronLeft,
   Search,
   Star,
   Calendar,
   Heart,
-  TrendingUp,
-  Award,
   Film,
   Tv,
-  Globe,
-  Zap,
-  Clock,
+  Download,
+  Check,
+  Eye,
+  EyeOff,
+  ExternalLink,
   Users,
-  Sparkles,
+  MessageCircle,
+  RefreshCw,
 } from "lucide-react";
 import axios from "axios";
 import AddMovieModal from "@/components/AddMovieModal";
@@ -31,7 +32,7 @@ import { useAuth } from "@/context/AuthContext";
 import "@/styles/FeaturedLists.scss";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
-const TMDB_API_KEY = "1f8c588ce20d993183c247936bc138e9";
+const TMDB_API_KEY = "02ad41cf73db27ff46061d6f52a97342";
 const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500";
 
 interface TMDBMedia {
@@ -51,23 +52,31 @@ interface TMDBMedia {
   media_type?: 'movie' | 'tv';
 }
 
-interface ListConfig {
+interface LetterboxdList {
   id: string;
+  slug: string;
   title: string;
-  description: string;
-  icon: any;
-  color: string;
-  type: 'movie' | 'tv';
-  endpoint: string;
-  params: Record<string, any>;
+  description: string | null;
+  author: string;
+  authorUrl: string;
+  listUrl: string;
+  filmCount: number;
+  likes: number;
+  comments: number;
+  category: string;
+  featured: boolean;
+  posterUrls: string[];
+  scrapedFilms: any[];
+  lastScrapedAt: string;
 }
 
 const FeaturedListDetail = () => {
   const params = useParams();
   const router = useRouter();
   const { user } = useAuth();
-  const listId = params.listId as string;
+  const listSlug = params.listId as string;
 
+  const [listData, setListData] = useState<LetterboxdList | null>(null);
   const [media, setMedia] = useState<TMDBMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -75,6 +84,8 @@ const FeaturedListDetail = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState("popularity.desc");
+  const [scrapingList, setScrapingList] = useState(false);
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -83,215 +94,129 @@ const FeaturedListDetail = () => {
   // Favorites state
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favoritingIds, setFavoritingIds] = useState<Set<number>>(new Set());
-
-  // List configuration
-  const [listConfig, setListConfig] = useState<ListConfig | null>(null);
-
-  // Define all featured lists configurations
-  const featuredListConfigs: Record<string, ListConfig> = {
-    'top-rated-movies': {
-      id: 'top-rated-movies',
-      title: 'Top 250 Narrative Feature Films',
-      description: 'The highest-rated movies of all time based on thousands of ratings',
-      icon: Star,
-      color: 'from-yellow-500 to-orange-500',
-      type: 'movie',
-      endpoint: '/movie/top_rated',
-      params: { language: 'en-US' }
-    },
-    'popular-movies': {
-      id: 'popular-movies',
-      title: 'Most Popular on TMDb',
-      description: 'The most popular movies being watched right now',
-      icon: TrendingUp,
-      color: 'from-purple-500 to-pink-500',
-      type: 'movie',
-      endpoint: '/movie/popular',
-      params: { language: 'en-US' }
-    },
-    'upcoming-movies': {
-      id: 'upcoming-movies',
-      title: 'Upcoming Releases',
-      description: 'Highly anticipated movies coming soon to theaters',
-      icon: Clock,
-      color: 'from-blue-500 to-cyan-500',
-      type: 'movie',
-      endpoint: '/movie/upcoming',
-      params: { language: 'en-US' }
-    },
-    'top-rated-tv': {
-      id: 'top-rated-tv',
-      title: 'Top 100 Series',
-      description: 'The greatest TV shows ever made',
-      icon: Tv,
-      color: 'from-green-500 to-emerald-500',
-      type: 'tv',
-      endpoint: '/tv/top_rated',
-      params: { language: 'en-US' }
-    },
-    'trending-movies': {
-      id: 'trending-movies',
-      title: 'Trending This Week',
-      description: 'Movies that are trending right now',
-      icon: Zap,
-      color: 'from-red-500 to-orange-500',
-      type: 'movie',
-      endpoint: '/trending/movie/week',
-      params: {}
-    },
-    'award-winners': {
-      id: 'award-winners',
-      title: 'Academy Award Winners',
-      description: 'Oscar-winning films throughout history',
-      icon: Award,
-      color: 'from-amber-500 to-yellow-500',
-      type: 'movie',
-      endpoint: '/discover/movie',
-      params: {
-        language: 'en-US',
-        sort_by: 'vote_average.desc',
-        with_keywords: '210024', // Oscar winner keyword
-        'vote_count.gte': 1000
-      }
-    },
-    'animated-films': {
-      id: 'animated-films',
-      title: 'Top 100 Animated Films',
-      description: 'The best animated movies for all ages',
-      icon: Sparkles,
-      color: 'from-pink-500 to-rose-500',
-      type: 'movie',
-      endpoint: '/discover/movie',
-      params: {
-        language: 'en-US',
-        sort_by: 'vote_average.desc',
-        with_genres: '16', // Animation genre
-        'vote_count.gte': 500
-      }
-    },
-    'horror-films': {
-      id: 'horror-films',
-      title: 'Top 250 Horror Films',
-      description: 'The scariest and most thrilling horror movies',
-      icon: Film,
-      color: 'from-red-600 to-black',
-      type: 'movie',
-      endpoint: '/discover/movie',
-      params: {
-        language: 'en-US',
-        sort_by: 'vote_average.desc',
-        with_genres: '27', // Horror genre
-        'vote_count.gte': 300
-      }
-    },
-    'scifi-films': {
-      id: 'scifi-films',
-      title: 'Top 250 Sci-Fi Films',
-      description: 'Mind-bending science fiction masterpieces',
-      icon: Globe,
-      color: 'from-cyan-500 to-blue-600',
-      type: 'movie',
-      endpoint: '/discover/movie',
-      params: {
-        language: 'en-US',
-        sort_by: 'vote_average.desc',
-        with_genres: '878', // Sci-Fi genre
-        'vote_count.gte': 500
-      }
-    },
-    'romance-films': {
-      id: 'romance-films',
-      title: 'Top Romance Films',
-      description: 'The most heartwarming and romantic stories',
-      icon: Heart,
-      color: 'from-pink-400 to-red-400',
-      type: 'movie',
-      endpoint: '/discover/movie',
-      params: {
-        language: 'en-US',
-        sort_by: 'vote_average.desc',
-        with_genres: '10749', // Romance genre
-        'vote_count.gte': 500
-      }
-    },
-    'international-films': {
-      id: 'international-films',
-      title: 'Top 250 International Films',
-      description: 'Acclaimed films from around the world',
-      icon: Globe,
-      color: 'from-indigo-500 to-purple-500',
-      type: 'movie',
-      endpoint: '/discover/movie',
-      params: {
-        language: 'en-US',
-        sort_by: 'vote_average.desc',
-        with_original_language: 'ja|ko|fr|es|de|it', // Major non-English languages
-        'vote_count.gte': 300
-      }
-    },
-    'cult-classics': {
-      id: 'cult-classics',
-      title: 'Cult Classics',
-      description: 'Iconic movies that have gained devoted followings',
-      icon: Users,
-      color: 'from-purple-600 to-pink-600',
-      type: 'movie',
-      endpoint: '/discover/movie',
-      params: {
-        language: 'en-US',
-        sort_by: 'popularity.desc',
-        'vote_average.gte': 7.0,
-        'vote_count.gte': 1000,
-        'release_date.lte': '2010-12-31'
-      }
-    },
-  };
+  
+  // Hidden media state
+  const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
+  const [hidingIds, setHidingIds] = useState<Set<number>>(new Set());
+  
+  // Download state
+  const [downloading, setDownloading] = useState<Set<number>>(new Set());
+  const [downloadSuccess, setDownloadSuccess] = useState<Set<number>>(new Set());
 
   useEffect(() => {
-    const config = featuredListConfigs[listId];
-    if (config) {
-      setListConfig(config);
-      fetchMedia(1, config);
-      if (user) {
-        fetchFavorites();
+    fetchListData();
+    if (user) {
+      fetchFavorites();
+      fetchHiddenMedia();
+    }
+  }, [listSlug, user]);
+
+  const fetchListData = async () => {
+    setLoading(true);
+    try {
+      // First try to fetch from our database
+      const response = await axios.get(`${API_BASE_URL}/api/FeaturedLists/${listSlug}`);
+      
+      if (response.data.success && response.data.list) {
+        setListData(response.data.list);
+        
+        // Get movies based on the list title
+        await fetchMediaForList(response.data.list);
+      } else {
+        router.push('/pages/featuredlists');
       }
-    } else {
-      // Invalid list ID, redirect back
+    } catch (error) {
+      console.error('Error fetching list:', error);
       router.push('/pages/featuredlists');
     }
-  }, [listId, user]);
+  };
 
-  const fetchMedia = async (page: number, config: ListConfig) => {
-    if (page === 1) {
-      setLoading(true);
-    } else {
+  const fetchMediaForList = async (list: LetterboxdList, page: number = 1) => {
+    if (page > 1) {
       setLoadingMore(true);
     }
 
     try {
+      // Extract genre/type from list title for better TMDB searches
+      const titleLower = list.title.toLowerCase();
+      let endpoint = '/movie/top_rated';
+      let extraParams: Record<string, string> = {};
+
+      // Map list titles to TMDB endpoints/filters
+      if (titleLower.includes('horror')) {
+        endpoint = '/discover/movie';
+        extraParams = { with_genres: '27', sort_by: 'vote_average.desc', 'vote_count.gte': '300' };
+      } else if (titleLower.includes('sci-fi') || titleLower.includes('science fiction')) {
+        endpoint = '/discover/movie';
+        extraParams = { with_genres: '878', sort_by: 'vote_average.desc', 'vote_count.gte': '500' };
+      } else if (titleLower.includes('documentary')) {
+        endpoint = '/discover/movie';
+        extraParams = { with_genres: '99', sort_by: 'vote_average.desc', 'vote_count.gte': '200' };
+      } else if (titleLower.includes('animated') || titleLower.includes('animation')) {
+        endpoint = '/discover/movie';
+        extraParams = { with_genres: '16', sort_by: 'vote_average.desc', 'vote_count.gte': '500' };
+      } else if (titleLower.includes('western')) {
+        endpoint = '/discover/movie';
+        extraParams = { with_genres: '37', sort_by: 'vote_average.desc', 'vote_count.gte': '200' };
+      } else if (titleLower.includes('comedy') || titleLower.includes('comedies')) {
+        endpoint = '/discover/movie';
+        extraParams = { with_genres: '35', sort_by: 'vote_average.desc', 'vote_count.gte': '500' };
+      } else if (titleLower.includes('thriller')) {
+        endpoint = '/discover/movie';
+        extraParams = { with_genres: '53', sort_by: 'vote_average.desc', 'vote_count.gte': '500' };
+      } else if (titleLower.includes('action')) {
+        endpoint = '/discover/movie';
+        extraParams = { with_genres: '28', sort_by: 'vote_average.desc', 'vote_count.gte': '500' };
+      } else if (titleLower.includes('drama')) {
+        endpoint = '/discover/movie';
+        extraParams = { with_genres: '18', sort_by: 'vote_average.desc', 'vote_count.gte': '500' };
+      } else if (titleLower.includes('romance') || titleLower.includes('romantic')) {
+        endpoint = '/discover/movie';
+        extraParams = { with_genres: '10749', sort_by: 'vote_average.desc', 'vote_count.gte': '500' };
+      } else if (titleLower.includes('noir') || titleLower.includes('crime')) {
+        endpoint = '/discover/movie';
+        extraParams = { with_genres: '80', sort_by: 'vote_average.desc', 'vote_count.gte': '300' };
+      } else if (titleLower.includes('war')) {
+        endpoint = '/discover/movie';
+        extraParams = { with_genres: '10752', sort_by: 'vote_average.desc', 'vote_count.gte': '300' };
+      } else if (titleLower.includes('music') || titleLower.includes('musical')) {
+        endpoint = '/discover/movie';
+        extraParams = { with_genres: '10402', sort_by: 'vote_average.desc', 'vote_count.gte': '200' };
+      } else if (titleLower.includes('mystery')) {
+        endpoint = '/discover/movie';
+        extraParams = { with_genres: '9648', sort_by: 'vote_average.desc', 'vote_count.gte': '300' };
+      } else if (titleLower.includes('fantasy')) {
+        endpoint = '/discover/movie';
+        extraParams = { with_genres: '14', sort_by: 'vote_average.desc', 'vote_count.gte': '500' };
+      } else if (titleLower.includes('fans') || titleLower.includes('popular') || titleLower.includes('million') || titleLower.includes('watched')) {
+        endpoint = '/movie/popular';
+      } else if (titleLower.includes('upcoming')) {
+        endpoint = '/movie/upcoming';
+      } else if (titleLower.includes('trending')) {
+        endpoint = '/trending/movie/week';
+      } else if (titleLower.includes('narrative') || titleLower.includes('feature') || titleLower.includes('top 250')) {
+        endpoint = '/movie/top_rated';
+      } else if (titleLower.includes('series') || titleLower.includes('tv') || titleLower.includes('show')) {
+        endpoint = '/tv/top_rated';
+      }
+
       const params: Record<string, string> = {
         api_key: TMDB_API_KEY,
         page: String(page),
+        language: 'en-US',
+        ...extraParams,
       };
-      
-      // Merge config params
-      Object.entries(config.params).forEach(([key, value]) => {
-        params[key] = String(value);
-      });
 
       const urlParams = new URLSearchParams(params);
-      const response = await fetch(
-        `https://api.themoviedb.org/3${config.endpoint}?${urlParams}`
-      );
+      const response = await fetch(`https://api.themoviedb.org/3${endpoint}?${urlParams}`);
       const data = await response.json();
 
       if (data.results) {
+        const mediaType = endpoint.includes('/tv') ? 'tv' : 'movie';
         const formattedMedia = data.results.map((item: any) => ({
           ...item,
-          posterUrl: item.poster_path 
-            ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}` 
-            : null,
-          media_type: config.type,
+          posterUrl: item.poster_path ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}` : null,
+          media_type: mediaType,
         }));
 
         if (page === 1) {
@@ -302,7 +227,7 @@ const FeaturedListDetail = () => {
 
         setCurrentPage(page);
         setTotalPages(data.total_pages || 1);
-        setHasMore(page < (data.total_pages || 1));
+        setHasMore(page < (data.total_pages || 1) && page < 25); // Limit to 25 pages
       }
     } catch (error) {
       console.error('Error fetching media:', error);
@@ -313,8 +238,28 @@ const FeaturedListDetail = () => {
   };
 
   const loadMore = () => {
-    if (hasMore && !loadingMore && listConfig) {
-      fetchMedia(currentPage + 1, listConfig);
+    if (hasMore && !loadingMore && listData) {
+      fetchMediaForList(listData, currentPage + 1);
+    }
+  };
+
+  const handleScrapeList = async () => {
+    if (!listData) return;
+    
+    setScrapingList(true);
+    try {
+      const token = localStorage.getItem('accessToken');
+      await axios.post(
+        `${API_BASE_URL}/api/FeaturedLists/scrape/${listSlug}`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      // Refresh list data
+      await fetchListData();
+    } catch (error) {
+      console.error('Error scraping list:', error);
+    } finally {
+      setScrapingList(false);
     }
   };
 
@@ -323,27 +268,42 @@ const FeaturedListDetail = () => {
     
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await axios.get(`${API_BASE_URL}/api/Favorites/read`, {
+      const response = await axios.get(`${API_BASE_URL}/api/Favorites`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       
       const favorites = response.data.favorites || [];
-      const ids = new Set<string>(favorites.map((fav: any) => `${fav.mediaType}-${fav.tmdbId}`));
+      const ids = new Set<string>(favorites.map((fav: any) => `${fav.tmdbId}-${fav.mediaType}`));
       setFavoriteIds(ids);
     } catch (error) {
       console.error('Error fetching favorites:', error);
     }
   };
 
+  const fetchHiddenMedia = async () => {
+    if (!user) return;
+    
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await axios.get(`${API_BASE_URL}/api/HiddenMedia`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      const hiddenMedia = response.data.hiddenMedia || [];
+      const ids = new Set<number>(hiddenMedia.map((h: any) => h.tmdbId));
+      setHiddenIds(ids);
+    } catch (error) {
+      console.error('Error fetching hidden media:', error);
+    }
+  };
+
   const toggleFavorite = async (mediaItem: TMDBMedia, e: React.MouseEvent) => {
     e.stopPropagation();
     
-    if (!user) {
-      return;
-    }
+    if (!user) return;
 
     const mediaType = mediaItem.media_type || 'movie';
-    const favoriteKey = `${mediaType}-${mediaItem.id}`;
+    const favoriteKey = `${mediaItem.id}-${mediaType}`;
     const isFavorited = favoriteIds.has(favoriteKey);
     
     setFavoritingIds(prev => new Set(prev).add(mediaItem.id));
@@ -354,10 +314,7 @@ const FeaturedListDetail = () => {
       if (isFavorited) {
         await axios.delete(`${API_BASE_URL}/api/Favorites`, {
           headers: { Authorization: `Bearer ${token}` },
-          data: {
-            tmdbId: mediaItem.id,
-            mediaType,
-          },
+          data: { tmdbId: mediaItem.id, mediaType },
         });
         
         setFavoriteIds(prev => {
@@ -377,9 +334,7 @@ const FeaturedListDetail = () => {
             releaseDate: mediaItem.release_date || mediaItem.first_air_date,
             voteAverage: mediaItem.vote_average,
           },
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
+          { headers: { Authorization: `Bearer ${token}` } }
         );
         
         setFavoriteIds(prev => new Set(prev).add(favoriteKey));
@@ -395,197 +350,446 @@ const FeaturedListDetail = () => {
     }
   };
 
+  const toggleHidden = async (mediaItem: TMDBMedia, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!user) return;
+
+    const mediaType = mediaItem.media_type || 'movie';
+    const isHidden = hiddenIds.has(mediaItem.id);
+    
+    setHidingIds(prev => new Set(prev).add(mediaItem.id));
+    
+    try {
+      const token = localStorage.getItem('accessToken');
+      
+      if (isHidden) {
+        await axios.delete(`${API_BASE_URL}/api/HiddenMedia`, {
+          headers: { Authorization: `Bearer ${token}` },
+          data: { tmdbId: mediaItem.id, mediaType },
+        });
+        
+        setHiddenIds(prev => {
+          const next = new Set(prev);
+          next.delete(mediaItem.id);
+          return next;
+        });
+      } else {
+        await axios.post(
+          `${API_BASE_URL}/api/HiddenMedia`,
+          {
+            tmdbId: mediaItem.id,
+            mediaType,
+            title: mediaItem.title || mediaItem.name || '',
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        setHiddenIds(prev => new Set(prev).add(mediaItem.id));
+      }
+    } catch (error) {
+      console.error('Error toggling hidden:', error);
+    } finally {
+      setHidingIds(prev => {
+        const next = new Set(prev);
+        next.delete(mediaItem.id);
+        return next;
+      });
+    }
+  };
+
+  const handleQuickDownload = async (mediaItem: TMDBMedia, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (downloading.has(mediaItem.id) || downloadSuccess.has(mediaItem.id)) return;
+    
+    setDownloading(prev => new Set(prev).add(mediaItem.id));
+    
+    try {
+      // Open modal for download instead of quick download
+      setSelectedMedia(mediaItem);
+      setIsModalOpen(true);
+      setDownloadSuccess(prev => new Set(prev).add(mediaItem.id));
+    } catch (error) {
+      console.error('Error handling download:', error);
+    } finally {
+      setDownloading(prev => {
+        const next = new Set(prev);
+        next.delete(mediaItem.id);
+        return next;
+      });
+    }
+  };
+
   const handleMediaClick = (mediaItem: TMDBMedia) => {
     setSelectedMedia(mediaItem);
     setIsModalOpen(true);
   };
 
+  // Sort and filter media
+  const sortedMedia = [...media].sort((a, b) => {
+    switch (sortBy) {
+      case 'vote_average.desc':
+        return (b.vote_average || 0) - (a.vote_average || 0);
+      case 'vote_average.asc':
+        return (a.vote_average || 0) - (b.vote_average || 0);
+      case 'release_date.desc':
+        return new Date(b.release_date || b.first_air_date || 0).getTime() - 
+               new Date(a.release_date || a.first_air_date || 0).getTime();
+      case 'release_date.asc':
+        return new Date(a.release_date || a.first_air_date || 0).getTime() - 
+               new Date(b.release_date || b.first_air_date || 0).getTime();
+      case 'popularity.desc':
+      default:
+        return (b.popularity || 0) - (a.popularity || 0);
+    }
+  });
+
   const filteredMedia = searchQuery
-    ? media.filter(item => {
+    ? sortedMedia.filter(item => {
         const title = (item.title || item.name || '').toLowerCase();
         return title.includes(searchQuery.toLowerCase());
       })
-    : media;
+    : sortedMedia;
 
-  if (!listConfig) {
+  // Filter out hidden media
+  const visibleMedia = filteredMedia.filter(item => !hiddenIds.has(item.id));
+
+  const renderMediaCard = (item: TMDBMedia) => {
+    const title = item.title || item.name || 'Untitled';
+    const year = item.release_date 
+      ? new Date(item.release_date).getFullYear() 
+      : item.first_air_date 
+        ? new Date(item.first_air_date).getFullYear() 
+        : null;
+    const posterUrl = item.posterUrl || (item.poster_path ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}` : null);
+    const mediaType = item.media_type || 'movie';
+    const isFavorited = favoriteIds.has(`${item.id}-${mediaType}`);
+    const isFavoriting = favoritingIds.has(item.id);
+    const isHidden = hiddenIds.has(item.id);
+    const isHiding = hidingIds.has(item.id);
+    const isDownloading = downloading.has(item.id);
+    const isDownloaded = downloadSuccess.has(item.id);
+
+    return (
+      <div
+        key={item.id}
+        onClick={() => handleMediaClick(item)}
+        className="cursor-pointer group transition-all duration-300 hover:scale-105 hover:-translate-y-1"
+        style={{ height: '100%' }}
+      >
+        <div className="relative aspect-[2/3] w-full overflow-hidden rounded-md sm:rounded-lg md:rounded-xl border border-secondary/20 hover:border-secondary/60 hover:shadow-xl sm:hover:shadow-2xl hover:shadow-secondary/20 transition-all duration-300">
+          {posterUrl ? (
+            <img
+              src={posterUrl}
+              alt={title}
+              className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-80"
+            />
+          ) : (
+            <div className="w-full h-full bg-default-200 flex items-center justify-center">
+              {mediaType === 'tv' ? (
+                <Tv size={48} className="text-default-400" />
+              ) : (
+                <Film size={48} className="text-default-400" />
+              )}
+            </div>
+          )}
+          
+          {/* Media Type Badge - Top Left */}
+          <div className="absolute top-0.5 left-0.5 sm:top-1 sm:left-1 z-10">
+            <Chip 
+              size="sm" 
+              color={mediaType === 'tv' ? "secondary" : "primary"}
+              variant="flat" 
+              className="text-[9px] sm:text-[10px] md:text-xs font-bold uppercase backdrop-blur-md px-0.5 sm:px-1 py-0.5 h-4 sm:h-5"
+            >
+              {mediaType === 'tv' ? 'TV' : 'Movie'}
+            </Chip>
+          </div>
+
+          {/* Rating Badge - Top Right */}
+          {item.vote_average > 0 && (
+            <div className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 z-10 bg-black/85 backdrop-blur-md px-1 sm:px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] md:text-xs">
+              <span className="font-semibold text-white">
+                ⭐ {item.vote_average.toFixed(1)}
+              </span>
+            </div>
+          )}
+
+          {/* Hide Button */}
+          {user && (
+            <button
+              onClick={(e) => toggleHidden(item, e)}
+              disabled={isHiding}
+              className={`absolute bottom-0.5 right-14 sm:bottom-1 sm:right-[4.5rem] z-10 p-1 sm:p-1.5 rounded-full backdrop-blur-md transition-all duration-200 ${
+                isHidden
+                  ? 'bg-warning/90 hover:bg-warning'
+                  : 'bg-default-500/60 hover:bg-default-500/80'
+              } ${isHiding ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={isHidden ? 'Unhide' : 'Hide (never show again)'}
+            >
+              {isHiding ? (
+                <Spinner size="sm" color="white" className="w-3 h-3 sm:w-4 sm:h-4" />
+              ) : isHidden ? (
+                <EyeOff size={14} className="sm:w-4 sm:h-4 text-white" />
+              ) : (
+                <Eye size={14} className="sm:w-4 sm:h-4 text-white" />
+              )}
+            </button>
+          )}
+
+          {/* Favorite Button */}
+          {user && (
+            <button
+              onClick={(e) => toggleFavorite(item, e)}
+              disabled={isFavoriting}
+              className={`absolute bottom-0.5 right-7 sm:bottom-1 sm:right-10 z-10 p-1 sm:p-1.5 rounded-full backdrop-blur-md transition-all duration-200 ${
+                isFavorited
+                  ? 'bg-danger/90 hover:bg-danger'
+                  : 'bg-secondary/60 hover:bg-secondary/80'
+              } ${isFavoriting ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={isFavorited ? 'Remove from Favorites' : 'Add to Favorites'}
+            >
+              {isFavoriting ? (
+                <Spinner size="sm" color="white" className="w-3 h-3 sm:w-4 sm:h-4" />
+              ) : (
+                <Heart 
+                  size={14} 
+                  className={`sm:w-4 sm:h-4 ${isFavorited ? 'text-white fill-white' : 'text-purple-300'}`} 
+                />
+              )}
+            </button>
+          )}
+
+          {/* Download Button */}
+          <button
+            onClick={(e) => handleQuickDownload(item, e)}
+            disabled={isDownloading || isDownloaded}
+            className={`absolute bottom-0.5 right-0.5 sm:bottom-1 sm:right-1 z-10 p-1 sm:p-1.5 rounded-full backdrop-blur-md transition-all duration-200 ${
+              isDownloaded
+                ? 'bg-success/90 hover:bg-success'
+                : 'bg-secondary/90 hover:bg-secondary'
+            } ${isDownloading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title={isDownloaded ? 'Downloaded' : isDownloading ? 'Downloading...' : 'Quick Download'}
+          >
+            {isDownloading ? (
+              <Spinner size="sm" color="white" className="w-3 h-3 sm:w-4 sm:h-4" />
+            ) : isDownloaded ? (
+              <Check size={14} className="sm:w-4 sm:h-4 text-white" />
+            ) : (
+              <Download size={14} className="sm:w-4 sm:h-4 text-white" />
+            )}
+          </button>
+
+          {/* Title and Year Overlay */}
+          <div className="absolute bottom-0 left-0 right-0 p-1.5 sm:p-2 bg-gradient-to-t from-black/95 via-black/80 to-transparent transition-all duration-300 group-hover:from-black/98 group-hover:via-black/90">
+            <h3 className="font-semibold text-[10px] sm:text-xs md:text-sm text-white line-clamp-2 mb-0.5 leading-tight">
+              {title}
+            </h3>
+            {year && (
+              <p className="text-[9px] sm:text-[10px] md:text-xs text-white/70">{year}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  if (loading && !listData) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <Spinner size="lg" />
+        <Spinner size="lg" color="secondary" />
       </div>
     );
   }
 
-  const IconComponent = listConfig.icon;
-  const mediaType = listConfig.type;
+  const mediaType = listData?.title.toLowerCase().includes('tv') || 
+                    listData?.title.toLowerCase().includes('series') || 
+                    listData?.title.toLowerCase().includes('show') 
+                    ? 'tv' : 'movie';
 
   return (
-    <div className="FeaturedLists min-h-screen bg-background">
+    <div className="min-h-screen bg-background">
       <ScrollToTop />
       
       {/* Header */}
-      <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-divider">
+      <div className="border-b border-secondary/20 sticky top-0 z-40 bg-background/95 backdrop-blur-sm">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          {/* Back button and title */}
           <div className="flex items-center gap-4 mb-4">
             <Button
               isIconOnly
               variant="flat"
               onPress={() => router.push('/pages/featuredlists')}
+              className="border-2 border-secondary/20 hover:border-secondary/40"
             >
               <ChevronLeft size={20} />
             </Button>
-            <div className="flex items-center gap-3 flex-1">
-              <div className={`p-3 rounded-xl bg-gradient-to-br ${listConfig.color} shadow-lg`}>
-                <IconComponent size={28} className="text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold">{listConfig.title}</h1>
-                <p className="text-sm text-default-500">{listConfig.description}</p>
-              </div>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent truncate">
+                {listData?.title || 'Featured List'}
+              </h1>
+              {listData?.description && (
+                <p className="text-xs sm:text-sm text-foreground/60 mt-1 line-clamp-1">
+                  {listData.description}
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Search */}
-          <div className="flex gap-4">
-            <Input
-              placeholder="Search titles..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              startContent={<Search size={18} className="text-default-400" />}
-              classNames={{
-                inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+          {/* List meta info */}
+          {listData && (
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              {listData.author && (
+                <Chip size="sm" variant="flat" className="bg-content2">
+                  <span className="text-xs">by {listData.author.replace('/', '')}</span>
+                </Chip>
+              )}
+              {listData.filmCount > 0 && (
+                <Chip size="sm" variant="flat" startContent={<Film size={12} />} className="bg-content2">
+                  {listData.filmCount.toLocaleString()} films
+                </Chip>
+              )}
+              {listData.likes > 0 && (
+                <Chip size="sm" variant="flat" startContent={<Heart size={12} />} className="bg-content2">
+                  {listData.likes.toLocaleString()}
+                </Chip>
+              )}
+              {listData.comments > 0 && (
+                <Chip size="sm" variant="flat" startContent={<MessageCircle size={12} />} className="bg-content2">
+                  {listData.comments}
+                </Chip>
+              )}
+              {listData.listUrl && (
+                <Button
+                  as="a"
+                  href={listData.listUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  size="sm"
+                  variant="flat"
+                  startContent={<ExternalLink size={14} />}
+                  className="bg-content2 text-xs"
+                >
+                  Letterboxd
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="flat"
+                startContent={<RefreshCw size={14} className={scrapingList ? 'animate-spin' : ''} />}
+                onPress={handleScrapeList}
+                isLoading={scrapingList}
+                className="bg-content2 text-xs"
+              >
+                Refresh
+              </Button>
+            </div>
+          )}
+
+          {/* Search and sort controls */}
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+            <div className="flex-1 max-w-md">
+              <Input
+                placeholder="Search titles..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                startContent={<Search size={18} className="text-default-400" />}
+                classNames={{
+                  inputWrapper: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
+                }}
+                isClearable
+                onClear={() => setSearchQuery("")}
+                size="sm"
+              />
+            </div>
+            <Select
+              aria-label="Sort by"
+              selectedKeys={new Set([sortBy])}
+              onSelectionChange={(keys) => {
+                const selected = Array.from(keys)[0] as string;
+                setSortBy(selected || "popularity.desc");
               }}
-              isClearable
-              onClear={() => setSearchQuery("")}
-            />
+              placeholder="Sort by"
+              className="w-full sm:w-48"
+              size="sm"
+              classNames={{
+                trigger: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
+              }}
+            >
+              <SelectItem key="popularity.desc" value="popularity.desc">Popularity ↓</SelectItem>
+              <SelectItem key="vote_average.desc" value="vote_average.desc">Rating ↓</SelectItem>
+              <SelectItem key="vote_average.asc" value="vote_average.asc">Rating ↑</SelectItem>
+              <SelectItem key="release_date.desc" value="release_date.desc">Newest First</SelectItem>
+              <SelectItem key="release_date.asc" value="release_date.asc">Oldest First</SelectItem>
+            </Select>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {loading ? (
           <div className="flex justify-center items-center py-20">
-            <Spinner size="lg" />
+            <Spinner size="lg" color="secondary" />
           </div>
-        ) : filteredMedia.length > 0 ? (
+        ) : visibleMedia.length > 0 ? (
           <>
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm text-default-500">
-                Showing {filteredMedia.length} {mediaType === 'tv' ? 'series' : 'movies'}
-              </p>
+            <div className="mb-4 text-xs sm:text-sm text-foreground/60">
+              Showing {visibleMedia.length} {mediaType === 'tv' ? 'series' : 'movies'}
+              {searchQuery && ` matching "${searchQuery}"`}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-              {filteredMedia.map((item) => {
-                const mediaType = item.media_type || 'movie';
-                const favoriteKey = `${mediaType}-${item.id}`;
-                const isFavorited = favoriteIds.has(favoriteKey);
-                const isFavoriting = favoritingIds.has(item.id);
-
-                return (
-                  <Card
-                    key={item.id}
-                    isPressable
-                    onPress={() => handleMediaClick(item)}
-                    className="group hover:scale-105 transition-all duration-300 bg-content1 border border-secondary/20 hover:border-secondary/60"
-                  >
-                    <CardBody className="p-0">
-                      <div className="relative aspect-[2/3]">
-                        {item.posterUrl ? (
-                          <img
-                            src={item.posterUrl}
-                            alt={item.title || item.name || 'Poster'}
-                            className="w-full h-full object-cover rounded-t-lg"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-content2 flex items-center justify-center rounded-t-lg">
-                            <Film size={48} className="text-default-300" />
-                          </div>
-                        )}
-                        
-                        {/* Favorite Button */}
-                        {user && (
-                          <Button
-                            isIconOnly
-                            size="sm"
-                            variant="flat"
-                            className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity ${
-                              isFavorited ? 'bg-danger/90 text-white' : 'bg-background/90'
-                            }`}
-                            onPress={(e) => toggleFavorite(item, e as any)}
-                            isDisabled={isFavoriting}
-                          >
-                            <Heart 
-                              size={16} 
-                              className={isFavorited ? 'fill-current' : ''} 
-                            />
-                          </Button>
-                        )}
-
-                        {/* Rating Badge */}
-                        {item.vote_average > 0 && (
-                          <div className="absolute bottom-2 left-2 bg-black/80 backdrop-blur-sm px-2 py-1 rounded-md flex items-center gap-1">
-                            <Star size={12} className="text-yellow-400 fill-yellow-400" />
-                            <span className="text-xs font-semibold text-white">
-                              {item.vote_average.toFixed(1)}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="p-3">
-                        <h3 className="font-semibold text-sm line-clamp-2 mb-1">
-                          {item.title || item.name || 'Untitled'}
-                        </h3>
-                        {(item.release_date || item.first_air_date) && (
-                          <div className="flex items-center gap-1 text-xs text-default-500">
-                            <Calendar size={12} />
-                            <span>
-                              {new Date(item.release_date || item.first_air_date || '').getFullYear()}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </CardBody>
-                  </Card>
-                );
-              })}
+            <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2 sm:gap-3 md:gap-4">
+              {visibleMedia.map((item) => renderMediaCard(item))}
             </div>
 
             {/* Load More */}
             {hasMore && (
               <div className="flex justify-center mt-8">
                 <Button
-                  color="primary"
+                  color="secondary"
                   variant="flat"
                   onPress={loadMore}
                   isLoading={loadingMore}
                   size="lg"
+                  className="border-2 border-secondary/20"
                 >
                   Load More
                 </Button>
               </div>
             )}
+
+            {!hasMore && visibleMedia.length > 0 && (
+              <div className="text-center py-8 text-xs sm:text-sm text-foreground/60">
+                No more results to load
+              </div>
+            )}
           </>
         ) : (
-          <Card className="bg-content1">
-            <CardBody className="text-center py-20">
+          <Card className="bg-content1 border border-secondary/20">
+            <CardBody className="text-center py-16">
               <Film size={64} className="mx-auto mb-4 text-default-300" />
-              <h3 className="text-xl font-semibold mb-2">No results found</h3>
-              <p className="text-default-500">
+              <h3 className="text-xl font-semibold mb-2">No Results Found</h3>
+              <p className="text-default-500 mb-4">
                 {searchQuery 
                   ? `No ${mediaType === 'tv' ? 'series' : 'movies'} matching "${searchQuery}"`
-                  : `No ${mediaType === 'tv' ? 'series' : 'movies'} available`
+                  : `No ${mediaType === 'tv' ? 'series' : 'movies'} available in this list yet.`
                 }
               </p>
+              {searchQuery && (
+                <Button color="secondary" variant="flat" onPress={() => setSearchQuery("")}>
+                  Clear Search
+                </Button>
+              )}
             </CardBody>
           </Card>
         )}
       </div>
 
-      {/* Modal */}
+      {/* Modals */}
       {selectedMedia && (
-        mediaType === 'tv' ? (
+        mediaType === 'tv' || selectedMedia.media_type === 'tv' ? (
           <AddSeriesModal
             isOpen={isModalOpen}
             onClose={() => {
@@ -620,4 +824,3 @@ const FeaturedListDetail = () => {
 };
 
 export default FeaturedListDetail;
-

@@ -56,6 +56,16 @@ const Settings = sequelize.define('Settings', {
     allowNull: false,
     defaultValue: false,
   },
+  autoRenameInterval: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 60, // minutes - how often to scan and rename files
+  },
+  autoRenameWarningShown: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false, // tracks if user has seen the beta warning
+  },
   checkInterval: {
     type: DataTypes.INTEGER,
     allowNull: false,

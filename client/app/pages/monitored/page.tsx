@@ -225,26 +225,57 @@ const Monitored = () => {
 
     try {
       const year = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : '';
+      const searchQuery = year ? `${movie.title} ${year}` : movie.title;
       
-      // Search for torrents
-      const torrentResponse = await axios.get(
-        `${API_BASE_URL}/api/TMDB/movie/${movie.tmdbId}/torrents`,
-        {
-          params: {
-            title: movie.title,
-            year: year,
-            categoryIds: '2000',
-          },
-          timeout: 30000,
+      // Robust search with retry logic for reliable results
+      const MAX_RETRIES = 2;
+      const RETRY_DELAY = 1500;
+      let allResults: TorrentResult[] = [];
+      
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        console.log(`[Monitored] Searching for movie: "${searchQuery}" (attempt ${attempt + 1}/${MAX_RETRIES + 1})`);
+        
+        try {
+          const torrentResponse = await axios.get(
+            `${API_BASE_URL}/api/Search`,
+            {
+              params: {
+                query: searchQuery,
+                categoryIds: '2000',
+                limit: 1000,
+                fresh: attempt === 0 ? 'true' : undefined, // Fresh results on first attempt
+              },
+              timeout: 45000,
+            }
+          );
+          
+          allResults = torrentResponse.data.results || [];
+          console.log(`[Monitored] Search returned ${allResults.length} results (attempt ${attempt + 1})`);
+          
+          // If we got results, break out of retry loop
+          if (allResults.length > 0) {
+            break;
+          }
+          
+          // No results - wait and retry if we haven't exhausted retries
+          if (attempt < MAX_RETRIES) {
+            console.log(`[Monitored] No results, retrying in ${RETRY_DELAY}ms...`);
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+          }
+        } catch (searchError) {
+          console.error(`[Monitored] Search attempt ${attempt + 1} failed:`, searchError);
+          if (attempt < MAX_RETRIES) {
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+          }
         }
-      );
+      }
 
-      if (!torrentResponse.data.success || torrentResponse.data.results.length === 0) {
+      if (allResults.length === 0) {
         throw new Error(`No torrents found for ${movie.title}`);
       }
 
       // Filter torrents by quality profile
-      let filteredTorrents = torrentResponse.data.results || [];
+      let filteredTorrents = allResults;
       if (movie.qualityProfile !== "any") {
         filteredTorrents = filteredTorrents.filter((torrent: TorrentResult) => {
           const title = torrent.title.toLowerCase();
@@ -269,22 +300,50 @@ const Monitored = () => {
         throw new Error(`No torrents found matching quality profile: ${movie.qualityProfile}`);
       }
 
-      // Get the best torrent (highest priority indexer, then highest seeders)
+      // Get the best torrent - prioritize by SEEDERS first (most seeders = best)
       const bestTorrent = filteredTorrents.reduce((best: any, current: any) => {
-        const bestPriority = best.indexerPriority ?? 25;
-        const currentPriority = current.indexerPriority ?? 25;
-        if (currentPriority < bestPriority) return current;
-        if (currentPriority > bestPriority) return best;
-        
+        // Prioritize by seeders (descending - most seeders first)
         const bestSeeders = best.seeders || 0;
         const currentSeeders = current.seeders || 0;
-        return currentSeeders > bestSeeders ? current : best;
+        if (currentSeeders > bestSeeders) return current;
+        if (currentSeeders < bestSeeders) return best;
+        
+        // If seeders are equal, use indexer priority as tiebreaker
+        const bestPriority = best.indexerPriority ?? 25;
+        const currentPriority = current.indexerPriority ?? 25;
+        return currentPriority < bestPriority ? current : best;
       });
+      
+      console.log(`[Monitored] Selected best torrent with ${bestTorrent.seeders} seeders: ${bestTorrent.title}`);
 
-      // Download the torrent
+      // Extract quality from torrent title
+      const titleLower = bestTorrent.title.toLowerCase();
+      let quality = 'SD';
+      if (titleLower.includes('2160p') || titleLower.includes('4k') || titleLower.includes('uhd')) {
+        quality = '2160p';
+      } else if (titleLower.includes('1080p')) {
+        quality = '1080p';
+      } else if (titleLower.includes('720p')) {
+        quality = '720p';
+      }
+
+      // Download the torrent with history data
       const downloadResponse = await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, {
         downloadUrl: bestTorrent.downloadUrl,
         protocol: bestTorrent.protocol,
+        // History information
+        releaseName: bestTorrent.title,
+        indexer: bestTorrent.indexer,
+        indexerId: bestTorrent.indexerId,
+        size: bestTorrent.size,
+        sizeFormatted: bestTorrent.sizeFormatted,
+        seeders: bestTorrent.seeders,
+        leechers: bestTorrent.leechers,
+        quality: quality,
+        source: 'MonitoredPage',
+        mediaType: 'movies',
+        mediaTitle: movie.title,
+        tmdbId: movie.tmdbId,
       });
 
       if (downloadResponse.data.success) {
@@ -347,44 +406,100 @@ const Monitored = () => {
       // Download each episode
       let successCount = 0;
       let failCount = 0;
+      
+      const MAX_RETRIES = 2;
+      const RETRY_DELAY = 1500;
 
       for (const season of seasons) {
         if (!season.episodes) continue;
 
         for (const episode of season.episodes) {
           try {
-            // Search for torrents for this episode
-            const torrentResponse = await axios.get(
-              `${API_BASE_URL}/api/TMDB/tv/${series.tmdbId}/torrents`,
-              {
-                params: {
-                  title: title,
-                  season: season.season_number,
-                  episode: episode.episode_number,
-                  year: year,
-                  categoryIds: '5000',
-                },
-                timeout: 30000,
-              }
-            );
-
-            if (torrentResponse.data.success && torrentResponse.data.results.length > 0) {
-              // Get the best torrent
-              const bestTorrent = torrentResponse.data.results.reduce((best: any, current: any) => {
-                const bestPriority = best.indexerPriority ?? 25;
-                const currentPriority = current.indexerPriority ?? 25;
-                if (currentPriority < bestPriority) return current;
-                if (currentPriority > bestPriority) return best;
+            // Build search query: "Title S01E01"
+            const searchQuery = `${title} S${String(season.season_number).padStart(2, '0')}E${String(episode.episode_number).padStart(2, '0')}`;
+            
+            // Robust search with retry logic
+            let allResults: TorrentResult[] = [];
+            
+            for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+              console.log(`[Monitored] Searching for episode: "${searchQuery}" (attempt ${attempt + 1}/${MAX_RETRIES + 1})`);
+              
+              try {
+                const torrentResponse = await axios.get(
+                  `${API_BASE_URL}/api/Search`,
+                  {
+                    params: {
+                      query: searchQuery,
+                      categoryIds: '5000',
+                      limit: 1000,
+                      fresh: attempt === 0 ? 'true' : undefined,
+                    },
+                    timeout: 45000,
+                  }
+                );
                 
+                allResults = torrentResponse.data.results || [];
+                console.log(`[Monitored] Search returned ${allResults.length} results (attempt ${attempt + 1})`);
+                
+                if (allResults.length > 0) {
+                  break;
+                }
+                
+                if (attempt < MAX_RETRIES) {
+                  await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+                }
+              } catch (searchError) {
+                console.error(`[Monitored] Search attempt ${attempt + 1} failed:`, searchError);
+                if (attempt < MAX_RETRIES) {
+                  await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+                }
+              }
+            }
+
+            if (allResults.length > 0) {
+              // Get the best torrent - prioritize by SEEDERS first (most seeders = best)
+              const bestTorrent = allResults.reduce((best: any, current: any) => {
                 const bestSeeders = best.seeders || 0;
                 const currentSeeders = current.seeders || 0;
-                return currentSeeders > bestSeeders ? current : best;
+                if (currentSeeders > bestSeeders) return current;
+                if (currentSeeders < bestSeeders) return best;
+                
+                const bestPriority = best.indexerPriority ?? 25;
+                const currentPriority = current.indexerPriority ?? 25;
+                return currentPriority < bestPriority ? current : best;
               });
+              
+              console.log(`[Monitored] Selected best torrent with ${bestTorrent.seeders} seeders: ${bestTorrent.title}`);
 
-              // Download the torrent
+              // Extract quality from torrent title
+              const torrentTitleLower = bestTorrent.title.toLowerCase();
+              let quality = 'SD';
+              if (torrentTitleLower.includes('2160p') || torrentTitleLower.includes('4k') || torrentTitleLower.includes('uhd')) {
+                quality = '2160p';
+              } else if (torrentTitleLower.includes('1080p')) {
+                quality = '1080p';
+              } else if (torrentTitleLower.includes('720p')) {
+                quality = '720p';
+              }
+
+              // Download the torrent with history data
               await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, {
                 downloadUrl: bestTorrent.downloadUrl,
                 protocol: bestTorrent.protocol,
+                releaseName: bestTorrent.title,
+                indexer: bestTorrent.indexer,
+                indexerId: bestTorrent.indexerId,
+                size: bestTorrent.size,
+                sizeFormatted: bestTorrent.sizeFormatted,
+                seeders: bestTorrent.seeders,
+                leechers: bestTorrent.leechers,
+                quality: quality,
+                source: 'MonitoredPage',
+                mediaType: 'tv',
+                mediaTitle: title,
+                tmdbId: series.tmdbId,
+                seasonNumber: season.season_number,
+                episodeNumber: episode.episode_number,
               });
 
               successCount++;
@@ -433,6 +548,8 @@ const Monitored = () => {
         return <CheckCircle2 size={16} className="text-success" />;
       case "error":
         return <AlertCircle size={16} className="text-danger" />;
+      case "missing":
+        return <Clock size={16} className="text-secondary" />;
       default:
         return <Clock size={16} />;
     }
@@ -448,6 +565,8 @@ const Monitored = () => {
         return "success";
       case "error":
         return "danger";
+      case "missing":
+        return "secondary";
       default:
         return "default";
     }

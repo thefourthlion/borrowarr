@@ -359,20 +359,26 @@ function applySeriesFormat(format, series, season, episode, episodeTitle = '', c
     .replace(/{Edition}/g, metadata.edition || '')
     .replace(/{Release Group}/g, metadata.releaseGroup || '');
 
-  // Clean up double spaces and leading/trailing spaces
-  result = result.replace(/\s+/g, ' ').trim();
+  // For series, we need to preserve / for folder paths
+  // Clean up each path segment separately
+  const pathParts = result.split('/');
+  const cleanedParts = pathParts.map(part => {
+    let cleaned = part;
+    // Clean up double spaces and leading/trailing spaces
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    // Clean up any invalid filename characters (but NOT / since we split on it)
+    cleaned = cleaned.replace(/[<>:"|?*\\]/g, '');
+    // Clean up multiple dots or dashes in a row
+    cleaned = cleaned.replace(/\.{2,}/g, '.').replace(/-{2,}/g, '-');
+    // Clean up spaces before punctuation
+    cleaned = cleaned.replace(/\s+([.,\-_()])/g, '$1');
+    // Remove empty parentheses or brackets
+    cleaned = cleaned.replace(/\(\s*\)/g, '').replace(/\[\s*\]/g, '');
+    return cleaned;
+  });
   
-  // Clean up any invalid filename characters
-  result = result.replace(/[<>:"/\\|?*]/g, '');
-  
-  // Clean up multiple dots or dashes in a row
-  result = result.replace(/\.{2,}/g, '.').replace(/-{2,}/g, '-');
-  
-  // Clean up spaces before punctuation
-  result = result.replace(/\s+([.,\-_()])/g, '$1');
-  
-  // Remove empty parentheses or brackets
-  result = result.replace(/\(\s*\)/g, '').replace(/\[\s*\]/g, '');
+  // Rejoin with / and filter out empty parts
+  result = cleanedParts.filter(part => part.length > 0).join('/');
   
   return result;
 }
@@ -534,11 +540,15 @@ async function previewSeriesRenames(userId, seriesFileFormat) {
       
       // Only include if the path would actually change
       if (currentPath !== newPath) {
+        // Determine if the format includes folder structure
+        const includesFolderStructure = newFileName.includes('/') || newFileName.includes('\\');
+        
         renames.push({
           seriesId: matchedSeries.id,
           currentPath,
           currentName,
-          newName: path.basename(newPath),
+          // Keep the full path with folders if the format includes folder structure
+          newName: includesFolderStructure ? newFileName : path.basename(newPath),
           newPath,
           directory: path.dirname(newPath),
           season,

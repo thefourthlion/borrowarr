@@ -1259,7 +1259,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
           title: title,
           overview: media.overview,
           posterPath: media.poster_path,
-          backdropPath: seriesDetails?.backdrop_path || null,
+          backdropPath: tvShowDetails?.backdrop_path || null,
           releaseDate: media.first_air_date || null,
           selectedSeasons: selectedSeasonsArray,
           selectedEpisodes: selectedEpisodesArray,

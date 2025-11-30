@@ -34,6 +34,19 @@ import {
   Clock,
   Zap,
   Shield,
+  Play,
+  Pause,
+  FolderInput,
+  FolderOutput,
+  ArrowRight,
+  Copy,
+  Move,
+  Activity,
+  FileVideo,
+  FileCheck,
+  Ban,
+  CheckCircle2,
+  List,
 } from "lucide-react";
 import DirectoryPicker from "../../../components/DirectoryPicker";
 import { useAuth } from "@/context/AuthContext";
@@ -50,6 +63,38 @@ interface FileSettings {
   autoRename: boolean;
   autoRenameInterval: number;
   autoRenameWarningShown: boolean;
+  // Download Watcher settings
+  downloadWatcherEnabled: boolean;
+  movieDownloadDirectory: string | null;
+  seriesDownloadDirectory: string | null;
+  movieWatcherDestination: string | null;
+  seriesWatcherDestination: string | null;
+  watcherInterval: number;
+  watcherAutoApprove: boolean;
+}
+
+interface PendingFile {
+  id: string;
+  filename: string;
+  sourcePath: string;
+  destinationPath: string;
+  type: 'movie' | 'series';
+  size: number;
+  detectedAt: string;
+}
+
+interface WatcherStats {
+  lastRun: string | null;
+  filesProcessed: number;
+  moviesProcessed: number;
+  seriesProcessed: number;
+  errors: number;
+  recentFiles: Array<{
+    name: string;
+    type: string;
+    destination: string;
+    timestamp: string;
+  }>;
 }
 
 interface RenameItem {
@@ -68,6 +113,14 @@ const DEFAULT_SETTINGS: FileSettings = {
   autoRename: false,
   autoRenameInterval: 60,
   autoRenameWarningShown: false,
+  // Download Watcher defaults
+  downloadWatcherEnabled: false,
+  movieDownloadDirectory: null,
+  seriesDownloadDirectory: null,
+  movieWatcherDestination: null,
+  seriesWatcherDestination: null,
+  watcherInterval: 30,
+  watcherAutoApprove: false,
 };
 
 const FileManagement = () => {
@@ -97,12 +150,30 @@ const FileManagement = () => {
   
   // Section expansion state
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    new Set(['directories', 'movieNaming', 'seriesNaming', 'autoRename'])
+    new Set(['directories', 'downloadWatcher', 'movieNaming', 'seriesNaming', 'autoRename'])
   );
   
   // Beta warning modal state
   const [showBetaWarning, setShowBetaWarning] = useState(false);
   const [pendingAutoRenameEnable, setPendingAutoRenameEnable] = useState(false);
+  
+  // Download Watcher state
+  const [watcherStatus, setWatcherStatus] = useState<{ isRunning: boolean; stats: WatcherStats }>({
+    isRunning: false,
+    stats: { lastRun: null, filesProcessed: 0, moviesProcessed: 0, seriesProcessed: 0, errors: 0, recentFiles: [] }
+  });
+  const [triggeringWatcher, setTriggeringWatcher] = useState(false);
+  const [testingMovieDownloadDir, setTestingMovieDownloadDir] = useState(false);
+  const [testingSeriesDownloadDir, setTestingSeriesDownloadDir] = useState(false);
+  const [testingMovieWatcherDest, setTestingMovieWatcherDest] = useState(false);
+  const [testingSeriesWatcherDest, setTestingSeriesWatcherDest] = useState(false);
+  const [movieDownloadDirStatus, setMovieDownloadDirStatus] = useState<'untested' | 'success' | 'error'>('untested');
+  const [seriesDownloadDirStatus, setSeriesDownloadDirStatus] = useState<'untested' | 'success' | 'error'>('untested');
+  const [movieWatcherDestStatus, setMovieWatcherDestStatus] = useState<'untested' | 'success' | 'error'>('untested');
+  const [seriesWatcherDestStatus, setSeriesWatcherDestStatus] = useState<'untested' | 'success' | 'error'>('untested');
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [approvingFile, setApprovingFile] = useState<string | null>(null);
+  const [rejectingFile, setRejectingFile] = useState<string | null>(null);
   
   // Modal state
   const [infoModal, setInfoModal] = useState<{
@@ -132,8 +203,26 @@ const FileManagement = () => {
   useEffect(() => {
     if (user) {
       fetchSettings();
+      fetchWatcherStatus();
     }
   }, [user]);
+
+  // Periodically refresh watcher status when enabled
+  useEffect(() => {
+    if (settings.downloadWatcherEnabled) {
+      const interval = setInterval(fetchWatcherStatus, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [settings.downloadWatcherEnabled]);
+
+  // Fetch pending files when watcher is enabled and manual approval is on
+  useEffect(() => {
+    if (settings.downloadWatcherEnabled && !settings.watcherAutoApprove) {
+      fetchPendingFiles();
+      const interval = setInterval(fetchPendingFiles, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [settings.downloadWatcherEnabled, settings.watcherAutoApprove]);
 
   const fetchSettings = async () => {
     try {
@@ -154,6 +243,215 @@ const FileManagement = () => {
       setSettings(DEFAULT_SETTINGS);
       setMessage({ type: 'error', text: 'Failed to load settings. Using defaults.' });
       setLoading(false);
+    }
+  };
+
+  const fetchWatcherStatus = async () => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      const response = await axios.get(`${API_BASE_URL}/api/Settings/download-watcher/status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setWatcherStatus(response.data);
+    } catch (error) {
+      console.error("Error fetching watcher status:", error);
+    }
+  };
+
+  const fetchPendingFiles = async () => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      const response = await axios.get(`${API_BASE_URL}/api/Settings/download-watcher/pending`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setPendingFiles(response.data.files || []);
+    } catch (error) {
+      console.error("Error fetching pending files:", error);
+    }
+  };
+
+  const approveFile = async (fileId: string) => {
+    setApprovingFile(fileId);
+    try {
+      const token = localStorage.getItem("accessToken");
+      await axios.post(
+        `${API_BASE_URL}/api/Settings/download-watcher/approve`,
+        { fileId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setMessage({ type: 'success', text: 'File moved successfully!' });
+      fetchPendingFiles();
+      fetchWatcherStatus();
+    } catch (error: any) {
+      console.error("Error approving file:", error);
+      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to move file' });
+    } finally {
+      setApprovingFile(null);
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
+  const rejectFile = async (fileId: string) => {
+    setRejectingFile(fileId);
+    try {
+      const token = localStorage.getItem("accessToken");
+      await axios.post(
+        `${API_BASE_URL}/api/Settings/download-watcher/reject`,
+        { fileId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setMessage({ type: 'success', text: 'File ignored' });
+      fetchPendingFiles();
+    } catch (error: any) {
+      console.error("Error rejecting file:", error);
+      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to reject file' });
+    } finally {
+      setRejectingFile(null);
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
+  const approveAllFiles = async () => {
+    for (const file of pendingFiles) {
+      await approveFile(file.id);
+    }
+  };
+
+  const triggerWatcherScan = async () => {
+    setTriggeringWatcher(true);
+    try {
+      const token = localStorage.getItem("accessToken");
+      const response = await axios.post(
+        `${API_BASE_URL}/api/Settings/download-watcher/trigger`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      if (response.data.success) {
+        setMessage({ type: 'success', text: 'Download watcher scan triggered successfully!' });
+        // Refresh status after scan
+        await fetchWatcherStatus();
+      } else {
+        setMessage({ type: 'error', text: response.data.message || 'Scan failed' });
+      }
+    } catch (error: any) {
+      console.error("Error triggering watcher scan:", error);
+      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to trigger scan' });
+    } finally {
+      setTriggeringWatcher(false);
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
+  const testDownloadDirectory = async (type: 'movie' | 'series') => {
+    const directory = type === 'movie' ? settings.movieDownloadDirectory : settings.seriesDownloadDirectory;
+    
+    if (!directory) {
+      setInfoModal({
+        isOpen: true,
+        title: 'No Directory',
+        message: `Please enter a ${type} download directory first.`,
+        type: 'warning',
+      });
+      return;
+    }
+
+    if (type === 'movie') {
+      setTestingMovieDownloadDir(true);
+      setMovieDownloadDirStatus('untested');
+    } else {
+      setTestingSeriesDownloadDir(true);
+      setSeriesDownloadDirStatus('untested');
+    }
+
+    try {
+      const token = localStorage.getItem("accessToken");
+      const response = await axios.post(
+        `${API_BASE_URL}/api/Settings/test-directory`,
+        { directory },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (response.data.accessible) {
+        if (type === 'movie') {
+          setMovieDownloadDirStatus('success');
+        } else {
+          setSeriesDownloadDirStatus('success');
+        }
+        setMessage({ type: 'success', text: `✓ ${type === 'movie' ? 'Movie' : 'Series'} download directory is accessible` });
+      }
+    } catch (error: any) {
+      console.error("Error testing directory:", error);
+      if (type === 'movie') {
+        setMovieDownloadDirStatus('error');
+      } else {
+        setSeriesDownloadDirStatus('error');
+      }
+      const errorMsg = error.response?.data?.error || `Failed to access ${type} download directory`;
+      setMessage({ type: 'error', text: errorMsg });
+    } finally {
+      if (type === 'movie') {
+        setTestingMovieDownloadDir(false);
+      } else {
+        setTestingSeriesDownloadDir(false);
+      }
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
+  const testWatcherDestination = async (type: 'movie' | 'series') => {
+    const directory = type === 'movie' ? settings.movieWatcherDestination : settings.seriesWatcherDestination;
+    
+    if (!directory) {
+      setInfoModal({
+        isOpen: true,
+        title: 'No Directory',
+        message: `Please enter a ${type} media folder first.`,
+        type: 'warning',
+      });
+      return;
+    }
+
+    if (type === 'movie') {
+      setTestingMovieWatcherDest(true);
+      setMovieWatcherDestStatus('untested');
+    } else {
+      setTestingSeriesWatcherDest(true);
+      setSeriesWatcherDestStatus('untested');
+    }
+
+    try {
+      const token = localStorage.getItem("accessToken");
+      const response = await axios.post(
+        `${API_BASE_URL}/api/Settings/test-directory`,
+        { directory },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (response.data.accessible) {
+        if (type === 'movie') {
+          setMovieWatcherDestStatus('success');
+        } else {
+          setSeriesWatcherDestStatus('success');
+        }
+        setMessage({ type: 'success', text: `✓ ${type === 'movie' ? 'Movie' : 'Series'} media folder is accessible` });
+      }
+    } catch (error: any) {
+      console.error("Error testing directory:", error);
+      if (type === 'movie') {
+        setMovieWatcherDestStatus('error');
+      } else {
+        setSeriesWatcherDestStatus('error');
+      }
+      const errorMsg = error.response?.data?.error || `Failed to access ${type} media folder`;
+      setMessage({ type: 'error', text: errorMsg });
+    } finally {
+      if (type === 'movie') {
+        setTestingMovieWatcherDest(false);
+      } else {
+        setTestingSeriesWatcherDest(false);
+      }
+      setTimeout(() => setMessage(null), 3000);
     }
   };
 
@@ -737,6 +1035,358 @@ const FileManagement = () => {
                     </Button>
                   </div>
                 </div>
+              </CardBody>
+            )}
+          </Card>
+
+          {/* Download Watcher Section */}
+          <Card className="border border-cyan-500/30 bg-gradient-to-r from-cyan-500/5 to-blue-500/5">
+            <CardHeader 
+              className="cursor-pointer hover:bg-cyan-500/10 transition-colors"
+              onClick={() => toggleSection('downloadWatcher')}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-3">
+                  <FolderInput size={24} className="text-cyan-500" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-semibold">Download Watcher</h2>
+                      <Chip size="sm" color="primary" variant="flat">AUTO-MOVE</Chip>
+                    </div>
+                    <p className="text-sm text-default-500">Move downloads from category folders to your media library</p>
+                  </div>
+                </div>
+                {expandedSections.has('downloadWatcher') ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+              </div>
+            </CardHeader>
+            {expandedSections.has('downloadWatcher') && (
+              <CardBody className="pt-0 space-y-6">
+                {/* Simple explanation */}
+                <div className="flex items-start gap-3 p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+                  <Info size={20} className="text-cyan-500 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-cyan-500">How it works</p>
+                    <p className="text-xs text-default-500 mt-1">
+                      Set your download client to save movies and TV shows to separate folders. 
+                      The watcher will automatically move completed files to your media library.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Movies Row */}
+                <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Film size={20} className="text-primary" />
+                    <h3 className="font-semibold text-primary">Movies</h3>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    {/* Source */}
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Download size={14} className="text-default-400" />
+                        <span className="text-xs font-medium text-default-500">Download Folder</span>
+                        {getDirStatusIcon(movieDownloadDirStatus)}
+                      </div>
+                      <DirectoryPicker
+                        label=""
+                        value={settings.movieDownloadDirectory}
+                        onChange={(path) => {
+                          setSettings({ ...settings, movieDownloadDirectory: path });
+                          setMovieDownloadDirStatus('untested');
+                        }}
+                        placeholder="/downloads/movies"
+                      />
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        color="default"
+                        isLoading={testingMovieDownloadDir}
+                        isDisabled={!settings.movieDownloadDirectory}
+                        onPress={() => testDownloadDirectory('movie')}
+                        startContent={!testingMovieDownloadDir && <RefreshCw size={12} />}
+                      >
+                        Test
+                      </Button>
+                    </div>
+
+                    {/* Arrow */}
+                    <ArrowRight size={24} className="text-primary flex-shrink-0" />
+
+                    {/* Destination */}
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <FolderOutput size={14} className="text-default-400" />
+                        <span className="text-xs font-medium text-default-500">Media Folder</span>
+                        {getDirStatusIcon(movieWatcherDestStatus)}
+                      </div>
+                      <DirectoryPicker
+                        label=""
+                        value={settings.movieWatcherDestination}
+                        onChange={(path) => {
+                          setSettings({ ...settings, movieWatcherDestination: path });
+                          setMovieWatcherDestStatus('untested');
+                        }}
+                        placeholder="/media/movies"
+                      />
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        color="default"
+                        isLoading={testingMovieWatcherDest}
+                        isDisabled={!settings.movieWatcherDestination}
+                        onPress={() => testWatcherDestination('movie')}
+                        startContent={!testingMovieWatcherDest && <RefreshCw size={12} />}
+                      >
+                        Test
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* TV Shows Row */}
+                <div className="p-4 rounded-xl border border-secondary/30 bg-secondary/5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Tv size={20} className="text-secondary" />
+                    <h3 className="font-semibold text-secondary">TV Shows</h3>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    {/* Source */}
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Download size={14} className="text-default-400" />
+                        <span className="text-xs font-medium text-default-500">Download Folder</span>
+                        {getDirStatusIcon(seriesDownloadDirStatus)}
+                      </div>
+                      <DirectoryPicker
+                        label=""
+                        value={settings.seriesDownloadDirectory}
+                        onChange={(path) => {
+                          setSettings({ ...settings, seriesDownloadDirectory: path });
+                          setSeriesDownloadDirStatus('untested');
+                        }}
+                        placeholder="/downloads/tv"
+                      />
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        color="default"
+                        isLoading={testingSeriesDownloadDir}
+                        isDisabled={!settings.seriesDownloadDirectory}
+                        onPress={() => testDownloadDirectory('series')}
+                        startContent={!testingSeriesDownloadDir && <RefreshCw size={12} />}
+                      >
+                        Test
+                      </Button>
+                    </div>
+
+                    {/* Arrow */}
+                    <ArrowRight size={24} className="text-secondary flex-shrink-0" />
+
+                    {/* Destination */}
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <FolderOutput size={14} className="text-default-400" />
+                        <span className="text-xs font-medium text-default-500">Media Folder</span>
+                        {getDirStatusIcon(seriesWatcherDestStatus)}
+                      </div>
+                      <DirectoryPicker
+                        label=""
+                        value={settings.seriesWatcherDestination}
+                        onChange={(path) => {
+                          setSettings({ ...settings, seriesWatcherDestination: path });
+                          setSeriesWatcherDestStatus('untested');
+                        }}
+                        placeholder="/media/tv"
+                      />
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        color="default"
+                        isLoading={testingSeriesWatcherDest}
+                        isDisabled={!settings.seriesWatcherDestination}
+                        onPress={() => testWatcherDestination('series')}
+                        startContent={!testingSeriesWatcherDest && <RefreshCw size={12} />}
+                      >
+                        Test
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Enable/Disable Toggle */}
+                <div className="flex items-center justify-between p-4 rounded-lg border border-cyan-500/30 bg-cyan-500/5">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${settings.downloadWatcherEnabled ? 'bg-success/20' : 'bg-content3'}`}>
+                      {settings.downloadWatcherEnabled ? <Play size={18} className="text-success" /> : <Pause size={18} className="text-default-500" />}
+                    </div>
+                    <div>
+                      <p className="font-medium">Enable Download Watcher</p>
+                      <p className="text-xs text-default-500">
+                        {settings.downloadWatcherEnabled 
+                          ? `Scanning every ${settings.watcherInterval} seconds` 
+                          : 'Enable to start watching downloads'}
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    isSelected={settings.downloadWatcherEnabled}
+                    onValueChange={(checked) => setSettings({ ...settings, downloadWatcherEnabled: checked })}
+                    color="success"
+                  />
+                </div>
+
+                {/* Auto-Approve Toggle */}
+                {settings.downloadWatcherEnabled && (
+                  <div className="flex items-center justify-between p-4 rounded-lg border border-content3">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-lg ${settings.watcherAutoApprove ? 'bg-primary/20' : 'bg-warning/20'}`}>
+                        {settings.watcherAutoApprove ? <Zap size={18} className="text-primary" /> : <FileCheck size={18} className="text-warning" />}
+                      </div>
+                      <div>
+                        <p className="font-medium">
+                          {settings.watcherAutoApprove ? 'Auto-Move Enabled' : 'Manual Approval Required'}
+                        </p>
+                        <p className="text-xs text-default-500">
+                          {settings.watcherAutoApprove 
+                            ? 'Files are moved automatically when detected' 
+                            : 'You must approve each file before it is moved'}
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      isSelected={settings.watcherAutoApprove}
+                      onValueChange={(checked) => setSettings({ ...settings, watcherAutoApprove: checked })}
+                      color="primary"
+                    />
+                  </div>
+                )}
+
+                {/* Status when enabled */}
+                {settings.downloadWatcherEnabled && (
+                  <div className="space-y-3">
+                    <div className={`flex items-center justify-between p-3 rounded-lg ${
+                      watcherStatus.isRunning 
+                        ? 'bg-success/10 border border-success/30' 
+                        : 'bg-warning/10 border border-warning/30'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        {watcherStatus.isRunning ? (
+                          <>
+                            <Activity size={16} className="text-success animate-pulse" />
+                            <span className="text-sm text-success">Watching for new downloads...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Pause size={16} className="text-warning" />
+                            <span className="text-sm text-warning">Save settings to start</span>
+                          </>
+                        )}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        color={watcherStatus.isRunning ? "success" : "warning"}
+                        isLoading={triggeringWatcher}
+                        onPress={triggerWatcherScan}
+                        startContent={!triggeringWatcher && <RefreshCw size={14} />}
+                      >
+                        Scan Now
+                      </Button>
+                    </div>
+
+                    {/* Pending Files Queue (when manual approval is enabled) */}
+                    {!settings.watcherAutoApprove && pendingFiles.length > 0 && (
+                      <div className="space-y-3 p-4 rounded-lg border border-warning/30 bg-warning/5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <List size={18} className="text-warning" />
+                            <span className="font-medium text-warning">Pending Approval ({pendingFiles.length})</span>
+                          </div>
+                          <Button
+                            size="sm"
+                            color="success"
+                            variant="flat"
+                            onPress={approveAllFiles}
+                            startContent={<CheckCircle2 size={14} />}
+                          >
+                            Approve All
+                          </Button>
+                        </div>
+                        
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                          {pendingFiles.map((file) => (
+                            <div 
+                              key={file.id} 
+                              className="flex items-center justify-between p-3 rounded-lg bg-content2 border border-content3"
+                            >
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                {file.type === 'movie' ? (
+                                  <Film size={18} className="text-primary flex-shrink-0" />
+                                ) : (
+                                  <Tv size={18} className="text-secondary flex-shrink-0" />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium truncate">{file.filename}</p>
+                                  <p className="text-xs text-default-400 truncate">
+                                    → {file.destinationPath}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2 flex-shrink-0 ml-2">
+                                <Button
+                                  size="sm"
+                                  color="success"
+                                  variant="flat"
+                                  isIconOnly
+                                  isLoading={approvingFile === file.id}
+                                  onPress={() => approveFile(file.id)}
+                                >
+                                  <Check size={16} />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  color="danger"
+                                  variant="flat"
+                                  isIconOnly
+                                  isLoading={rejectingFile === file.id}
+                                  onPress={() => rejectFile(file.id)}
+                                >
+                                  <Ban size={16} />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* No pending files message */}
+                    {!settings.watcherAutoApprove && pendingFiles.length === 0 && (
+                      <div className="flex items-center gap-2 p-3 rounded-lg bg-content2 border border-content3">
+                        <FileCheck size={16} className="text-default-400" />
+                        <span className="text-sm text-default-500">No files pending approval</span>
+                      </div>
+                    )}
+
+                    {/* Quick Stats */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="p-3 rounded-lg bg-content2 text-center">
+                        <p className="text-xl font-bold text-cyan-500">{watcherStatus.stats.filesProcessed}</p>
+                        <p className="text-xs text-default-500">Total</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-content2 text-center">
+                        <p className="text-xl font-bold text-primary">{watcherStatus.stats.moviesProcessed}</p>
+                        <p className="text-xs text-default-500">Movies</p>
+                      </div>
+                      <div className="p-3 rounded-lg bg-content2 text-center">
+                        <p className="text-xl font-bold text-secondary">{watcherStatus.stats.seriesProcessed}</p>
+                        <p className="text-xs text-default-500">TV Shows</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </CardBody>
             )}
           </Card>

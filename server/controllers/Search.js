@@ -237,10 +237,28 @@ exports.search = async (req, res) => {
     setCached(cacheKey, { allResults, indexerSummaries });
 
     // Filter results by category if provided
+    // Categories use a hierarchical system: 2000=Movies (2000-2999), 5000=TV (5000-5999), etc.
+    // When user requests 5000, we should include all TV subcategories (5010, 5020, 5040, etc.)
     let filteredResults = allResults;
     if (parsedCategoryIds.length > 0) {
+      // Get the base categories (e.g., 2000, 5000) to match against subcategories
+      const baseCategories = parsedCategoryIds.map(catId => Math.floor(catId / 1000) * 1000);
+      
       filteredResults = allResults.filter((result) => {
-        return result.categories.some((catId) => parsedCategoryIds.includes(catId));
+        // If result has no categories, include it (don't filter out)
+        if (!result.categories || result.categories.length === 0) {
+          return true;
+        }
+        
+        return result.categories.some((catId) => {
+          // Exact match
+          if (parsedCategoryIds.includes(catId)) return true;
+          
+          // Check if result category belongs to any of the requested base categories
+          // e.g., if user requests 5000, match 5010, 5020, 5040, etc.
+          const resultBaseCategory = Math.floor(catId / 1000) * 1000;
+          return baseCategories.includes(resultBaseCategory);
+        });
       });
     }
 

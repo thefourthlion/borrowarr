@@ -1105,5 +1105,185 @@ exports.searchTorrentsForTVEpisode = async (req, res) => {
   }
 };
 
+/**
+ * Get movies by person (actor) ID
+ */
+exports.getMoviesByPerson = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { page, sortBy } = req.query;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Person ID is required',
+      });
+    }
+
+    const result = await tmdbService.getPersonMovieCredits(parseInt(id));
+
+    if (result.success && result.cast) {
+      const { movieGenres } = await getGenreLists();
+      
+      // Filter to only include movies (not TV) and deduplicate by ID
+      const seenIds = new Set();
+      let movies = result.cast.filter(item => {
+        if (item.media_type && item.media_type !== 'movie') return false;
+        if (seenIds.has(item.id)) return false;
+        seenIds.add(item.id);
+        return true;
+      });
+      
+      // Sort by the requested sort option
+      if (sortBy === 'release_date.desc') {
+        movies = movies.sort((a, b) => {
+          const dateA = a.release_date ? new Date(a.release_date).getTime() : 0;
+          const dateB = b.release_date ? new Date(b.release_date).getTime() : 0;
+          return dateB - dateA;
+        });
+      } else if (sortBy === 'release_date.asc') {
+        movies = movies.sort((a, b) => {
+          const dateA = a.release_date ? new Date(a.release_date).getTime() : 0;
+          const dateB = b.release_date ? new Date(b.release_date).getTime() : 0;
+          return dateA - dateB;
+        });
+      } else if (sortBy === 'vote_average.desc') {
+        movies = movies.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
+      } else {
+        // Default: sort by popularity
+        movies = movies.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+      }
+      
+      // Paginate results (20 per page)
+      const pageNum = parseInt(page) || 1;
+      const perPage = 20;
+      const startIdx = (pageNum - 1) * perPage;
+      const paginatedMovies = movies.slice(startIdx, startIdx + perPage);
+      
+      // Enrich with poster URLs and genres
+      const enrichedResults = paginatedMovies.map(movie => ({
+        ...movie,
+        posterUrl: tmdbService.getPosterUrl(movie.poster_path, 'w500'),
+        backdropUrl: tmdbService.getBackdropUrl(movie.backdrop_path, 'w1280'),
+        genres: getGenreNames(movie.genre_ids, movieGenres),
+        language: movie.original_language ? movie.original_language.toUpperCase() : null,
+        media_type: 'movie',
+      }));
+
+      res.json({
+        success: true,
+        results: enrichedResults,
+        page: pageNum,
+        totalPages: Math.ceil(movies.length / perPage),
+        totalResults: movies.length,
+      });
+    } else {
+      res.json({
+        success: true,
+        results: [],
+        page: 1,
+        totalPages: 0,
+        totalResults: 0,
+      });
+    }
+  } catch (error) {
+    console.error('Error in getMoviesByPerson controller:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error',
+    });
+  }
+};
+
+/**
+ * Get TV shows by person (actor) ID
+ */
+exports.getTVShowsByPerson = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { page, sortBy } = req.query;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Person ID is required',
+      });
+    }
+
+    const result = await tmdbService.getPersonTVCredits(parseInt(id));
+
+    if (result.success && result.cast) {
+      const { tvGenres } = await getGenreLists();
+      
+      // Filter to only include TV shows (not movies) and deduplicate by ID
+      const seenIds = new Set();
+      let tvShows = result.cast.filter(item => {
+        if (item.media_type && item.media_type !== 'tv') return false;
+        if (seenIds.has(item.id)) return false;
+        seenIds.add(item.id);
+        return true;
+      });
+      
+      // Sort by the requested sort option
+      if (sortBy === 'first_air_date.desc') {
+        tvShows = tvShows.sort((a, b) => {
+          const dateA = a.first_air_date ? new Date(a.first_air_date).getTime() : 0;
+          const dateB = b.first_air_date ? new Date(b.first_air_date).getTime() : 0;
+          return dateB - dateA;
+        });
+      } else if (sortBy === 'first_air_date.asc') {
+        tvShows = tvShows.sort((a, b) => {
+          const dateA = a.first_air_date ? new Date(a.first_air_date).getTime() : 0;
+          const dateB = b.first_air_date ? new Date(b.first_air_date).getTime() : 0;
+          return dateA - dateB;
+        });
+      } else if (sortBy === 'vote_average.desc') {
+        tvShows = tvShows.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
+      } else {
+        // Default: sort by popularity
+        tvShows = tvShows.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+      }
+      
+      // Paginate results (20 per page)
+      const pageNum = parseInt(page) || 1;
+      const perPage = 20;
+      const startIdx = (pageNum - 1) * perPage;
+      const paginatedTVShows = tvShows.slice(startIdx, startIdx + perPage);
+      
+      // Enrich with poster URLs and genres
+      const enrichedResults = paginatedTVShows.map(tv => ({
+        ...tv,
+        posterUrl: tmdbService.getPosterUrl(tv.poster_path, 'w500'),
+        backdropUrl: tmdbService.getBackdropUrl(tv.backdrop_path, 'w1280'),
+        genres: getGenreNames(tv.genre_ids, tvGenres),
+        language: tv.original_language ? tv.original_language.toUpperCase() : null,
+        media_type: 'tv',
+      }));
+
+      res.json({
+        success: true,
+        results: enrichedResults,
+        page: pageNum,
+        totalPages: Math.ceil(tvShows.length / perPage),
+        totalResults: tvShows.length,
+      });
+    } else {
+      res.json({
+        success: true,
+        results: [],
+        page: 1,
+        totalPages: 0,
+        totalResults: 0,
+      });
+    }
+  } catch (error) {
+    console.error('Error in getTVShowsByPerson controller:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error',
+    });
+  }
+};
+
 module.exports = exports;
 

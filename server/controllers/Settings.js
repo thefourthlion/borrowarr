@@ -14,6 +14,15 @@ const getAutoRenameService = () => {
   return autoRenameService;
 };
 
+// Lazy load download watcher service
+let downloadWatcherService = null;
+const getDownloadWatcherService = () => {
+  if (!downloadWatcherService) {
+    downloadWatcherService = require('../services/downloadWatcher');
+  }
+  return downloadWatcherService;
+};
+
 /**
  * Get user settings
  */
@@ -110,6 +119,27 @@ exports.updateSettings = async (req, res) => {
         console.log(`🔄 [Settings] Auto-rename service updated for user ${userId}: enabled=${settings.autoRename}, interval=${settings.autoRenameInterval}min`);
       } catch (autoRenameError) {
         console.error('Error updating auto-rename service:', autoRenameError);
+        // Don't fail the request, just log the error
+      }
+    }
+
+    // Update download watcher if settings changed
+    const watcherSettingsChanged = (
+      updates.downloadWatcherEnabled !== undefined ||
+      updates.movieDownloadDirectory !== undefined ||
+      updates.seriesDownloadDirectory !== undefined ||
+      updates.movieWatcherDestination !== undefined ||
+      updates.seriesWatcherDestination !== undefined ||
+      updates.watcherInterval !== undefined
+    );
+
+    if (watcherSettingsChanged) {
+      try {
+        const { updateWatcher } = getDownloadWatcherService();
+        updateWatcher(userId, settings.toJSON());
+        console.log(`👁️ [Settings] Download watcher updated for user ${userId}: enabled=${settings.downloadWatcherEnabled}`);
+      } catch (watcherError) {
+        console.error('Error updating download watcher:', watcherError);
         // Don't fail the request, just log the error
       }
     }
@@ -398,5 +428,103 @@ exports.triggerAutoRename = async (req, res) => {
   } catch (error) {
     console.error('Error triggering auto-rename:', error);
     res.status(500).json({ error: error.message || 'Failed to trigger auto-rename' });
+  }
+};
+
+/**
+ * Get download watcher status for user
+ */
+exports.getDownloadWatcherStatus = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { getWatcherStatus } = getDownloadWatcherService();
+    const status = getWatcherStatus(userId);
+    
+    res.json({
+      success: true,
+      ...status,
+    });
+  } catch (error) {
+    console.error('Error getting download watcher status:', error);
+    res.status(500).json({ error: 'Failed to get download watcher status' });
+  }
+};
+
+/**
+ * Trigger manual download watcher scan for user
+ */
+exports.triggerDownloadWatcherScan = async (req, res) => {
+  try {
+    const userId = req.userId;
+    
+    console.log(`👁️ [Settings] Manual download watcher scan for user ${userId}`);
+    
+    const { triggerScan } = getDownloadWatcherService();
+    const result = await triggerScan(userId);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Error triggering download watcher scan:', error);
+    res.status(500).json({ error: error.message || 'Failed to trigger scan' });
+  }
+};
+
+/**
+ * Get pending files waiting for approval
+ */
+exports.getPendingFiles = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { getPendingFiles } = getDownloadWatcherService();
+    const files = getPendingFiles(userId);
+    
+    res.json({ success: true, files });
+  } catch (error) {
+    console.error('Error getting pending files:', error);
+    res.status(500).json({ error: 'Failed to get pending files' });
+  }
+};
+
+/**
+ * Approve a pending file (move it)
+ */
+exports.approveFile = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { fileId } = req.body;
+    
+    if (!fileId) {
+      return res.status(400).json({ error: 'File ID is required' });
+    }
+    
+    const { approveFile } = getDownloadWatcherService();
+    const result = await approveFile(userId, fileId);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Error approving file:', error);
+    res.status(500).json({ error: error.message || 'Failed to approve file' });
+  }
+};
+
+/**
+ * Reject a pending file (ignore it)
+ */
+exports.rejectFile = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { fileId } = req.body;
+    
+    if (!fileId) {
+      return res.status(400).json({ error: 'File ID is required' });
+    }
+    
+    const { rejectFile } = getDownloadWatcherService();
+    const result = rejectFile(userId, fileId);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Error rejecting file:', error);
+    res.status(500).json({ error: error.message || 'Failed to reject file' });
   }
 };

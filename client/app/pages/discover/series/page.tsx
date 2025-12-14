@@ -20,6 +20,7 @@ import {
   Heart,
   Eye,
   EyeOff,
+  Users,
 } from "lucide-react";
 import axios from "axios";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -109,6 +110,10 @@ const SeriesPage = () => {
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
   
+  // Person (cast) filter state
+  const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
+  const [selectedPersonName, setSelectedPersonName] = useState<string | null>(null);
+  
   // Handle URL query parameters
   useEffect(() => {
     const urlQuery = searchParams.get('q');
@@ -118,6 +123,8 @@ const SeriesPage = () => {
     const urlNetwork = searchParams.get('network');
     const urlSortBy = searchParams.get('sortBy');
     const urlId = searchParams.get('id'); // Single series ID to show modal
+    const urlPersonId = searchParams.get('person');
+    const urlPersonName = searchParams.get('personName');
     
     if (urlQuery) {
       setSearchQuery(urlQuery);
@@ -139,6 +146,16 @@ const SeriesPage = () => {
     }
     if (urlSortBy) {
       setSortBy(urlSortBy);
+    }
+    if (urlPersonId) {
+      const personId = parseInt(urlPersonId, 10);
+      if (!isNaN(personId)) {
+        setSelectedPersonId(personId);
+        setSelectedPersonName(urlPersonName || null);
+      }
+    } else {
+      setSelectedPersonId(null);
+      setSelectedPersonName(null);
     }
     if (urlId) {
       // If a specific series ID is provided, open the modal for that series
@@ -329,8 +346,13 @@ const SeriesPage = () => {
       let endpoint: string;
       const params: any = { page };
 
+      // If searching by person (cast member), use person TV shows endpoint
+      if (selectedPersonId) {
+        endpoint = `${API_BASE_URL}/api/TMDB/person/${selectedPersonId}/tv`;
+        params.sortBy = sortBy;
+      }
       // If searching, use search endpoint
-      if (debouncedSearchQuery.trim()) {
+      else if (debouncedSearchQuery.trim()) {
         endpoint = `${API_BASE_URL}/api/TMDB/search`;
         params.query = debouncedSearchQuery.trim();
         // Get search type from URL or default to 'tv' for series page
@@ -391,7 +413,7 @@ const SeriesPage = () => {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [debouncedSearchQuery, sortBy, firstAirDateFrom, firstAirDateTo, selectedGenres, originalLanguage, runtimeMin, runtimeMax, voteAverageMin, voteAverageMax, voteCountMin, keywords, watchRegion, selectedProviders, nudityFilter, violenceFilter, profanityFilter, alcoholFilter, frighteningFilter, searchParams, selectedIndexer]);
+  }, [debouncedSearchQuery, sortBy, firstAirDateFrom, firstAirDateTo, selectedGenres, originalLanguage, runtimeMin, runtimeMax, voteAverageMin, voteAverageMax, voteCountMin, keywords, watchRegion, selectedProviders, nudityFilter, violenceFilter, profanityFilter, alcoholFilter, frighteningFilter, searchParams, selectedIndexer, selectedPersonId]);
 
   // Fetch parental guide data for visible series when any content filter is active
   useEffect(() => {
@@ -1029,7 +1051,9 @@ const SeriesPage = () => {
               </Button>
               <div className="min-w-0">
                 <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent truncate">
-                  {searchQuery ? (
+                  {selectedPersonName ? (
+                    <>TV Shows with {selectedPersonName}</>
+                  ) : searchQuery ? (
                     <>
                       Search: &quot;{searchQuery}&quot;
                       {searchParams.get('type') === 'all' && ' (All Media)'}
@@ -1039,7 +1063,7 @@ const SeriesPage = () => {
                   )}
                 </h1>
                 <p className="text-xs sm:text-sm text-foreground/60 mt-1">
-                  Discover and explore TV series
+                  {selectedPersonName ? `Browse all TV shows featuring ${selectedPersonName}` : 'Discover and explore TV series'}
                 </p>
               </div>
             </div>
@@ -1064,6 +1088,22 @@ const SeriesPage = () => {
                   inputWrapper: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
                 }}
               />
+              {selectedPersonName && (
+                <Chip
+                  size="sm"
+                  variant="flat"
+                  color="secondary"
+                  onClose={() => {
+                    router.push('/pages/discover/series');
+                  }}
+                  className="flex-shrink-0"
+                >
+                  <span className="flex items-center gap-1">
+                    <Users size={12} />
+                    {selectedPersonName}
+                  </span>
+                </Chip>
+              )}
               {indexers.length > 0 && (
                 <Select
                   aria-label="Select indexer"
@@ -1678,6 +1718,11 @@ const SeriesPage = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         media={selectedMedia}
+        onCastClick={(castMember) => {
+          setIsModalOpen(false);
+          // Navigate to search for this actor's TV shows
+          router.push(`/pages/discover/series?person=${castMember.id}&personName=${encodeURIComponent(castMember.name)}`);
+        }}
       />
 
       {/* Notification Modal */}

@@ -51,8 +51,15 @@ const connectDB = async () => {
     }
     
     // Use alter: true to update existing tables with new columns
-    await sequelize.sync({ alter: true });
-    console.log('✅ Database synchronized');
+    // If alter fails, try without alter
+    try {
+      await sequelize.sync({ alter: true });
+      console.log('✅ Database synchronized');
+    } catch (syncError) {
+      console.warn('⚠️  Alter sync failed, trying without alter:', syncError.message);
+      await sequelize.sync({ alter: false });
+      console.log('✅ Database synchronized (without alter)');
+    }
   } catch (error) {
     console.error('❌ Unable to connect to the database:', error);
   }

@@ -19,3 +19,7 @@ router.post('/batch', curatedListsController.getMultipleLists);
 
 module.exports = router;
 
+
+
+
+

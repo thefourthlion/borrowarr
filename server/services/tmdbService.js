@@ -918,6 +918,66 @@ class TMDBService {
       };
     }
   }
+
+  /**
+   * Get movie credits for a person
+   * @param {number} personId - TMDB person ID
+   * @returns {Promise<Object>} Person's movie credits
+   */
+  async getPersonMovieCredits(personId) {
+    try {
+      const api = this.getAxiosInstance();
+      const response = await api.get(`/person/${personId}/movie_credits`, {
+        params: {
+          language: 'en-US',
+        },
+      });
+
+      return {
+        success: true,
+        cast: response.data.cast || [],
+        crew: response.data.crew || [],
+      };
+    } catch (error) {
+      console.error('Error getting person movie credits:', error.message);
+      return {
+        success: false,
+        error: error.message || 'Failed to get person movie credits',
+        cast: [],
+        crew: [],
+      };
+    }
+  }
+
+  /**
+   * Get TV credits for a person
+   * @param {number} personId - TMDB person ID
+   * @returns {Promise<Object>} Person's TV credits
+   */
+  async getPersonTVCredits(personId) {
+    try {
+      const api = this.getAxiosInstance();
+      const response = await api.get(`/person/${personId}/tv_credits`, {
+        params: {
+          language: 'en-US',
+        },
+      });
+
+      return {
+        success: true,
+        cast: response.data.cast || [],
+        crew: response.data.crew || [],
+      };
+    } catch (error) {
+      console.error('Error getting person TV credits:', error.message);
+      return {
+        success: false,
+        error: error.message || 'Failed to get person TV credits',
+        cast: [],
+        crew: [],
+      };
+    }
+  }
 }
 
 module.exports = new TMDBService();

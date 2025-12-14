@@ -39,4 +39,19 @@ router.get('/auto-rename/status', settingsController.getAutoRenameStatus);
 // Trigger manual auto-rename
 router.post('/auto-rename/trigger', settingsController.triggerAutoRename);
 
+// Download watcher status
+router.get('/download-watcher/status', settingsController.getDownloadWatcherStatus);
+
+// Trigger manual download watcher scan
+router.post('/download-watcher/trigger', settingsController.triggerDownloadWatcherScan);
+
+// Get pending files for manual approval
+router.get('/download-watcher/pending', settingsController.getPendingFiles);
+
+// Approve a pending file
+router.post('/download-watcher/approve', settingsController.approveFile);
+
+// Reject a pending file
+router.post('/download-watcher/reject', settingsController.rejectFile);
+
 module.exports = router;

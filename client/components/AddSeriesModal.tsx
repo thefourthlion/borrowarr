@@ -143,11 +143,20 @@ interface SelectedEpisode {
   episodeName: string;
 }
 
+interface CastMember {
+  id: number;
+  name: string;
+  character: string;
+  profile_path: string | null;
+  order: number;
+}
+
 interface AddSeriesModalProps {
   isOpen: boolean;
   onClose: () => void;
   media: TMDBMedia | null;
   onAddSeries?: () => void;
+  onCastClick?: (castMember: { id: number; name: string }) => void;
 }
 
 const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
@@ -155,6 +164,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
   onClose,
   media,
   onAddSeries,
+  onCastClick,
 }) => {
   const { user } = useAuth();
   
@@ -357,22 +367,22 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
     return existingRank >= minRank;
   };
 
-  // Get the best torrent by seeders count (prioritize seeders over indexer priority for auto-download)
-  const getBestTorrentBySeeders = (torrents: TorrentResult[]): TorrentResult | null => {
+  // Get the best torrent by indexer priority first, then seeders as tiebreaker
+  const getBestTorrent = (torrents: TorrentResult[]): TorrentResult | null => {
     if (torrents.length === 0) return null;
     
     return torrents.reduce((best, current) => {
+      // First compare by indexer priority (lower = higher priority)
+      const bestPriority = best.indexerPriority ?? 25;
+      const currentPriority = current.indexerPriority ?? 25;
+      
+      if (currentPriority < bestPriority) return current;
+      if (currentPriority > bestPriority) return best;
+      
+      // If priority is equal, use seeders as tiebreaker
       const bestSeeders = best.seeders || 0;
       const currentSeeders = current.seeders || 0;
-      
-      // Prioritize by seeders first
-      if (currentSeeders > bestSeeders) return current;
-      if (currentSeeders < bestSeeders) return best;
-      
-      // If seeders are equal, use indexer priority as tiebreaker
-      const bestPriority = (best as any).indexerPriority ?? 25;
-      const currentPriority = (current as any).indexerPriority ?? 25;
-      return currentPriority < bestPriority ? current : best;
+      return currentSeeders > bestSeeders ? current : best;
     });
   };
 
@@ -750,18 +760,18 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
         return fetchEpisodeTorrents(seasonNumber, episodeNumber, retryCount + 1);
       }
 
-      // Sort by seeders first (descending), then by indexer priority as tiebreaker
+      // Sort by indexer priority first (lower = higher priority), then by seeders as tiebreaker
       const sortedResults = [...results].sort((a: TorrentResult, b: TorrentResult) => {
-        // Prioritize by seeders (descending - most seeders first)
+        // First compare by indexer priority (lower number = higher priority)
+        const aPriority = a.indexerPriority ?? 25;
+        const bPriority = b.indexerPriority ?? 25;
+        if (aPriority !== bPriority) {
+          return aPriority - bPriority;
+        }
+        // Then sort by seeders (descending)
         const aSeeders = a.seeders ?? 0;
         const bSeeders = b.seeders ?? 0;
-        if (aSeeders !== bSeeders) {
-          return bSeeders - aSeeders;
-        }
-        // If seeders are equal, use indexer priority
-        const aPriority = (a as any).indexerPriority ?? 25;
-        const bPriority = (b as any).indexerPriority ?? 25;
-        return aPriority - bPriority;
+        return bSeeders - aSeeders;
       });
       
       setEpisodeTorrents(prev => {
@@ -933,16 +943,18 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
         return fetchCompleteSeriesTorrents(seasonNumber, retryCount + 1);
       }
 
-      // Sort by seeders first (descending), then by indexer priority as tiebreaker
+      // Sort by indexer priority first (lower = higher priority), then by seeders as tiebreaker
       const sortedResults = [...results].sort((a: TorrentResult, b: TorrentResult) => {
-        const aSeeders = a.seeders || 0;
-        const bSeeders = b.seeders || 0;
-        if (aSeeders !== bSeeders) {
-          return bSeeders - aSeeders;
+        // First compare by indexer priority (lower number = higher priority)
+        const aPriority = a.indexerPriority ?? 25;
+        const bPriority = b.indexerPriority ?? 25;
+        if (aPriority !== bPriority) {
+          return aPriority - bPriority;
         }
-        const aPriority = (a as any).indexerPriority ?? 25;
-        const bPriority = (b as any).indexerPriority ?? 25;
-        return aPriority - bPriority;
+        // Then sort by seeders (descending)
+        const aSeeders = a.seeders ?? 0;
+        const bSeeders = b.seeders ?? 0;
+        return bSeeders - aSeeders;
       });
       
       setCompleteSeriesTorrents(sortedResults);
@@ -1013,16 +1025,18 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
         return fetchSeasonTorrents(seasonNumber, retryCount + 1);
       }
 
-      // Sort by seeders first (descending), then by indexer priority as tiebreaker
+      // Sort by indexer priority first (lower = higher priority), then by seeders as tiebreaker
       const sortedResults = [...results].sort((a: TorrentResult, b: TorrentResult) => {
-        const aSeeders = a.seeders || 0;
-        const bSeeders = b.seeders || 0;
-        if (aSeeders !== bSeeders) {
-          return bSeeders - aSeeders;
+        // First compare by indexer priority (lower number = higher priority)
+        const aPriority = a.indexerPriority ?? 25;
+        const bPriority = b.indexerPriority ?? 25;
+        if (aPriority !== bPriority) {
+          return aPriority - bPriority;
         }
-        const aPriority = (a as any).indexerPriority ?? 25;
-        const bPriority = (b as any).indexerPriority ?? 25;
-        return aPriority - bPriority;
+        // Then sort by seeders (descending)
+        const aSeeders = a.seeders ?? 0;
+        const bSeeders = b.seeders ?? 0;
+        return bSeeders - aSeeders;
       });
       
       setSeasonTorrents(prev => {
@@ -1141,8 +1155,8 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
         throw new Error(`No torrents matching quality threshold (${effectiveMinQuality}) found for ${title} S${String(seasonNumber).padStart(2, '0')}E${String(episodeNumber).padStart(2, '0')}`);
       }
 
-      // Get the best torrent - prioritize by SEEDERS first (most seeders = best)
-      const bestTorrent = getBestTorrentBySeeders(qualityFilteredTorrents);
+      // Get the best torrent - prioritize by indexer priority first, then seeders
+      const bestTorrent = getBestTorrent(qualityFilteredTorrents);
       
       if (!bestTorrent) {
         throw new Error(`No suitable torrents found for ${title} S${String(seasonNumber).padStart(2, '0')}E${String(episodeNumber).padStart(2, '0')}`);
@@ -1985,19 +1999,43 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                     return null;
                   })()}
 
-                  {/* Top Cast */}
+                  {/* Top Cast with Photos */}
                   {tvShowDetails?.credits?.cast && tvShowDetails.credits.cast.length > 0 && (() => {
                     const topCast = tvShowDetails.credits.cast
                       .sort((a, b) => (a.order || 999) - (b.order || 999))
-                      .slice(0, 5);
+                      .slice(0, 10);
                     return (
                       <div className="mt-4">
-                        <p className="text-sm font-medium text-default-600 mb-2">Cast:</p>
-                        <div className="flex flex-wrap gap-2">
+                        <p className="text-sm font-medium text-default-600 mb-3">Cast:</p>
+                        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
                           {topCast.map((actor) => (
-                            <Chip key={actor.id} size="sm" variant="flat" className="text-xs">
-                              {actor.name} {actor.character && `as ${actor.character}`}
-                            </Chip>
+                            <div 
+                              key={actor.id} 
+                              className={`flex-shrink-0 text-center group ${onCastClick ? 'cursor-pointer' : ''}`}
+                              onClick={() => onCastClick && onCastClick({ id: actor.id, name: actor.name })}
+                            >
+                              <div className={`relative w-16 h-16 rounded-full overflow-hidden bg-default-100 mb-1 mx-auto ${onCastClick ? 'group-hover:ring-2 group-hover:ring-primary transition-all' : ''}`}>
+                                {actor.profile_path ? (
+                                  <img
+                                    src={`${TMDB_IMAGE_BASE_URL}${actor.profile_path}`}
+                                    alt={actor.name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <Users size={24} className="text-default-400" />
+                                  </div>
+                                )}
+                              </div>
+                              <p className={`text-xs font-medium truncate max-w-[70px] ${onCastClick ? 'group-hover:text-primary' : ''}`}>
+                                {actor.name}
+                              </p>
+                              {actor.character && (
+                                <p className="text-[10px] text-default-500 truncate max-w-[70px]">
+                                  {actor.character}
+                                </p>
+                              )}
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -2181,7 +2219,14 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                                     <Spinner size="sm" />
                                   </div>
                                 ) : (seasonTorrents.get(season.season_number) || []).length > 0 ? (
-                                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className="text-xs text-default-500">Season {season.season_number} Torrents</span>
+                                      <Chip size="sm" variant="flat" color="secondary">
+                                        {(seasonTorrents.get(season.season_number) || []).length} result{(seasonTorrents.get(season.season_number) || []).length !== 1 ? 's' : ''}
+                                      </Chip>
+                                    </div>
+                                    <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
                                     {seasonTorrents.get(season.season_number)?.map((torrent) => {
                                       const torrentId = torrent.id;
                                       const isDownloadingTorrent = downloadingTorrents.has(torrentId);
@@ -2237,6 +2282,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                                         </Card>
                                       );
                                     })}
+                                    </div>
                                   </div>
                                 ) : (
                                   <Card className="bg-default-50">
@@ -2321,7 +2367,14 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                                               <Spinner size="sm" />
                                             </div>
                                           ) : torrents.length > 0 ? (
-                                            <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                                            <div>
+                                              <div className="flex items-center justify-between mb-2">
+                                                <span className="text-xs text-default-500">Episode Torrents</span>
+                                                <Chip size="sm" variant="flat" color="secondary">
+                                                  {torrents.length} result{torrents.length !== 1 ? 's' : ''}
+                                                </Chip>
+                                              </div>
+                                              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
                                               {torrents.map((torrent) => {
                                                 const torrentId = torrent.id;
                                                 const isDownloadingTorrent = downloadingTorrents.has(torrentId);
@@ -2377,6 +2430,7 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                                                   </Card>
                                                 );
                                               })}
+                                              </div>
                                             </div>
                                           ) : (
                                             <Card className="bg-default-50">

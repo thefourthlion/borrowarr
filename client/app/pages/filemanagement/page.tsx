@@ -1269,25 +1269,25 @@ const FileManagement = () => {
                     <div className={`flex items-center justify-between p-3 rounded-lg ${
                       watcherStatus.isRunning 
                         ? 'bg-success/10 border border-success/30' 
-                        : 'bg-warning/10 border border-warning/30'
+                        : 'bg-cyan-500/10 border border-cyan-500/30'
                     }`}>
                       <div className="flex items-center gap-2">
                         {watcherStatus.isRunning ? (
                           <>
                             <Activity size={16} className="text-success animate-pulse" />
-                            <span className="text-sm text-success">Watching for new downloads...</span>
+                            <span className="text-sm text-success">Watching for new downloads every {settings.watcherInterval || 30}s</span>
                           </>
                         ) : (
                           <>
-                            <Pause size={16} className="text-warning" />
-                            <span className="text-sm text-warning">Save settings to start</span>
+                            <RefreshCw size={16} className="text-cyan-500" />
+                            <span className="text-sm text-cyan-500">Click Scan Now to process downloads</span>
                           </>
                         )}
                       </div>
                       <Button
                         size="sm"
                         variant="flat"
-                        color={watcherStatus.isRunning ? "success" : "warning"}
+                        color={watcherStatus.isRunning ? "success" : "primary"}
                         isLoading={triggeringWatcher}
                         onPress={triggerWatcherScan}
                         startContent={!triggeringWatcher && <RefreshCw size={14} />}
@@ -1385,6 +1385,34 @@ const FileManagement = () => {
                         <p className="text-xs text-default-500">TV Shows</p>
                       </div>
                     </div>
+
+                    {/* Recent Files */}
+                    {watcherStatus.stats.recentFiles && watcherStatus.stats.recentFiles.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-semibold flex items-center gap-2 text-default-600">
+                          <Clock size={14} />
+                          Recently Processed
+                        </h4>
+                        <div className="space-y-1 max-h-40 overflow-y-auto">
+                          {watcherStatus.stats.recentFiles.slice(0, 5).map((file: any, idx: number) => (
+                            <div 
+                              key={idx}
+                              className="flex items-center gap-2 p-2 rounded-lg bg-content2/50 text-xs"
+                            >
+                              {file.type === 'movie' ? (
+                                <Film size={14} className="text-primary flex-shrink-0" />
+                              ) : (
+                                <Tv size={14} className="text-secondary flex-shrink-0" />
+                              )}
+                              <span className="truncate flex-1">{file.name}</span>
+                              <span className="text-default-400 flex-shrink-0">
+                                {new Date(file.timestamp).toLocaleTimeString()}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardBody>

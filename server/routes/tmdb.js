@@ -57,6 +57,12 @@ router.get('/tv/:id', TMDBController.getTVShowDetails);
 // Get TV show season details with episodes
 router.get('/tv/:id/season/:seasonNumber', TMDBController.getTVSeasonDetails);
 
+// Get movies by person (actor)
+router.get('/person/:id/movies', TMDBController.getMoviesByPerson);
+
+// Get TV shows by person (actor)
+router.get('/person/:id/tv', TMDBController.getTVShowsByPerson);
+
 // Search torrents for a specific movie (optional auth to filter by user's indexers)
 router.get('/movie/:id/torrents', optionalAuth, TMDBController.searchTorrentsForMovie);
 

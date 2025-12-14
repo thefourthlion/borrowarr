@@ -128,11 +128,20 @@ interface MovieDetails {
   original_name?: string;
 }
 
+interface CastMember {
+  id: number;
+  name: string;
+  character: string;
+  profile_path: string | null;
+  order: number;
+}
+
 interface AddMovieModalProps {
   isOpen: boolean;
   onClose: () => void;
   media: TMDBMedia | null;
   onAddMovie?: () => void;
+  onCastClick?: (castMember: { id: number; name: string }) => void;
 }
 
 const AddMovieModal: React.FC<AddMovieModalProps> = ({
@@ -140,6 +149,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
   onClose,
   media,
   onAddMovie,
+  onCastClick,
 }) => {
   const { user } = useAuth();
   
@@ -327,22 +337,22 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
     return existingRank >= minRank;
   };
 
-  // Get the best torrent by seeders count (prioritize seeders over indexer priority for auto-download)
-  const getBestTorrentBySeeders = (torrents: TorrentResult[]): TorrentResult | null => {
+  // Get the best torrent by indexer priority first, then seeders
+  const getBestTorrent = (torrents: TorrentResult[]): TorrentResult | null => {
     if (torrents.length === 0) return null;
     
     return torrents.reduce((best, current) => {
+      // First compare by indexer priority (lower = higher priority)
+      const bestPriority = best.indexerPriority ?? 25;
+      const currentPriority = current.indexerPriority ?? 25;
+      
+      if (currentPriority < bestPriority) return current;
+      if (currentPriority > bestPriority) return best;
+      
+      // If priority is equal, use seeders as tiebreaker
       const bestSeeders = best.seeders || 0;
       const currentSeeders = current.seeders || 0;
-      
-      // Prioritize by seeders first
-      if (currentSeeders > bestSeeders) return current;
-      if (currentSeeders < bestSeeders) return best;
-      
-      // If seeders are equal, use indexer priority as tiebreaker
-      const bestPriority = (best as any).indexerPriority ?? 25;
-      const currentPriority = (current as any).indexerPriority ?? 25;
-      return currentPriority < bestPriority ? current : best;
+      return currentSeeders > bestSeeders ? current : best;
     });
   };
 
@@ -525,18 +535,18 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
         return fetchTorrents(retryCount + 1);
       }
 
-      // Sort by seeders first (highest seeders = best), then by indexer priority as tiebreaker
+      // Sort by indexer priority first (lower = higher priority), then by seeders as tiebreaker
       const sortedResults = [...results].sort((a: TorrentResult, b: TorrentResult) => {
-        // Prioritize by seeders (descending - most seeders first)
-        const aSeeders = a.seeders ?? 0;
-        const bSeeders = b.seeders ?? 0;
-        if (aSeeders !== bSeeders) {
-          return bSeeders - aSeeders;
-        }
-        // If seeders are equal, use indexer priority (lower number = higher priority)
+        // First compare by indexer priority (lower number = higher priority)
         const aPriority = a.indexerPriority ?? 25;
         const bPriority = b.indexerPriority ?? 25;
-        return aPriority - bPriority;
+        if (aPriority !== bPriority) {
+          return aPriority - bPriority;
+        }
+        // Then sort by seeders (descending)
+        const aSeeders = a.seeders ?? 0;
+        const bSeeders = b.seeders ?? 0;
+        return bSeeders - aSeeders;
       });
       
       setTorrents(sortedResults);
@@ -849,8 +859,8 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
         return;
       }
 
-      // Get the best torrent - prioritize by SEEDERS first (most seeders = best), then indexer priority as tiebreaker
-      const bestTorrent = getBestTorrentBySeeders(filteredTorrents);
+      // Get the best torrent - prioritize by indexer priority first, then seeders
+      const bestTorrent = getBestTorrent(filteredTorrents);
       
       if (!bestTorrent) {
         setTimeout(() => {
@@ -1119,7 +1129,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
     return movieDetails.credits.crew.find(person => person.job === 'Director');
   };
 
-  const getTopCast = (limit = 5) => {
+  const getTopCast = (limit = 10) => {
     if (!movieDetails?.credits?.cast) return [];
     return movieDetails.credits.cast
       .sort((a, b) => (a.order || 999) - (b.order || 999))
@@ -1528,15 +1538,39 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
                     </div>
                   )}
 
-                  {/* Top Cast */}
+                  {/* Top Cast with Photos */}
                   {topCast.length > 0 && (
                     <div className="mt-4">
-                      <p className="text-sm font-medium text-default-600 mb-2">Cast:</p>
-                      <div className="flex flex-wrap gap-2">
+                      <p className="text-sm font-medium text-default-600 mb-3">Cast:</p>
+                      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
                         {topCast.map((actor) => (
-                          <Chip key={actor.id} size="sm" variant="flat" className="text-xs">
-                            {actor.name} {actor.character && `as ${actor.character}`}
-                          </Chip>
+                          <div 
+                            key={actor.id} 
+                            className={`flex-shrink-0 text-center group ${onCastClick ? 'cursor-pointer' : ''}`}
+                            onClick={() => onCastClick && onCastClick({ id: actor.id, name: actor.name })}
+                          >
+                            <div className={`relative w-16 h-16 rounded-full overflow-hidden bg-default-100 mb-1 mx-auto ${onCastClick ? 'group-hover:ring-2 group-hover:ring-primary transition-all' : ''}`}>
+                              {actor.profile_path ? (
+                                <img
+                                  src={`${TMDB_IMAGE_BASE_URL}${actor.profile_path}`}
+                                  alt={actor.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <Users size={24} className="text-default-400" />
+                                </div>
+                              )}
+                            </div>
+                            <p className={`text-xs font-medium truncate max-w-[70px] ${onCastClick ? 'group-hover:text-primary' : ''}`}>
+                              {actor.name}
+                            </p>
+                            {actor.character && (
+                              <p className="text-[10px] text-default-500 truncate max-w-[70px]">
+                                {actor.character}
+                              </p>
+                            )}
+                          </div>
                         ))}
                       </div>
                     </div>

@@ -79,9 +79,6 @@ const FeaturedListDetail = () => {
   const [listData, setListData] = useState<LetterboxdList | null>(null);
   const [media, setMedia] = useState<TMDBMedia[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("popularity.desc");
@@ -131,11 +128,7 @@ const FeaturedListDetail = () => {
     }
   };
 
-  const fetchMediaForList = async (list: LetterboxdList, page: number = 1) => {
-    if (page > 1) {
-      setLoadingMore(true);
-    }
-
+  const fetchMediaForList = async (list: LetterboxdList) => {
     try {
       // Extract genre/type from list title for better TMDB searches
       const titleLower = list.title.toLowerCase();
@@ -200,46 +193,48 @@ const FeaturedListDetail = () => {
         endpoint = '/tv/top_rated';
       }
 
-      const params: Record<string, string> = {
-        api_key: TMDB_API_KEY,
-        page: String(page),
-        language: 'en-US',
-        ...extraParams,
-      };
+      const mediaType = endpoint.includes('/tv') ? 'tv' : 'movie';
+      const maxPages = 13; // Fetch up to 13 pages (260 items) - TMDB returns 20 per page
+      let allMedia: TMDBMedia[] = [];
 
-      const urlParams = new URLSearchParams(params);
-      const response = await fetch(`https://api.themoviedb.org/3${endpoint}?${urlParams}`);
-      const data = await response.json();
+      // Fetch all pages in parallel
+      const pageNumbers = Array.from({ length: maxPages }, (_, i) => i + 1);
+      const fetchPromises = pageNumbers.map(async (page) => {
+        const params: Record<string, string> = {
+          api_key: TMDB_API_KEY,
+          page: String(page),
+          language: 'en-US',
+          ...extraParams,
+        };
 
-      if (data.results) {
-        const mediaType = endpoint.includes('/tv') ? 'tv' : 'movie';
-        const formattedMedia = data.results.map((item: any) => ({
-          ...item,
-          posterUrl: item.poster_path ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}` : null,
-          media_type: mediaType,
-        }));
+        const urlParams = new URLSearchParams(params);
+        const response = await fetch(`https://api.themoviedb.org/3${endpoint}?${urlParams}`);
+        const data = await response.json();
 
-        if (page === 1) {
-          setMedia(formattedMedia);
-        } else {
-          setMedia(prev => [...prev, ...formattedMedia]);
+        if (data.results) {
+          return data.results.map((item: any) => ({
+            ...item,
+            posterUrl: item.poster_path ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}` : null,
+            media_type: mediaType,
+          }));
         }
+        return [];
+      });
 
-        setCurrentPage(page);
-        setTotalPages(data.total_pages || 1);
-        setHasMore(page < (data.total_pages || 1) && page < 25); // Limit to 25 pages
-      }
+      const results = await Promise.all(fetchPromises);
+      allMedia = results.flat();
+
+      // Remove duplicates by ID
+      const uniqueMedia = Array.from(
+        new Map(allMedia.map(item => [item.id, item])).values()
+      );
+
+      setMedia(uniqueMedia);
+      setHasMore(false);
     } catch (error) {
       console.error('Error fetching media:', error);
     } finally {
       setLoading(false);
-      setLoadingMore(false);
-    }
-  };
-
-  const loadMore = () => {
-    if (hasMore && !loadingMore && listData) {
-      fetchMediaForList(listData, currentPage + 1);
     }
   };
 
@@ -744,27 +739,6 @@ const FeaturedListDetail = () => {
               {visibleMedia.map((item) => renderMediaCard(item))}
             </div>
 
-            {/* Load More */}
-            {hasMore && (
-              <div className="flex justify-center mt-8">
-                <Button
-                  color="secondary"
-                  variant="flat"
-                  onPress={loadMore}
-                  isLoading={loadingMore}
-                  size="lg"
-                  className="border-2 border-secondary/20"
-                >
-                  Load More
-                </Button>
-              </div>
-            )}
-
-            {!hasMore && visibleMedia.length > 0 && (
-              <div className="text-center py-8 text-xs sm:text-sm text-foreground/60">
-                No more results to load
-              </div>
-            )}
           </>
         ) : (
           <Card className="bg-content1 border border-secondary/20">

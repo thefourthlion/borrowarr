@@ -20,6 +20,7 @@ import {
   Heart,
   Eye,
   EyeOff,
+  Users,
 } from "lucide-react";
 import axios from "axios";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -109,6 +110,10 @@ const MoviesPage = () => {
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
   
+  // Person (cast) filter state
+  const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
+  const [selectedPersonName, setSelectedPersonName] = useState<string | null>(null);
+  
   // Handle URL query parameters
   useEffect(() => {
     const urlQuery = searchParams.get('q');
@@ -118,6 +123,8 @@ const MoviesPage = () => {
     const urlStudio = searchParams.get('studio');
     const urlSortBy = searchParams.get('sortBy');
     const urlId = searchParams.get('id'); // Single movie ID to show modal
+    const urlPersonId = searchParams.get('person');
+    const urlPersonName = searchParams.get('personName');
     
     if (urlQuery) {
       setSearchQuery(urlQuery);
@@ -139,6 +146,16 @@ const MoviesPage = () => {
     }
     if (urlSortBy) {
       setSortBy(urlSortBy);
+    }
+    if (urlPersonId) {
+      const personId = parseInt(urlPersonId, 10);
+      if (!isNaN(personId)) {
+        setSelectedPersonId(personId);
+        setSelectedPersonName(urlPersonName || null);
+      }
+    } else {
+      setSelectedPersonId(null);
+      setSelectedPersonName(null);
     }
     if (urlId) {
       // If a specific movie ID is provided, open the modal for that movie
@@ -329,8 +346,13 @@ const MoviesPage = () => {
       let endpoint: string;
       const params: any = { page };
 
+      // If searching by person (cast member), use person movies endpoint
+      if (selectedPersonId) {
+        endpoint = `${API_BASE_URL}/api/TMDB/person/${selectedPersonId}/movies`;
+        params.sortBy = sortBy;
+      }
       // If searching, use search endpoint
-      if (debouncedSearchQuery.trim()) {
+      else if (debouncedSearchQuery.trim()) {
         endpoint = `${API_BASE_URL}/api/TMDB/search`;
         params.query = debouncedSearchQuery.trim();
         // Get search type from URL or default to 'movie' for movies page
@@ -391,7 +413,7 @@ const MoviesPage = () => {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [debouncedSearchQuery, sortBy, releaseDateFrom, releaseDateTo, selectedGenres, originalLanguage, runtimeMin, runtimeMax, voteAverageMin, voteAverageMax, voteCountMin, keywords, watchRegion, selectedProviders, nudityFilter, violenceFilter, profanityFilter, alcoholFilter, frighteningFilter, searchParams]);
+  }, [debouncedSearchQuery, sortBy, releaseDateFrom, releaseDateTo, selectedGenres, originalLanguage, runtimeMin, runtimeMax, voteAverageMin, voteAverageMax, voteCountMin, keywords, watchRegion, selectedProviders, nudityFilter, violenceFilter, profanityFilter, alcoholFilter, frighteningFilter, searchParams, selectedPersonId, selectedIndexer]);
 
   // Fetch parental guide data for visible movies when any content filter is active
   useEffect(() => {
@@ -568,34 +590,55 @@ const MoviesPage = () => {
         ? new Date(item.release_date).getFullYear() 
         : (item.first_air_date ? new Date(item.first_air_date).getFullYear() : '');
       
-      // Search for torrents
+      // Build search query: "Movie Title year"
+      const searchQuery = year ? `${title} ${year}` : title;
+      
+      // Search for torrents using the Search API
+      const token = localStorage.getItem('accessToken');
       const torrentResponse = await axios.get(
-        `${API_BASE_URL}/api/TMDB/movie/${item.id}/torrents`,
+        `${API_BASE_URL}/api/Search`,
         {
           params: {
-            title: title,
-            year: year,
-            categoryIds: '2000',
+            query: searchQuery,
+            categoryIds: '2000', // Movies
+            limit: 100,
           },
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           timeout: 30000,
         }
       );
 
-      if (!torrentResponse.data.success || torrentResponse.data.results.length === 0) {
+      const results = torrentResponse.data.results || [];
+      
+      if (results.length === 0) {
         throw new Error(`No torrents found for ${title}`);
       }
 
-      // Get the best torrent (highest priority indexer, then highest seeders)
-      const bestTorrent = torrentResponse.data.results.reduce((best: any, current: any) => {
-        const bestPriority = best.indexerPriority ?? 25;
-        const currentPriority = current.indexerPriority ?? 25;
-        if (currentPriority < bestPriority) return current;
-        if (currentPriority > bestPriority) return best;
-        
-        const bestSeeders = best.seeders || 0;
-        const currentSeeders = current.seeders || 0;
-        return currentSeeders > bestSeeders ? current : best;
+      // Sort by indexer priority first (lower = higher priority), then by seeders
+      results.sort((a: any, b: any) => {
+        const aPriority = a.indexerPriority ?? 25;
+        const bPriority = b.indexerPriority ?? 25;
+        if (aPriority !== bPriority) {
+          return aPriority - bPriority;
+        }
+        const aSeeders = a.seeders ?? 0;
+        const bSeeders = b.seeders ?? 0;
+        return bSeeders - aSeeders;
       });
+
+      // Get the best torrent (first after sorting)
+      const bestTorrent = results[0];
+
+      // Extract quality from torrent title
+      const titleLower = bestTorrent.title.toLowerCase();
+      let quality = 'SD';
+      if (titleLower.includes('2160p') || titleLower.includes('4k') || titleLower.includes('uhd')) {
+        quality = '2160p';
+      } else if (titleLower.includes('1080p')) {
+        quality = '1080p';
+      } else if (titleLower.includes('720p')) {
+        quality = '720p';
+      }
 
       // Save movie to monitored list
       const posterUrl = item.poster_path 
@@ -612,16 +655,31 @@ const MoviesPage = () => {
         qualityProfile: "any",
         minAvailability: "released",
         monitor: "movieOnly",
+        status: "downloading",
       });
 
-      // Download the torrent
+      // Download the torrent with full history data
       const downloadResponse = await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, {
         downloadUrl: bestTorrent.downloadUrl,
         protocol: bestTorrent.protocol,
+        // History information
+        releaseName: bestTorrent.title,
+        indexer: bestTorrent.indexer,
+        indexerId: bestTorrent.indexerId,
+        size: bestTorrent.size,
+        sizeFormatted: bestTorrent.sizeFormatted,
+        seeders: bestTorrent.seeders,
+        leechers: bestTorrent.leechers,
+        quality: quality,
+        source: 'QuickDownload',
+        mediaType: 'movies',
+        mediaTitle: title,
+        tmdbId: item.id,
       });
 
       if (downloadResponse.data.success) {
         setDownloadSuccess((prev) => new Set(prev).add(movieId));
+        showNotification('Download Started', `Downloading: ${bestTorrent.title}`, 'success');
         setTimeout(() => {
           setDownloadSuccess((prev) => {
             const next = new Set(prev);
@@ -961,7 +1019,9 @@ const MoviesPage = () => {
               </Button>
               <div className="min-w-0">
                 <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent truncate">
-                  {searchQuery ? (
+                  {selectedPersonName ? (
+                    <>Movies with {selectedPersonName}</>
+                  ) : searchQuery ? (
                     <>
                       Search: &quot;{searchQuery}&quot;
                       {searchParams.get('type') === 'all' && ' (All Media)'}
@@ -971,7 +1031,7 @@ const MoviesPage = () => {
                   )}
                 </h1>
                 <p className="text-xs sm:text-sm text-foreground/60 mt-1">
-                  Discover and explore movies
+                  {selectedPersonName ? `Browse all movies featuring ${selectedPersonName}` : 'Discover and explore movies'}
                 </p>
               </div>
             </div>
@@ -996,6 +1056,22 @@ const MoviesPage = () => {
                   inputWrapper: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
                 }}
               />
+              {selectedPersonName && (
+                <Chip
+                  size="sm"
+                  variant="flat"
+                  color="secondary"
+                  onClose={() => {
+                    router.push('/pages/discover/movies');
+                  }}
+                  className="flex-shrink-0"
+                >
+                  <span className="flex items-center gap-1">
+                    <Users size={12} />
+                    {selectedPersonName}
+                  </span>
+                </Chip>
+              )}
               {indexers.length > 0 && (
                 <Select
                   aria-label="Select indexer"
@@ -1610,6 +1686,11 @@ const MoviesPage = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         media={selectedMedia}
+        onCastClick={(castMember) => {
+          setIsModalOpen(false);
+          // Navigate to search for this actor's movies
+          router.push(`/pages/discover/movies?person=${castMember.id}&personName=${encodeURIComponent(castMember.name)}`);
+        }}
       />
 
       {/* Notification Modal */}

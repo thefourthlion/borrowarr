@@ -68,6 +68,12 @@ setTimeout(() => {
   startAutoRenameService();
 }, 15000); // Wait 15 seconds after server starts
 
+// Start download watcher service (after database connection)
+setTimeout(() => {
+  const { initializeAllWatchers } = require('./services/downloadWatcher');
+  initializeAllWatchers();
+}, 20000); // Wait 20 seconds after server starts
+
 app.get("/", (req, res) => {
   res.json({ app: "running" });
 });

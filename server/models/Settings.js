@@ -66,6 +66,42 @@ const Settings = sequelize.define('Settings', {
     allowNull: false,
     defaultValue: false, // tracks if user has seen the beta warning
   },
+  // Download Watcher Settings
+  downloadWatcherEnabled: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  },
+  movieDownloadDirectory: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    defaultValue: null, // Where movie downloads come from
+  },
+  seriesDownloadDirectory: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    defaultValue: null, // Where TV downloads come from
+  },
+  movieWatcherDestination: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    defaultValue: null, // Where movies get moved to
+  },
+  seriesWatcherDestination: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    defaultValue: null, // Where TV shows get moved to
+  },
+  watcherInterval: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 30, // seconds - how often to check for new downloads
+  },
+  watcherAutoApprove: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false, // if false, files require manual approval before moving
+  },
   checkInterval: {
     type: DataTypes.INTEGER,
     allowNull: false,

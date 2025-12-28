@@ -13,18 +13,70 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Helper function to validate and sanitize expiry values
+const getExpiryValue = (envVar, defaultValue) => {
+  // If envVar is falsy, undefined, or null, use default
+  if (!envVar || envVar === "null" || envVar === "undefined") {
+    return defaultValue;
+  }
+  
+  // Convert to string and trim whitespace
+  let value;
+  try {
+    value = String(envVar).trim();
+  } catch (e) {
+    console.warn(`Error converting JWT expiry to string, using default: "${defaultValue}"`);
+    return defaultValue;
+  }
+  
+  // Check for empty string after trimming
+  if (!value || value === "") {
+    return defaultValue;
+  }
+  
+  // Check if it's a valid positive number (seconds)
+  const numValue = Number(value);
+  if (!isNaN(numValue) && isFinite(numValue) && numValue > 0) {
+    return numValue;
+  }
+  
+  // Check if it's a valid timespan string format (e.g., "15m", "1h", "7d", "2 days")
+  // jsonwebtoken accepts formats like: "2 days", "10h", "7d", "1h", "1m", "1s"
+  const timespanRegex = /^\d+\s*(second|sec|s|minute|min|m|hour|hr|h|day|d|week|wk|w|month|mon|mo|year|yr|y)(s)?$/i;
+  if (timespanRegex.test(value) || /^\d+[smhdwy]$/i.test(value)) {
+    return value;
+  }
+  
+  // If it doesn't match expected format, use default
+  console.warn(`Invalid JWT expiry value: "${value}", using default: "${defaultValue}"`);
+  return defaultValue;
+};
+
 // Generate JWT tokens
 const generateTokens = (userId) => {
+  let accessExpiry = getExpiryValue(process.env.JWT_ACCESS_EXPIRY, "15m");
+  let refreshExpiry = getExpiryValue(process.env.JWT_REFRESH_EXPIRY, "7d");
+
+  // Final safety check - ensure we have valid values
+  if (accessExpiry === null || accessExpiry === undefined || (typeof accessExpiry !== "string" && typeof accessExpiry !== "number")) {
+    console.error("Invalid accessExpiry, forcing default:", accessExpiry);
+    accessExpiry = "15m";
+  }
+  if (refreshExpiry === null || refreshExpiry === undefined || (typeof refreshExpiry !== "string" && typeof refreshExpiry !== "number")) {
+    console.error("Invalid refreshExpiry, forcing default:", refreshExpiry);
+    refreshExpiry = "7d";
+  }
+
   const accessToken = jwt.sign(
     { userId, type: "access" },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_ACCESS_EXPIRY || "15m" }
+    { expiresIn: accessExpiry }
   );
 
   const refreshToken = jwt.sign(
     { userId, type: "refresh" },
     process.env.JWT_REFRESH_SECRET,
-    { expiresIn: process.env.JWT_REFRESH_EXPIRY || "7d" }
+    { expiresIn: refreshExpiry }
   );
 
   return { accessToken, refreshToken };
@@ -165,10 +217,12 @@ exports.refreshToken = async (req, res) => {
     }
 
     // Generate new access token
+    const accessExpiry = getExpiryValue(process.env.JWT_ACCESS_EXPIRY, "15m");
+    
     const accessToken = jwt.sign(
       { userId: user.id, type: "access" },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_ACCESS_EXPIRY || "15m" }
+      { expiresIn: accessExpiry }
     );
 
     res.json({

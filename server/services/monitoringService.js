@@ -560,6 +560,19 @@ async function checkMonitoredSeries(series) {
  * Check all monitored content for a user (movies and series)
  */
 async function checkUserMonitoredContent(userId) {
+  // Check if autoDownload is enabled for this user
+  const settings = await Settings.findOne({ where: { userId } });
+  const autoDownload = settings?.autoDownload ?? true;
+  
+  if (!autoDownload) {
+    console.log(`[Monitoring] User ${userId} has auto download disabled`);
+    return {
+      movies: [],
+      series: [],
+      message: 'Auto-download disabled',
+    };
+  }
+  
   console.log(`[Monitoring] Checking all monitored content for user ${userId}`);
   
   const movieResults = [];

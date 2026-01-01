@@ -23,6 +23,15 @@ const getDownloadWatcherService = () => {
   return downloadWatcherService;
 };
 
+// Lazy load monitoring service
+let monitoringService = null;
+const getMonitoringService = () => {
+  if (!monitoringService) {
+    monitoringService = require('../services/monitoringService');
+  }
+  return monitoringService;
+};
+
 /**
  * Get user settings
  */
@@ -69,25 +78,126 @@ exports.updateSettings = async (req, res) => {
     const userId = req.userId;
     const updates = req.body;
 
-    // Validate directories if provided (skip if null or empty)
-    if (updates.movieDirectory && updates.movieDirectory.trim() !== '') {
+    // Validate media directories if provided (skip if null, undefined, or empty)
+    // These are separate from download watcher directories
+    // Only validate if a non-empty value is being set
+    if (updates.movieDirectory !== undefined && updates.movieDirectory !== null && String(updates.movieDirectory).trim() !== '') {
       try {
         await fs.access(updates.movieDirectory);
       } catch (error) {
-        return res.status(400).json({ 
-          error: 'Movie directory does not exist or is not accessible',
-          field: 'movieDirectory'
-        });
+        console.error('Movie directory validation error:', error);
+        // Don't fail if it's just for download watcher - only fail if user is actually setting media directory
+        // Check if this is a download watcher-only update
+        const isDownloadWatcherOnly = updates.movieDownloadDirectory !== undefined || 
+                                     updates.seriesDownloadDirectory !== undefined ||
+                                     updates.movieWatcherDestination !== undefined ||
+                                     updates.seriesWatcherDestination !== undefined;
+        
+        if (!isDownloadWatcherOnly) {
+          return res.status(400).json({ 
+            error: 'Movie directory does not exist or is not accessible',
+            field: 'movieDirectory',
+            message: error.message
+          });
+        }
+        // If it's a download watcher update, just log the warning but don't fail
+        console.warn('Movie directory validation failed but continuing (download watcher update)');
       }
     }
 
-    if (updates.seriesDirectory && updates.seriesDirectory.trim() !== '') {
+    if (updates.seriesDirectory !== undefined && updates.seriesDirectory !== null && String(updates.seriesDirectory).trim() !== '') {
       try {
         await fs.access(updates.seriesDirectory);
       } catch (error) {
+        console.error('Series directory validation error:', error);
+        // Don't fail if it's just for download watcher - only fail if user is actually setting media directory
+        const isDownloadWatcherOnly = updates.movieDownloadDirectory !== undefined || 
+                                     updates.seriesDownloadDirectory !== undefined ||
+                                     updates.movieWatcherDestination !== undefined ||
+                                     updates.seriesWatcherDestination !== undefined;
+        
+        if (!isDownloadWatcherOnly) {
+          return res.status(400).json({ 
+            error: 'Series directory does not exist or is not accessible',
+            field: 'seriesDirectory',
+            message: error.message
+          });
+        }
+        // If it's a download watcher update, just log the warning but don't fail
+        console.warn('Series directory validation failed but continuing (download watcher update)');
+      }
+    }
+
+    // Validate download watcher directories if provided
+    // Only validate if the directory is being set (not null/empty)
+    // For download watcher, you need BOTH source and destination for each type, but you can configure just movies OR just series
+    
+    // Movie download watcher: if either is set, both should be set
+    const hasMovieDownloadSource = updates.movieDownloadDirectory !== undefined && updates.movieDownloadDirectory !== null && String(updates.movieDownloadDirectory).trim() !== '';
+    const hasMovieDownloadDest = updates.movieWatcherDestination !== undefined && updates.movieWatcherDestination !== null && String(updates.movieWatcherDestination).trim() !== '';
+    
+    if (hasMovieDownloadSource || hasMovieDownloadDest) {
+      // If one is set, the other should also be set
+      if (!hasMovieDownloadSource || !hasMovieDownloadDest) {
         return res.status(400).json({ 
-          error: 'Series directory does not exist or is not accessible',
-          field: 'seriesDirectory'
+          error: 'Movie download watcher requires both download directory and destination directory',
+          field: hasMovieDownloadSource ? 'movieWatcherDestination' : 'movieDownloadDirectory'
+        });
+      }
+      
+      // Validate both exist
+      try {
+        await fs.access(updates.movieDownloadDirectory);
+      } catch (error) {
+        return res.status(400).json({ 
+          error: 'Movie download directory does not exist or is not accessible',
+          field: 'movieDownloadDirectory',
+          message: error.message
+        });
+      }
+      
+      try {
+        await fs.access(updates.movieWatcherDestination);
+      } catch (error) {
+        return res.status(400).json({ 
+          error: 'Movie watcher destination does not exist or is not accessible',
+          field: 'movieWatcherDestination',
+          message: error.message
+        });
+      }
+    }
+    
+    // Series download watcher: if either is set, both should be set
+    const hasSeriesDownloadSource = updates.seriesDownloadDirectory !== undefined && updates.seriesDownloadDirectory !== null && String(updates.seriesDownloadDirectory).trim() !== '';
+    const hasSeriesDownloadDest = updates.seriesWatcherDestination !== undefined && updates.seriesWatcherDestination !== null && String(updates.seriesWatcherDestination).trim() !== '';
+    
+    if (hasSeriesDownloadSource || hasSeriesDownloadDest) {
+      // If one is set, the other should also be set
+      if (!hasSeriesDownloadSource || !hasSeriesDownloadDest) {
+        return res.status(400).json({ 
+          error: 'Series download watcher requires both download directory and destination directory',
+          field: hasSeriesDownloadSource ? 'seriesWatcherDestination' : 'seriesDownloadDirectory'
+        });
+      }
+      
+      // Validate both exist
+      try {
+        await fs.access(updates.seriesDownloadDirectory);
+      } catch (error) {
+        return res.status(400).json({ 
+          error: 'Series download directory does not exist or is not accessible',
+          field: 'seriesDownloadDirectory',
+          message: error.message
+        });
+      }
+      
+      try {
+        await fs.access(updates.seriesWatcherDestination);
+      } catch (error) {
+        return res.status(400).json({ 
+          error: 'Series watcher destination does not exist or is not accessible',
+          field: 'seriesWatcherDestination',
+          message: error.message
         });
       }
     }
@@ -97,14 +207,23 @@ exports.updateSettings = async (req, res) => {
     
     // Track if auto-rename settings changed
     const autoRenameChanged = settings && (
-      settings.autoRename !== updates.autoRename ||
-      settings.autoRenameInterval !== updates.autoRenameInterval
+      updates.autoRename !== undefined && settings.autoRename !== updates.autoRename ||
+      updates.autoRenameInterval !== undefined && settings.autoRenameInterval !== updates.autoRenameInterval
     );
     
     if (!settings) {
       settings = await Settings.create({ userId, ...updates });
     } else {
-      await settings.update(updates);
+      // Only update fields that are provided in the request
+      const fieldsToUpdate = {};
+      Object.keys(updates).forEach(key => {
+        if (updates[key] !== undefined) {
+          fieldsToUpdate[key] = updates[key];
+        }
+      });
+      await settings.update(fieldsToUpdate);
+      // Reload to get updated values
+      await settings.reload();
     }
 
     // Update auto-rename service if settings changed
@@ -144,10 +263,33 @@ exports.updateSettings = async (req, res) => {
       }
     }
 
+    // Update monitoring scheduler if checkInterval or autoDownload changed
+    const monitoringSettingsChanged = (
+      updates.checkInterval !== undefined ||
+      updates.autoDownload !== undefined
+    );
+
+    if (monitoringSettingsChanged) {
+      try {
+        const { scheduleUserMonitoring } = getMonitoringService();
+        await scheduleUserMonitoring(userId);
+        console.log(`🔄 [Settings] Monitoring scheduler updated for user ${userId}: checkInterval=${settings.checkInterval}min, autoDownload=${settings.autoDownload}`);
+      } catch (monitoringError) {
+        console.error('Error updating monitoring scheduler:', monitoringError);
+        // Don't fail the request, just log the error
+      }
+    }
+
     res.json(settings);
   } catch (error) {
     console.error('Error updating settings:', error);
-    res.status(500).json({ error: 'Failed to update settings' });
+    // Provide more detailed error information
+    const errorMessage = error.message || 'Failed to update settings';
+    const statusCode = error.name === 'SequelizeValidationError' ? 400 : 500;
+    res.status(statusCode).json({ 
+      error: errorMessage,
+      details: error.errors || undefined
+    });
   }
 };
 
@@ -207,29 +349,82 @@ exports.testDirectory = async (req, res) => {
 
 /**
  * Browse directories (for directory picker)
+ * Supports network shares on Windows (UNC paths), macOS, and Linux
  */
 exports.browseDirectories = async (req, res) => {
   try {
     const { currentPath } = req.query;
     let browsePath = currentPath || '/';
 
+    // Handle Windows UNC paths (\\server\share)
+    const isWindowsUNC = browsePath.startsWith('\\\\') || browsePath.startsWith('//');
+    
     // Security: Prevent path traversal attacks
-    browsePath = path.resolve(browsePath);
+    // For UNC paths, normalize but preserve the UNC format
+    if (isWindowsUNC) {
+      // Normalize UNC path (convert // to \\, remove redundant separators)
+      browsePath = browsePath.replace(/[/\\]+/g, '\\');
+      // Ensure it starts with \\
+      if (!browsePath.startsWith('\\\\')) {
+        browsePath = '\\' + browsePath;
+      }
+    } else {
+      // For regular paths, use path.resolve but handle network mounts
+      // On macOS, network mounts are often in /Volumes
+      // On Linux, they might be in /mnt or /media
+      const normalized = path.resolve(browsePath);
+      
+      // Check if the resolved path is still accessible (network paths might resolve differently)
+      try {
+        await fs.access(normalized);
+        browsePath = normalized;
+      } catch {
+        // If resolved path doesn't exist, try the original (might be a network path)
+        try {
+          await fs.access(browsePath);
+          // Keep original path
+        } catch {
+          browsePath = normalized;
+        }
+      }
+    }
 
     try {
       const entries = await fs.readdir(browsePath, { withFileTypes: true });
       
       const directories = entries
         .filter(entry => entry.isDirectory())
-        .map(entry => ({
-          name: entry.name,
-          path: path.join(browsePath, entry.name),
-        }))
+        .map(entry => {
+          const entryPath = isWindowsUNC 
+            ? path.win32.join(browsePath, entry.name)
+            : path.join(browsePath, entry.name);
+          return {
+            name: entry.name,
+            path: entryPath,
+          };
+        })
         .sort((a, b) => a.name.localeCompare(b.name));
 
       // Add parent directory option if not at root
-      const parentPath = path.dirname(browsePath);
-      const isRoot = browsePath === path.parse(browsePath).root;
+      let parentPath = null;
+      let isRoot = false;
+      
+      if (isWindowsUNC) {
+        // For UNC paths, check if we're at the share root (\\server\share)
+        const parts = browsePath.split('\\').filter(p => p);
+        if (parts.length <= 2) {
+          isRoot = true;
+        } else {
+          parentPath = parts.slice(0, -1).join('\\');
+          if (!parentPath.startsWith('\\\\')) {
+            parentPath = '\\\\' + parentPath;
+          }
+        }
+      } else {
+        parentPath = path.dirname(browsePath);
+        const parsed = path.parse(browsePath);
+        isRoot = browsePath === parsed.root || browsePath === '/';
+      }
 
       res.json({
         currentPath: browsePath,
@@ -528,3 +723,4 @@ exports.rejectFile = async (req, res) => {
     res.status(500).json({ error: error.message || 'Failed to reject file' });
   }
 };
+

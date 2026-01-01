@@ -83,6 +83,7 @@ interface PendingFile {
   detectedAt: string;
 }
 
+
 interface WatcherStats {
   lastRun: string | null;
   filesProcessed: number;
@@ -231,11 +232,27 @@ const FileManagement = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       
-      // Merge with defaults to ensure all fields exist
-      setSettings({
+      // Merge with defaults, but preserve null values for optional fields
+      const loadedSettings = {
         ...DEFAULT_SETTINGS,
         ...response.data,
-      });
+        // Preserve null values for directories (don't overwrite with defaults)
+        movieDirectory: response.data.movieDirectory ?? DEFAULT_SETTINGS.movieDirectory,
+        seriesDirectory: response.data.seriesDirectory ?? DEFAULT_SETTINGS.seriesDirectory,
+        movieDownloadDirectory: response.data.movieDownloadDirectory ?? DEFAULT_SETTINGS.movieDownloadDirectory,
+        seriesDownloadDirectory: response.data.seriesDownloadDirectory ?? DEFAULT_SETTINGS.seriesDownloadDirectory,
+        movieWatcherDestination: response.data.movieWatcherDestination ?? DEFAULT_SETTINGS.movieWatcherDestination,
+        seriesWatcherDestination: response.data.seriesWatcherDestination ?? DEFAULT_SETTINGS.seriesWatcherDestination,
+        // Ensure boolean fields are properly set
+        downloadWatcherEnabled: response.data.downloadWatcherEnabled ?? false,
+        watcherAutoApprove: response.data.watcherAutoApprove ?? false,
+        autoRename: response.data.autoRename ?? false,
+        // Ensure numeric fields have defaults
+        watcherInterval: response.data.watcherInterval ?? 30,
+        autoRenameInterval: response.data.autoRenameInterval ?? 60,
+      };
+      
+      setSettings(loadedSettings);
       setLoading(false);
     } catch (error) {
       console.error("Error fetching settings:", error);
@@ -461,22 +478,53 @@ const FileManagement = () => {
 
     try {
       const token = localStorage.getItem("accessToken");
+      
+      // Ensure all download watcher fields are included, even if null
+      const settingsToSave = {
+        ...settings,
+        // Explicitly include all download watcher fields
+        downloadWatcherEnabled: settings.downloadWatcherEnabled ?? false,
+        movieDownloadDirectory: settings.movieDownloadDirectory || null,
+        seriesDownloadDirectory: settings.seriesDownloadDirectory || null,
+        movieWatcherDestination: settings.movieWatcherDestination || null,
+        seriesWatcherDestination: settings.seriesWatcherDestination || null,
+        watcherInterval: settings.watcherInterval || 30,
+        watcherAutoApprove: settings.watcherAutoApprove ?? false,
+        // Include other settings
+        movieDirectory: settings.movieDirectory || null,
+        seriesDirectory: settings.seriesDirectory || null,
+        movieFileFormat: settings.movieFileFormat || DEFAULT_SETTINGS.movieFileFormat,
+        seriesFileFormat: settings.seriesFileFormat || DEFAULT_SETTINGS.seriesFileFormat,
+        autoRename: settings.autoRename ?? false,
+        autoRenameInterval: settings.autoRenameInterval || 60,
+        autoRenameWarningShown: settings.autoRenameWarningShown ?? false,
+      };
+      
       const response = await axios.put(
         `${API_BASE_URL}/api/Settings`,
-        settings,
+        settingsToSave,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      setSettings({ ...DEFAULT_SETTINGS, ...response.data });
-      setMessage({ type: 'success', text: 'File management settings saved successfully!' });
       
-      // Auto-clear success message after 3 seconds
-      setTimeout(() => setMessage(null), 3000);
+      // Update local state with the saved settings from server
+      setSettings({ ...DEFAULT_SETTINGS, ...response.data });
+      setMessage({ type: 'success', text: 'Settings saved successfully! Your preferences have been saved.' });
+      
+      // Refresh watcher status after saving
+      if (settings.downloadWatcherEnabled) {
+        await fetchWatcherStatus();
+      }
+      
+      // Auto-clear success message after 5 seconds
+      setTimeout(() => setMessage(null), 5000);
     } catch (error: any) {
       console.error("Error saving settings:", error);
-      const errorMsg = error.response?.data?.error || 'Failed to save settings';
+      const errorMsg = error.response?.data?.error || error.response?.data?.message || 'Failed to save settings';
       setMessage({ type: 'error', text: errorMsg });
+      // Keep error message visible longer
+      setTimeout(() => setMessage(null), 5000);
     } finally {
       setSaving(false);
     }
@@ -906,11 +954,13 @@ const FileManagement = () => {
             <Button
               color="primary"
               variant="shadow"
+              size="lg"
               isLoading={saving}
               onPress={handleSave}
-              startContent={!saving && <Check size={18} />}
+              startContent={!saving && <Check size={20} />}
+              className="font-semibold"
             >
-              {saving ? 'Saving...' : 'Save Settings'}
+              {saving ? 'Saving Settings...' : 'Save All Settings'}
             </Button>
           </div>
         </div>
@@ -1260,6 +1310,47 @@ const FileManagement = () => {
                       onValueChange={(checked) => setSettings({ ...settings, watcherAutoApprove: checked })}
                       color="primary"
                     />
+                  </div>
+                )}
+
+                {/* Scan Interval (only shown when auto-move is enabled) */}
+                {settings.downloadWatcherEnabled && settings.watcherAutoApprove && (
+                  <div className="p-4 rounded-lg border border-primary/30 bg-primary/5 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Clock size={18} className="text-primary" />
+                      <div className="flex-1">
+                        <label htmlFor="watcherInterval" className="text-sm font-medium text-primary">
+                          Scan Interval (seconds)
+                        </label>
+                        <p className="text-xs text-default-500">
+                          How often to check for new downloads (minimum: 10 seconds)
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Input
+                        id="watcherInterval"
+                        type="number"
+                        min="10"
+                        max="3600"
+                        value={String(settings.watcherInterval || 30)}
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value) || 30;
+                          const clampedValue = Math.max(10, Math.min(3600, value));
+                          setSettings({ ...settings, watcherInterval: clampedValue });
+                        }}
+                        className="max-w-32"
+                        startContent={
+                          <Clock size={16} className="text-default-400" />
+                        }
+                        endContent={
+                          <span className="text-xs text-default-400">sec</span>
+                        }
+                      />
+                      <div className="text-xs text-default-500">
+                        Currently scanning every <strong>{settings.watcherInterval || 30}s</strong>
+                      </div>
+                    </div>
                   </div>
                 )}
 

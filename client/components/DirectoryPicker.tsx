@@ -4,6 +4,8 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import "../styles/DirectoryPicker.scss";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
+
 interface Directory {
   name: string;
   path: string;
@@ -29,16 +31,31 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
   placeholder = "Select a directory",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [currentPath, setCurrentPath] = useState<string>("/Users");
+  const [currentPath, setCurrentPath] = useState<string>("/");
   const [directories, setDirectories] = useState<Directory[]>([]);
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Determine starting path based on OS and value
+  const getStartPath = () => {
+    if (value) {
+      return value;
+    }
+    // Default starting paths based on platform
+    if (typeof window !== 'undefined') {
+      const isWindows = navigator.platform.toLowerCase().includes('win');
+      if (isWindows) {
+        return 'C:\\';
+      }
+    }
+    // macOS/Linux - start at root or /Volumes for network mounts
+    return '/';
+  };
+
   useEffect(() => {
     if (isOpen) {
-      // Start at user's home directory or the current value
-      const startPath = value || "/Users";
+      const startPath = getStartPath();
       fetchDirectories(startPath);
     }
   }, [isOpen]);
@@ -48,9 +65,9 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
     setError(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
       const response = await axios.get<DirectoryBrowserResponse>(
-        `http://localhost:3013/api/Settings/browse?currentPath=${encodeURIComponent(path)}`,
+        `${API_BASE_URL}/api/Settings/browse?currentPath=${encodeURIComponent(path)}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }

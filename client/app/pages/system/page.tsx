@@ -54,13 +54,22 @@ const System = () => {
 
     try {
       const token = localStorage.getItem("token");
+      // Only send the fields that are editable on this page
+      const updateData = {
+        minQuality: settings.minQuality,
+        maxQuality: settings.maxQuality,
+        autoDownload: settings.autoDownload,
+        checkInterval: settings.checkInterval,
+      };
+      
       const response = await axios.put(
         "http://localhost:3013/api/Settings",
-        settings,
+        updateData,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
+      // Update local state with the full response
       setSettings(response.data);
       setMessage({ type: 'success', text: 'Settings saved successfully!' });
       
@@ -68,7 +77,7 @@ const System = () => {
       setTimeout(() => setMessage(null), 3000);
     } catch (error: any) {
       console.error("Error saving settings:", error);
-      const errorMsg = error.response?.data?.error || 'Failed to save settings';
+      const errorMsg = error.response?.data?.error || error.response?.data?.message || 'Failed to save settings';
       setMessage({ type: 'error', text: errorMsg });
     } finally {
       setSaving(false);

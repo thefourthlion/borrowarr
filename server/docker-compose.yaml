@@ -1,5 +1,6 @@
 services:
   borrowarr-server:
+    restart: unless-stopped
     build: .
     container_name: borrowarr-server
     ports:

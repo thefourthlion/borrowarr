@@ -252,9 +252,9 @@ exports.testIndexer = async (req, res) => {
       console.log(`[Test] Using Cardigann for: ${indexer.name}`);
       
       const path = require('path');
-      const { CardigannEngine } = require('../cardigann');
+      const { getCardigannEngine } = require('../cardigann');
       const definitionsPath = path.join(__dirname, '../cardigann-indexer-yamls');
-      const cardigann = new CardigannEngine(definitionsPath);
+      const cardigann = getCardigannEngine(definitionsPath);
       
       // Find matching Cardigann definition
       const allCardigannIndexers = cardigann.getAllIndexers();

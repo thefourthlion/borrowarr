@@ -49,8 +49,6 @@ class DefinitionLoader {
       
       this.validateDefinition(definition);
       this.definitions.set(definition.id, definition);
-      
-      console.log(`   📄 Loaded: ${definition.name} (${definition.id})`);
     } catch (error) {
       console.error(`Error loading ${filePath}:`, error.message);
     }

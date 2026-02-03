@@ -3,11 +3,26 @@
  * Complete implementation compatible with Prowlarr's Cardigann YAML definitions
  */
 
+const path = require('path');
 const CardigannLoader = require('./loader');
 const CardigannScraper = require('./scraper');
 const CardigannTemplateEngine = require('./templateEngine');
 const CardigannFilterEngine = require('./filterEngine');
 const CardigannParser = require('./parser');
+
+const defaultDefinitionsPath = path.join(__dirname, '..', 'cardigann-indexer-yamls');
+let sharedEngine = null;
+
+/**
+ * Get shared Cardigann engine (loads definitions once, avoids duplicate logs)
+ */
+function getCardigannEngine(definitionsPath) {
+  const pathToUse = definitionsPath || defaultDefinitionsPath;
+  if (!sharedEngine) {
+    sharedEngine = new CardigannEngine(pathToUse);
+  }
+  return sharedEngine;
+}
 
 class CardigannEngine {
   constructor(definitionsPath) {
@@ -91,6 +106,7 @@ class CardigannEngine {
 
 module.exports = {
   CardigannEngine,
+  getCardigannEngine,
   CardigannLoader,
   CardigannScraper,
   CardigannTemplateEngine,

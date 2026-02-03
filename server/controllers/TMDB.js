@@ -7,11 +7,10 @@ const tmdbService = require('../services/tmdbService');
 const { searchIndexers } = require('../services/indexerSearch');
 const Indexers = require('../models/Indexers');
 const path = require('path');
-const { CardigannEngine } = require('../cardigann');
+const { getCardigannEngine } = require('../cardigann');
 
-// Initialize Cardigann engine
 const definitionsPath = path.join(__dirname, '../cardigann-indexer-yamls');
-const cardigann = new CardigannEngine(definitionsPath);
+const cardigann = getCardigannEngine(definitionsPath);
 
 // Cache genre lists
 let movieGenresCache = null;

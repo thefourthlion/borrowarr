@@ -2,11 +2,10 @@ const Indexers = require("../models/Indexers");
 const Categories = require("../models/Categories");
 const { searchIndexers } = require("../services/indexerSearch");
 const path = require("path");
-const { CardigannEngine } = require("../cardigann");
+const { getCardigannEngine } = require("../cardigann");
 
-// Initialize Cardigann engine
 const definitionsPath = path.join(__dirname, '../cardigann-indexer-yamls');
-const cardigann = new CardigannEngine(definitionsPath);
+const cardigann = getCardigannEngine(definitionsPath);
 
 // In-memory cache with TTL
 const cache = new Map();

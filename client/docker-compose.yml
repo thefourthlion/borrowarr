@@ -1,3 +1,5 @@
+name: borrowarr-client
+
 services:
   borrowarr-client:
     container_name: borrowarr-client

@@ -119,8 +119,12 @@ export const Navbar = () => {
   }, [accountDropdownOpen, discoverDropdownOpen, settingsDropdownOpen]);
 
   return (
-    <NextUINavbar maxWidth="xl" position="sticky" className="bg-content1/80 backdrop-blur-xl border-b border-secondary/20">
-      <NavbarContent className="basis-1/5 sm:basis-full" justify="start">
+    <NextUINavbar
+      maxWidth="xl"
+      position="sticky"
+      className="bg-content1/80 backdrop-blur-xl border-b border-secondary/20 px-4 sm:px-6"
+    >
+      <NavbarContent className="basis-1/5 sm:basis-full min-w-0" justify="start">
         <NavbarBrand as="li" className="gap-3 max-w-fit">
           <NextLink className="flex justify-start items-center gap-2 group" href="/">
             <div className="text-secondary group-hover:scale-110 transition-transform">
@@ -411,10 +415,10 @@ export const Navbar = () => {
       </NavbarContent>
 
       <NavbarContent
-        className="hidden sm:flex basis-1/5 sm:basis-full"
+        className="hidden sm:flex basis-1/5 sm:basis-full min-w-0 flex-1"
         justify="end"
       >
-        <NavbarItem className="hidden md:flex flex-grow max-w-md gap-2">
+        <NavbarItem className="hidden md:flex flex-grow min-w-0 max-w-md gap-2">
           {indexers.length > 0 && (
             <Select
               aria-label="Select indexer"
@@ -440,7 +444,7 @@ export const Navbar = () => {
           )}
           <Input
             classNames={{
-              base: "w-full",
+              base: "w-full min-w-0",
               mainWrapper: "h-full",
               input: "text-small",
               inputWrapper: "h-full font-normal bg-content2 border border-secondary/20 hover:border-secondary/40 transition-colors",
@@ -454,7 +458,7 @@ export const Navbar = () => {
             onKeyPress={handleSearchKeyPress}
           />
         </NavbarItem>
-        <NavbarItem>
+        <NavbarItem className="flex-shrink-0">
           <Button
             as={NextLink}
             href="/pages/products"
@@ -465,7 +469,7 @@ export const Navbar = () => {
             Premium
           </Button>
         </NavbarItem>
-        <NavbarItem>
+        <NavbarItem className="flex-shrink-0">
           <Button 
             color="secondary" 
             variant="solid" 
@@ -475,7 +479,7 @@ export const Navbar = () => {
             {user ? "Logout" : "Login"}
           </Button>
         </NavbarItem>
-        <NavbarItem className="hidden sm:flex gap-2">
+        <NavbarItem className="hidden sm:flex gap-2 flex-shrink-0">
           <ThemeSwitch />
         </NavbarItem>
       </NavbarContent>

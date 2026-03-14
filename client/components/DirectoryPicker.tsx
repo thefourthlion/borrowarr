@@ -65,7 +65,7 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
     setError(null);
 
     try {
-      const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       const response = await axios.get<DirectoryBrowserResponse>(
         `${API_BASE_URL}/api/Settings/browse?currentPath=${encodeURIComponent(path)}`,
         {

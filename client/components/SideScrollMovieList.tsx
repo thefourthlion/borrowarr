@@ -167,7 +167,7 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
     if (!user) return;
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       const response = await axios.get(`${API_BASE_URL}/api/Favorites`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -187,7 +187,7 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
     if (!user) return;
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       const response = await axios.get(`${API_BASE_URL}/api/HiddenMedia`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -355,7 +355,7 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
     setFavoritingIds((prev) => new Set(prev).add(item.id));
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       
       if (isFavorited) {
         await axios.delete(`${API_BASE_URL}/api/Favorites`, {
@@ -417,7 +417,7 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
     setHidingIds((prev) => new Set(prev).add(item.id));
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       
       if (isHidden) {
         // Unhide

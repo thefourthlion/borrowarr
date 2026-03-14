@@ -102,7 +102,7 @@ const PlexConnection = () => {
       setLoading(true);
       const response = await axios.get(`${API_BASE_URL}/api/PlexConnection`, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
         },
       });
       setConnection(response.data);
@@ -120,7 +120,7 @@ const PlexConnection = () => {
       setLoadingLibraries(true);
       const response = await axios.get(`${API_BASE_URL}/api/PlexConnection/libraries`, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
         },
       });
       if (response.data.success) {
@@ -148,7 +148,7 @@ const PlexConnection = () => {
         { serverUrl, authToken },
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
           },
         }
       );
@@ -178,7 +178,7 @@ const PlexConnection = () => {
         { serverUrl, authToken },
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
           },
         }
       );
@@ -206,7 +206,7 @@ const PlexConnection = () => {
     try {
       await axios.delete(`${API_BASE_URL}/api/PlexConnection`, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
         },
       });
       await fetchConnection();
@@ -224,7 +224,7 @@ const PlexConnection = () => {
         {},
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
           },
         }
       );

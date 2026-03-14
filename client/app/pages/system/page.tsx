@@ -35,7 +35,7 @@ const System = () => {
 
   const fetchSettings = async () => {
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       const response = await axios.get("http://localhost:3013/api/Settings", {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -53,7 +53,7 @@ const System = () => {
     setMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       // Only send the fields that are editable on this page
       const updateData = {
         minQuality: settings.minQuality,

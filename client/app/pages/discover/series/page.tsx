@@ -259,7 +259,7 @@ const SeriesPage = () => {
   useEffect(() => {
     if (!user) return;
 
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("accessToken");
     if (!token) return;
 
     axios.get(`${API_BASE_URL}/api/Indexers/read`, {
@@ -280,7 +280,7 @@ const SeriesPage = () => {
   // Fetch favorites
   useEffect(() => {
     if (user) {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       axios.get(`${API_BASE_URL}/api/Favorites/ids?mediaType=tv`, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -298,7 +298,7 @@ const SeriesPage = () => {
   // Fetch hidden media
   useEffect(() => {
     if (user) {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       axios.get(`${API_BASE_URL}/api/HiddenMedia?mediaType=series`, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -748,7 +748,7 @@ const SeriesPage = () => {
     setFavoritingIds((prev) => new Set(prev).add(item.id));
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       
       if (isFavorited) {
         // Remove from favorites
@@ -818,7 +818,7 @@ const SeriesPage = () => {
     setHidingIds((prev) => new Set(prev).add(item.id));
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       
       if (isHidden) {
         // Unhide

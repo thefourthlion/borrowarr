@@ -121,7 +121,7 @@ const FavoritesPage = () => {
     }
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       const params: any = { page, limit: 20 };
 
       if (mediaTypeFilter && mediaTypeFilter !== 'all') {
@@ -208,7 +208,7 @@ const FavoritesPage = () => {
     if (!user) return;
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       await axios.delete(`${API_BASE_URL}/api/Favorites`, {
         headers: { Authorization: `Bearer ${token}` },
         data: {

@@ -83,7 +83,7 @@ const Users = () => {
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       const response = await axios.get(`${API_BASE_URL}/api/Users/read`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -99,7 +99,7 @@ const Users = () => {
   const fetchSettings = useCallback(async () => {
     try {
       setLoadingSettings(true);
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       const response = await axios.get(`${API_BASE_URL}/api/Settings`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -151,7 +151,7 @@ const Users = () => {
   const handleSaveUser = async () => {
     try {
       setSaving(true);
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       
       if (editingUser) {
         // Update existing user
@@ -194,7 +194,7 @@ const Users = () => {
     if (!confirm("Are you sure you want to delete this user?")) return;
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       await axios.delete(`${API_BASE_URL}/api/Users/delete/${userId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -208,7 +208,7 @@ const Users = () => {
 
   const handleTogglePublicRegistration = async (enabled: boolean) => {
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       await axios.put(
         `${API_BASE_URL}/api/Settings`,
         { publicRegistrationEnabled: enabled },

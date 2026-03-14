@@ -84,7 +84,7 @@ const HiddenMediaPage = () => {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       const params: any = {};
 
       if (mediaTypeFilter && mediaTypeFilter !== 'all') {
@@ -139,7 +139,7 @@ const HiddenMediaPage = () => {
     setUnhiding((prev) => new Set(prev).add(item.tmdbId));
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       
       await axios.post(
         `${API_BASE_URL}/api/HiddenMedia/unhide`,

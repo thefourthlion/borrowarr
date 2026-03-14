@@ -62,7 +62,7 @@ export const Navbar = () => {
   useEffect(() => {
     if (!user) return;
 
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("accessToken");
     if (!token) return;
 
     axios.get(`${API_BASE_URL}/api/Indexers/read`, {

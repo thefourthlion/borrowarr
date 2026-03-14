@@ -130,7 +130,7 @@ const MediaLibrary = () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/PlexConnection`, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
         },
       });
 
@@ -169,7 +169,7 @@ const MediaLibrary = () => {
 
       const response = await axios.get(`${API_BASE_URL}/api/PlexConnection/media`, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
         },
         params,
       });

@@ -6,6 +6,12 @@ const PORT = process.env.PORT || 3013;
 const { connectDB } = require("./config/database");
 require("dotenv").config({ path: "./.env" });
 
+// Fail fast if JWT secrets are missing (prevents 401s after rebuilds with new/missing env)
+if (!process.env.JWT_SECRET || !process.env.JWT_REFRESH_SECRET) {
+  console.error("❌ Missing JWT_SECRET or JWT_REFRESH_SECRET in environment. Set them in .env and keep the same values across server deploys so existing tokens remain valid.");
+  process.exit(1);
+}
+
 // Security middleware
 app.use(helmet({
   contentSecurityPolicy: false, // Disable CSP for API

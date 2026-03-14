@@ -259,7 +259,7 @@ const MoviesPage = () => {
   useEffect(() => {
     if (!user) return;
 
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("accessToken");
     if (!token) return;
 
     axios.get(`${API_BASE_URL}/api/Indexers/read`, {
@@ -280,7 +280,7 @@ const MoviesPage = () => {
   // Fetch favorites
   useEffect(() => {
     if (user) {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       axios.get(`${API_BASE_URL}/api/Favorites/ids?mediaType=movie`, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -298,7 +298,7 @@ const MoviesPage = () => {
   // Fetch hidden media
   useEffect(() => {
     if (user) {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       axios.get(`${API_BASE_URL}/api/HiddenMedia?mediaType=movie`, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -716,7 +716,7 @@ const MoviesPage = () => {
     setFavoritingIds((prev) => new Set(prev).add(item.id));
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       
       if (isFavorited) {
         // Remove from favorites
@@ -786,7 +786,7 @@ const MoviesPage = () => {
     setHidingIds((prev) => new Set(prev).add(item.id));
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("accessToken");
       
       if (isHidden) {
         // Unhide

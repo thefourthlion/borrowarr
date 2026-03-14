@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import axios from "axios";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
@@ -64,45 +64,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Shared refresh promise so concurrent 401s don't each trigger a refresh
+  const refreshPromiseRef = useRef<Promise<string | null> | null>(null);
+
   // Set up axios interceptor for token refresh
   useEffect(() => {
     const interceptor = axios.interceptors.response.use(
       (response) => response,
       async (error) => {
         const originalRequest = error.config;
+        const isAuthEndpoint =
+          originalRequest?.url?.includes("/api/auth/refresh") ||
+          originalRequest?.url?.includes("/api/auth/verify");
 
-        // If error is 401 and we haven't tried to refresh yet
-        if (error.response?.status === 401 && !originalRequest._retry) {
-          originalRequest._retry = true;
-
-          try {
-            const { refreshToken } = getTokens();
-            // If no refresh token, user is not logged in - just reject the request
-            if (!refreshToken) {
-              clearTokens();
-              setUser(null);
-              return Promise.reject(error);
-            }
-
-            const response = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {
-              refreshToken,
-            });
-
-            const { accessToken } = response.data;
-            setTokens(accessToken, refreshToken);
-
-            // Retry original request with new token
-            originalRequest.headers["Authorization"] = `Bearer ${accessToken}`;
-            return axios(originalRequest);
-          } catch (refreshError) {
-            // Refresh failed, logout user
+        // Never retry refresh/verify with another refresh (stops 401 loop)
+        if (isAuthEndpoint) {
+          if (originalRequest?.url?.includes("/api/auth/refresh")) {
             clearTokens();
             setUser(null);
-            return Promise.reject(refreshError);
           }
+          return Promise.reject(error);
         }
 
-        return Promise.reject(error);
+        if (error.response?.status !== 401 || originalRequest._retry) {
+          return Promise.reject(error);
+        }
+        originalRequest._retry = true;
+
+        const { refreshToken: token } = getTokens();
+        if (!token) {
+          clearTokens();
+          setUser(null);
+          return Promise.reject(error);
+        }
+
+        try {
+          // One refresh at a time: reuse in-flight refresh promise
+          if (!refreshPromiseRef.current) {
+            refreshPromiseRef.current = axios
+              .post(`${API_BASE_URL}/api/auth/refresh`, { refreshToken: token })
+              .then((res) => {
+                const newAccess = res.data?.accessToken;
+                if (newAccess) setTokens(newAccess, token);
+                return newAccess;
+              })
+              .catch((err) => {
+                clearTokens();
+                setUser(null);
+                return null;
+              })
+              .finally(() => {
+                refreshPromiseRef.current = null;
+              });
+          }
+          const newAccessToken = await refreshPromiseRef.current;
+          if (!newAccessToken) return Promise.reject(error);
+          originalRequest.headers["Authorization"] = `Bearer ${newAccessToken}`;
+          return axios(originalRequest);
+        } catch (refreshError) {
+          return Promise.reject(refreshError);
+        }
       }
     );
 

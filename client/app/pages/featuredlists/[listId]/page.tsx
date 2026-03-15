@@ -515,7 +515,7 @@ const FeaturedListDetail = () => {
             />
           ) : null}
           <PlexBadge
-            show={!!user && hasConnection && isInPlex(title, year, (item.media_type || mediaType) === 'tv' ? 'tv' : 'movie')}
+            show={!!user && hasConnection && isInPlex(title, year ?? undefined, (item.media_type || mediaType) === 'tv' ? 'tv' : 'movie')}
             title="On Plex"
           />
           {!posterUrl && (

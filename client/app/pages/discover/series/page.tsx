@@ -931,7 +931,7 @@ const SeriesPage = () => {
 
           {/* Plex badge - Bottom Left (when in library) */}
           <PlexBadge
-            show={!!user && hasConnection && isInPlex(title, year, 'tv')}
+            show={!!user && hasConnection && isInPlex(title, year ?? undefined, 'tv')}
             title="On Plex"
           />
           

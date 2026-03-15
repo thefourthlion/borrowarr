@@ -899,7 +899,7 @@ const MoviesPage = () => {
 
           {/* Plex badge - Bottom Left (when in library) */}
           <PlexBadge
-            show={!!user && hasConnection && isInPlex(title, year, 'movie')}
+            show={!!user && hasConnection && isInPlex(title, year ?? undefined, 'movie')}
             title="On Plex"
           />
           

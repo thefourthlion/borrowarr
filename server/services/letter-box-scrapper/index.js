@@ -1,119 +1,172 @@
-const axios = require('axios');
+const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 const FeaturedList = require('../../models/FeaturedLists');
 
 /**
  * Letterboxd Scraper Service
- * 
- * This service scrapes publicly accessible featured lists from Letterboxd
- * in compliance with their Terms of Service for automated access.
- * 
- * Key Compliance Points:
- * - Only accesses publicly available data (no authentication required)
- * - Respects robots.txt
- * - Operates at reasonable request rates (delays between requests)
- * - Does not circumvent technical protections
- * - Does not degrade service performance
+ *
+ * Uses Puppeteer (visible browser by default) to scrape Letterboxd.
+ * Set LETTERBOXD_HEADLESS=true to run headless.
  */
 
+const DEFAULT_DELAY = 2000;
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 5000;
+const LIST_PAGE_TIMEOUT = 60000; // List pages have many posters, need longer
+
 class LetterboxdScraper {
-  constructor() {
+  constructor(options = {}) {
     this.baseUrl = 'https://letterboxd.com';
-    this.requestDelay = 2000; // 2 seconds between requests
-    this.userAgent = 'BorrowArr/1.0 (Media Management Application)';
+    this.requestDelay = options.requestDelay ?? DEFAULT_DELAY;
+    this.headless = options.headless ?? (process.env.LETTERBOXD_HEADLESS === 'true');
+    this.browser = null;
+    this.page = null;
   }
 
-  /**
-   * Add delay between requests to be respectful
-   */
-  async delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  async delay(ms = this.requestDelay) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  /**
-   * Make a request with proper headers and error handling
-   */
-  async makeRequest(url) {
-    try {
-      const response = await axios.get(url, {
-        headers: {
-          'User-Agent': this.userAgent,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          'Accept-Encoding': 'gzip, deflate',
-          'DNT': '1',
-          'Connection': 'keep-alive',
-          'Upgrade-Insecure-Requests': '1',
-        },
-        timeout: 10000,
-      });
-      return response.data;
-    } catch (error) {
-      console.error(`Error fetching ${url}:`, error.message);
-      throw error;
+  async init() {
+    if (this.browser) return;
+    console.log(this.headless ? 'Launching browser (headless)...' : 'Launching browser (visible)...');
+    this.browser = await puppeteer.launch({
+      headless: this.headless,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      defaultViewport: { width: 1280, height: 800 },
+    });
+    this.page = await this.browser.newPage();
+    await this.page.setUserAgent(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    );
+  }
+
+  async close() {
+    if (this.browser) {
+      await this.browser.close();
+      this.browser = null;
+      this.page = null;
+      console.log('Browser closed.');
+    }
+  }
+
+  async makeRequest(url, options = {}) {
+    const { retries = MAX_RETRIES, timeout = 30000, waitUntil = 'load' } = options;
+    await this.init();
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const response = await this.page.goto(url, {
+          waitUntil,
+          timeout,
+        });
+        if (response && response.status() >= 400) {
+          throw new Error(`Request failed with status code ${response.status()}`);
+        }
+        const html = await this.page.content();
+        return html;
+      } catch (error) {
+        const isLast = attempt === retries;
+        console.error(`Request failed (attempt ${attempt}/${retries}): ${url}`, error.message);
+        if (isLast) throw error;
+        await this.delay(RETRY_DELAY);
+      }
+    }
+  }
+
+  /** Request for list detail pages (many posters) - longer timeout, waits for content */
+  async makeListPageRequest(url) {
+    await this.init();
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const response = await this.page.goto(url, {
+          waitUntil: 'domcontentloaded',
+          timeout: LIST_PAGE_TIMEOUT,
+        });
+        if (response && response.status() >= 400) {
+          throw new Error(`Request failed with status code ${response.status()}`);
+        }
+        await this.page.waitForSelector('li.posteritem, .poster-list, .js-list-entries, body', {
+          timeout: 15000,
+        });
+        const html = await this.page.content();
+        return html;
+      } catch (error) {
+        const isLast = attempt === MAX_RETRIES;
+        console.error(`Request failed (attempt ${attempt}/${MAX_RETRIES}): ${url}`, error.message);
+        if (isLast) throw error;
+        await this.delay(RETRY_DELAY);
+      }
     }
   }
 
   /**
-   * Scrape the featured lists page
+   * Scrape the featured lists page - gets EVERY list on the page
    */
   async scrapeFeaturedListsPage() {
     console.log('Scraping Letterboxd featured lists...');
-    
     const url = `${this.baseUrl}/lists/featured/`;
     const html = await this.makeRequest(url);
     const $ = cheerio.load(html);
 
     const lists = [];
 
-    // Find all list sections
-    $('.list').each((index, element) => {
+    $('section.list.js-list, section.list').each((index, element) => {
       try {
-        const $list = $(element);
-        
-        // Extract list URL
-        const listLink = $list.find('.poster-list-link').attr('href');
+        const $section = $(element);
+
+        const listLink = $section.find('a.poster-list-link').attr('href');
         if (!listLink) return;
-        
-        const listUrl = `${this.baseUrl}${listLink}`;
-        // Extract slug from URL: /username/list/slug-name/
-        const pathParts = listLink.split('/').filter(p => p);
-        const slug = pathParts.length >= 3 ? pathParts[2] : `list-${index}`;
-        
-        // Extract title (from the link or heading)
-        const title = $list.find('.list-title a').text().trim() || 
-                     $list.find('h3 a').text().trim();
-        
+
+        const listUrl = listLink.startsWith('http') ? listLink : `${this.baseUrl}${listLink}`;
+        const pathParts = listLink.replace(/\/$/, '').split('/').filter(Boolean);
+        const slug = pathParts.length >= 3 ? pathParts[pathParts.length - 1] : `list-${index}`;
+
+        const title =
+          $section.find('h3.title-3 a').text().trim() ||
+          $section.find('h3 a').text().trim() ||
+          $section.find('.list-title a').text().trim();
         if (!title || !slug) return;
 
-        // Extract author info
-        const authorLink = $list.find('.list-owner a').attr('href') || 
-                          $list.find('.avatar').attr('href');
-        const author = authorLink ? authorLink.replace('/', '') : null;
+        const authorLink =
+          $section.find('.attribution-block .owner').attr('href') ||
+          $section.find('.attribution-block a.avatar').attr('href') ||
+          $section.find('.list-owner a').attr('href');
+        const author = authorLink ? authorLink.replace(/^\//, '').replace(/\/$/, '') : null;
         const authorUrl = author ? `${this.baseUrl}/${author}/` : null;
 
-        // Extract film count
-        const filmCountText = $list.find('.list-number').text().trim();
-        const filmCount = filmCountText ? parseInt(filmCountText.replace(/[^\d]/g, '')) : 0;
+        const filmCountText =
+          $section.find('.content-reactions-strip .value').text().trim() ||
+          $section.find('.list-number').text().trim();
+        const filmCountParsed = filmCountText ? parseInt(String(filmCountText).replace(/[^\d]/g, ''), 10) : 0;
+        const filmCount = Number.isNaN(filmCountParsed) ? 0 : filmCountParsed;
 
-        // Extract poster URLs (up to 5)
         const posterUrls = [];
-        $list.find('.posterlist img').each((i, img) => {
-          if (i < 5) {
-            let posterSrc = $(img).attr('src');
-            if (posterSrc) {
-              // Convert to higher resolution if possible
-              posterSrc = posterSrc.replace('-70-0-105', '-230-0-345');
-              posterUrls.push(posterSrc);
+        $section.find('.posterlist img, .posterlist .poster img, .poster.film-poster img').each((i, img) => {
+          if (i < 10) {
+            let src = $(img).attr('src');
+            if (src && !src.includes('empty-poster')) {
+              src = src.replace(/-70-0-105|-0-70-0-105/, '-230-0-345');
+              posterUrls.push(src);
             }
           }
         });
+        if (posterUrls.length === 0) {
+          $section.find('[data-poster-url]').each((i, el) => {
+            if (i < 10) {
+              const path = $(el).attr('data-poster-url');
+              if (path && !path.includes('empty')) {
+                posterUrls.push(path.startsWith('http') ? path : `${this.baseUrl}${path}`);
+              }
+            }
+          });
+        }
 
-        // Extract likes and comments if available
-        const likesText = $list.find('.like-count').text().trim();
-        const commentsText = $list.find('.comment-count').text().trim();
-        const likes = likesText ? parseInt(likesText.replace(/[^\d]/g, '')) : 0;
-        const comments = commentsText ? parseInt(commentsText.replace(/[^\d]/g, '')) : 0;
+        const likesText = $section.find('.like-count').text().trim();
+        const commentsText = $section.find('.comment-count').text().trim();
+        const likesParsed = likesText ? parseInt(String(likesText).replace(/[^\d]/g, ''), 10) : 0;
+        const likes = Number.isNaN(likesParsed) ? 0 : likesParsed;
+        const commentsParsed = commentsText ? parseInt(String(commentsText).replace(/[^\d]/g, ''), 10) : 0;
+        const comments = Number.isNaN(commentsParsed) ? 0 : commentsParsed;
 
         lists.push({
           slug,
@@ -128,76 +181,115 @@ class LetterboxdScraper {
           category: 'community',
           featured: true,
         });
-      } catch (error) {
-        console.error('Error parsing list:', error.message);
+      } catch (err) {
+        console.error('Error parsing list:', err.message);
       }
     });
 
-    console.log(`Found ${lists.length} featured lists`);
+    console.log(`Found ${lists.length} lists`);
     return lists;
   }
 
-  /**
-   * Scrape a specific list to get all films
-   */
-  async scrapeListDetails(listUrl) {
-    console.log(`Scraping list details: ${listUrl}`);
-    
-    const html = await this.makeRequest(listUrl);
-    const $ = cheerio.load(html);
+  _extractFilmFromPosterItem($, $el, position) {
+    const $comp = $el.find('[data-item-slug]').first();
+    if ($comp.length === 0) return null;
 
-    const films = [];
+    const filmSlug = $comp.attr('data-item-slug');
+    const filmName = $comp.attr('data-item-name') || $comp.attr('data-item-full-display-name');
+    const filmLink = $comp.attr('data-item-link') || $comp.attr('data-target-link');
+    const filmId = $comp.attr('data-film-id');
 
-    // Extract films from the list
-    $('.poster-container').each((index, element) => {
-      try {
-        const $film = $(element);
-        
-        // Extract film slug and title
-        const filmLink = $film.find('a').attr('href');
-        if (!filmLink) return;
-        
-        const filmSlug = filmLink.split('/')[2]; // /film/slug/
-        const filmTitle = $film.find('img').attr('alt');
-        
-        // Extract poster
-        const posterUrl = $film.find('img').attr('src');
-        
-        // Extract rating if available
-        const ratingText = $film.find('.rating').text().trim();
-        const rating = ratingText ? parseFloat(ratingText) : null;
+    if (!filmSlug) return null;
 
-        films.push({
-          slug: filmSlug,
-          title: filmTitle,
-          posterUrl: posterUrl ? posterUrl.replace('-70-0-105', '-230-0-345') : null,
-          letterboxdUrl: `${this.baseUrl}/film/${filmSlug}/`,
-          rating,
-          position: index + 1,
-        });
-      } catch (error) {
-        console.error('Error parsing film:', error.message);
-      }
-    });
+    let posterUrl = $el.find('img').attr('src');
+    if (posterUrl && !posterUrl.includes('empty-poster')) {
+      posterUrl = posterUrl.replace(/-70-0-105|-0-70-0-105|-0-125-0-187/, '-230-0-345');
+    } else {
+      posterUrl = null;
+    }
 
-    // Extract list metadata
-    const listTitle = $('.list-title-intro h1').text().trim();
-    const listDescription = $('.body-text').first().text().trim();
-    const filmCount = films.length;
-
-    console.log(`Found ${films.length} films in list`);
+    const positionEl = $el.find('.list-number').text().trim();
+    const pos = positionEl ? parseInt(positionEl, 10) : position;
 
     return {
-      title: listTitle,
-      description: listDescription,
-      filmCount,
-      films,
+      slug: filmSlug,
+      title: filmName || filmSlug,
+      posterUrl,
+      letterboxdUrl: filmLink ? `${this.baseUrl}${filmLink}` : `${this.baseUrl}/film/${filmSlug}/`,
+      letterboxdFilmId: filmId ? parseInt(filmId, 10) : null,
+      position: pos,
     };
   }
 
-  /**
-   * Save or update a list in the database
-   */
+  async _scrapeListFilmsPage(listUrl, pageNum = 1) {
+    const base = listUrl.replace(/\/$/, '');
+    const url = pageNum > 1 ? `${base}/page/${pageNum}/` : `${base}/`;
+    const html = await this.makeListPageRequest(url);
+    const $ = cheerio.load(html);
+
+    const films = [];
+    $('li.posteritem, li.posteritem.numbered-list-item').each((index, el) => {
+      const film = this._extractFilmFromPosterItem($, $(el), index + 1);
+      if (film) films.push(film);
+    });
+
+    if (films.length === 0) {
+      $('.poster-list li.posteritem, .js-list-entries li.posteritem').each((index, el) => {
+        const film = this._extractFilmFromPosterItem($, $(el), index + 1);
+        if (film) films.push(film);
+      });
+    }
+
+    const hasNext = $('.pagination a.next[href]').length > 0;
+
+    return { films, hasNext, $: pageNum === 1 ? $ : null };
+  }
+
+  _extractListMetadata($) {
+    const title =
+      $('.list-title-intro h1').text().trim() ||
+      $('h1.title-1').text().trim() ||
+      $('meta[property="og:title"]').attr('content') ||
+      '';
+    const description =
+      $('.body-text.-prose').first().text().trim() ||
+      $('.collapsed-text').text().trim() ||
+      $('.body-text.-hero').first().text().trim() ||
+      $('meta[property="og:description"]').attr('content') ||
+      '';
+    return { title, description };
+  }
+
+  async scrapeListDetails(listUrl) {
+    console.log(`Scraping list: ${listUrl}`);
+    const allFilms = [];
+    let pageNum = 1;
+    let hasNext = true;
+    let metadata = { title: '', description: '' };
+
+    while (hasNext) {
+      const result = await this._scrapeListFilmsPage(listUrl, pageNum);
+      allFilms.push(...result.films);
+      if (pageNum === 1 && result.$) {
+        metadata = this._extractListMetadata(result.$);
+      }
+      hasNext = result.hasNext && result.films.length > 0;
+      pageNum++;
+
+      if (hasNext) {
+        await this.delay();
+      }
+    }
+
+    console.log(`Found ${allFilms.length} films in list`);
+    return {
+      title: metadata.title,
+      description: metadata.description,
+      filmCount: allFilms.length,
+      films: allFilms,
+    };
+  }
+
   async saveList(listData) {
     try {
       const [list, created] = await FeaturedList.findOrCreate({
@@ -214,117 +306,125 @@ class LetterboxdScraper {
           lastScrapedAt: new Date(),
         });
       }
-
       return list;
     } catch (error) {
-      console.error('Error saving list to database:', error.message);
+      console.error('Error saving list:', error.message);
       throw error;
     }
   }
 
-  /**
-   * Main scraping workflow
-   */
   async scrapeFeaturedLists() {
+    console.log('Starting Letterboxd featured lists scraper...');
     try {
-      console.log('Starting Letterboxd featured lists scraper...');
-      
-      // Step 1: Scrape the featured lists page
       const lists = await this.scrapeFeaturedListsPage();
-      
-      // Step 2: Save each list to the database
+
       const savedLists = [];
       for (const listData of lists) {
         try {
-          const savedList = await this.saveList(listData);
-          savedLists.push(savedList);
-          console.log(`✓ Saved list: ${listData.title}`);
-          
-          // Delay between requests
-          await this.delay(this.requestDelay);
-        } catch (error) {
-          console.error(`✗ Failed to save list: ${listData.title}`, error.message);
+          const saved = await this.saveList(listData);
+          savedLists.push(saved);
+          console.log(`  ✓ ${listData.title}`);
+          await this.delay();
+        } catch (err) {
+          console.error(`  ✗ ${listData.title}:`, err.message);
         }
       }
 
-      console.log(`\nSuccessfully scraped ${savedLists.length}/${lists.length} lists`);
+      console.log(`\nSaved ${savedLists.length}/${lists.length} lists`);
       return savedLists;
-    } catch (error) {
-      console.error('Fatal error in scraper:', error.message);
-      throw error;
+    } finally {
+      await this.close();
     }
   }
 
-  /**
-   * Scrape full details for a specific list (including all films)
-   */
   async scrapeFullListDetails(slug) {
+    const list = await FeaturedList.findOne({ where: { slug } });
+    if (!list) {
+      throw new Error(`List not found: ${slug}`);
+    }
+
+    console.log(`Scraping full details: ${list.title}`);
+    const details = await this.scrapeListDetails(list.listUrl);
+
+    await list.update({
+      title: details.title || list.title,
+      description: details.description || list.description,
+      filmCount: details.filmCount,
+      scrapedFilms: details.films,
+      posterUrls: details.films.slice(0, 10).map((f) => f.posterUrl).filter(Boolean),
+      lastScrapedAt: new Date(),
+    });
+
+    console.log(`  ✓ ${details.films.length} films`);
+    return list;
+  }
+
+  async scrapeAllListsWithFilms() {
+    console.log('=== Full scrape: all lists + all films ===\n');
+
     try {
-      // Find the list in the database
-      const list = await FeaturedList.findOne({ where: { slug } });
-      if (!list) {
-        throw new Error(`List not found: ${slug}`);
+      const lists = await this.scrapeFeaturedListsPage();
+      console.log(`\nFound ${lists.length} lists. Saving...`);
+
+      const savedLists = [];
+      for (const listData of lists) {
+        try {
+          const saved = await this.saveList(listData);
+          savedLists.push(saved);
+          console.log(`  ✓ ${listData.title}`);
+          await this.delay();
+        } catch (err) {
+          console.error(`  ✗ ${listData.title}:`, err.message);
+        }
       }
 
-      console.log(`Scraping full details for: ${list.title}`);
-      
-      // Scrape the list page
-      const details = await this.scrapeListDetails(list.listUrl);
-      
-      // Update the list with full details
-      await list.update({
-        description: details.description || list.description,
-        filmCount: details.filmCount,
-        scrapedFilms: details.films,
-        lastScrapedAt: new Date(),
-      });
+      console.log(`\nScraping films for ${savedLists.length} lists...`);
+      for (const list of savedLists) {
+        try {
+          await this.scrapeFullListDetails(list.slug);
+          await this.delay();
+        } catch (err) {
+          console.error(`  ✗ Films for ${list.slug}:`, err.message);
+        }
+      }
 
-      console.log(`✓ Updated list with ${details.films.length} films`);
-      return list;
-    } catch (error) {
-      console.error('Error scraping full list details:', error.message);
-      throw error;
+      console.log('\n=== Full scrape complete ===');
+      return savedLists;
+    } finally {
+      await this.close();
     }
   }
 
-  /**
-   * Update all lists (refresh data from Letterboxd)
-   */
   async updateAllLists() {
+    const lists = await FeaturedList.findAll({ where: { featured: true } });
+    console.log(`Updating ${lists.length} lists...`);
+
     try {
-      const lists = await FeaturedList.findAll({
-        where: { featured: true },
-      });
-
-      console.log(`Updating ${lists.length} featured lists...`);
-
       for (const list of lists) {
         try {
           await this.scrapeFullListDetails(list.slug);
-          await this.delay(this.requestDelay);
-        } catch (error) {
-          console.error(`Failed to update list: ${list.slug}`, error.message);
+          await this.delay();
+        } catch (err) {
+          console.error(`Failed ${list.slug}:`, err.message);
         }
       }
-
       console.log('Update complete');
-    } catch (error) {
-      console.error('Error updating lists:', error.message);
-      throw error;
+    } finally {
+      await this.close();
     }
   }
 }
 
-// Export singleton instance
-const scraper = new LetterboxdScraper();
+// Visible by default for CLI; set LETTERBOXD_HEADLESS=true for headless (e.g. API/Docker)
+const scraper = new LetterboxdScraper({
+  headless: process.env.LETTERBOXD_HEADLESS === 'true',
+});
 
 module.exports = {
   LetterboxdScraper,
   scraper,
-  
-  // Convenience methods
   scrapeFeaturedLists: () => scraper.scrapeFeaturedLists(),
   scrapeFullListDetails: (slug) => scraper.scrapeFullListDetails(slug),
+  scrapeAllListsWithFilms: () => scraper.scrapeAllListsWithFilms(),
   updateAllLists: () => scraper.updateAllLists(),
 };
-

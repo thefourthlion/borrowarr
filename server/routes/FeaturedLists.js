@@ -12,6 +12,7 @@ router.get("/:slug", featuredListsController.getFeaturedListBySlug);
 
 // Protected routes - require authentication (admin only for scraping/management)
 router.post("/scrape", authenticateToken, featuredListsController.scrapeFeaturedLists);
+router.post("/scrape-all", authenticateToken, featuredListsController.scrapeAllListsWithFilms);
 router.post("/scrape/:slug", authenticateToken, featuredListsController.scrapeListDetails);
 router.post("/update-all", authenticateToken, featuredListsController.updateAllLists);
 router.post("/", authenticateToken, featuredListsController.createOrUpdateList);

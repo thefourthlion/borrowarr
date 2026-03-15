@@ -58,18 +58,29 @@ The `FeaturedLists` table stores:
 
 ## Usage
 
-### CLI Tool
+### CLI Tool (run from `server/` directory)
 
 ```bash
-# Scrape featured lists page
-node server/scripts/scrapeLetterboxd.js featured
+cd server
 
-# Update all existing lists
-node server/scripts/scrapeLetterboxd.js update
+# 1. Featured lists only (metadata - fast)
+node scripts/scrapeLetterboxd.js featured
 
-# Scrape a specific list
-node server/scripts/scrapeLetterboxd.js list official-top-250-narrative-feature-films
+# 2. FULL SCRAPE: all lists + ALL films in each list (comprehensive, takes longer)
+node scripts/scrapeLetterboxd.js all
+
+# 3. Update existing lists with full film data
+node scripts/scrapeLetterboxd.js update
+
+# 4. Scrape a specific list (all films, paginated)
+node scripts/scrapeLetterboxd.js list letterboxds-top-500-films
 ```
+
+**Commands:**
+- `featured` – Scrape the featured lists page (list metadata only, ~2 sec per list)
+- `all` – Full scrape: every list + every film in each list (paginated, ~2 sec per page)
+- `update` – Refresh film data for all existing lists
+- `list <slug>` – Scrape one list with all its films
 
 ### API Endpoints
 
@@ -84,8 +95,9 @@ GET /api/FeaturedLists/:slug
 **Protected Endpoints** (authentication required):
 
 ```
-POST /api/FeaturedLists/scrape
-POST /api/FeaturedLists/scrape/:slug
+POST /api/FeaturedLists/scrape          # Lists metadata only
+POST /api/FeaturedLists/scrape-all      # Full: all lists + all films
+POST /api/FeaturedLists/scrape/:slug    # One list, all films
 POST /api/FeaturedLists/update-all
 POST /api/FeaturedLists
 PUT /api/FeaturedLists/:slug
@@ -97,13 +109,16 @@ DELETE /api/FeaturedLists/:slug
 ```javascript
 const { scraper } = require('./services/letter-box-scrapper');
 
-// Scrape featured lists page
+// Scrape featured lists page (metadata only)
 const lists = await scraper.scrapeFeaturedLists();
 
-// Scrape full details for a specific list
-const list = await scraper.scrapeFullListDetails('official-top-250-narrative-feature-films');
+// Full scrape: all lists + all films in each list
+const lists = await scraper.scrapeAllListsWithFilms();
 
-// Update all lists
+// Scrape full details for a specific list (all films, paginated)
+const list = await scraper.scrapeFullListDetails('letterboxds-top-500-films');
+
+// Update all existing lists with fresh film data
 await scraper.updateAllLists();
 ```
 

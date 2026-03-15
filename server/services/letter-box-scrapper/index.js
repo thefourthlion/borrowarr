@@ -201,7 +201,9 @@ class LetterboxdScraper {
 
     if (!filmSlug) return null;
 
-    let posterUrl = $el.find('img').attr('src');
+    let posterUrl = $el.find('img.image, img[src*="ltrbxd"], .poster img').attr('src') ||
+      $el.find('img').attr('data-src') ||
+      $el.find('img').attr('src');
     if (posterUrl && !posterUrl.includes('empty-poster')) {
       posterUrl = posterUrl.replace(/-70-0-105|-0-70-0-105|-0-125-0-187/, '-230-0-345');
     } else {

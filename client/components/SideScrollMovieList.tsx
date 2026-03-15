@@ -10,6 +10,8 @@ import axios from 'axios';
 import { useAuth } from '@/context/AuthContext';
 import AddMovieModal from './AddMovieModal';
 import AddSeriesModal from './AddSeriesModal';
+import { PlexBadge } from './PlexBadge';
+import { usePlexLibrary } from '@/hooks/usePlexLibrary';
 import {
   Carousel,
   CarouselContent,
@@ -74,6 +76,7 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
   categoryPath,
 }) => {
   const { user } = useAuth();
+  const { hasConnection, isInPlex } = usePlexLibrary();
   const [api, setApi] = useState<CarouselApi>();
   const [canScrollPrev, setCanScrollPrev] = useState(false);
   const [canScrollNext, setCanScrollNext] = useState(false);
@@ -505,6 +508,12 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
             </div>
           )}
           
+          {/* Plex badge - Bottom Left (when in library) */}
+          <PlexBadge
+            show={!!user && hasConnection && isInPlex(title, getMediaYear(item), isTV ? 'tv' : 'movie')}
+            title="On Plex"
+          />
+
           {/* Media Type Badge - Top Left */}
           <div className="absolute top-1 left-1 z-10">
             <Chip 

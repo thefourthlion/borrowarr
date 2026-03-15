@@ -341,16 +341,16 @@ const Indexers = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="Indexers min-h-screen bg-background">
       {/* Header */}
-      <div className="border-b border-secondary/20 sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
-            <div className="min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent truncate">
+      <div className="border-b border-secondary/20 sticky top-16 z-10 bg-background/95 backdrop-blur-sm shrink-0">
+        <div className="w-full max-w-[min(1600px,100%)] mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+            <div className="min-w-0 flex-shrink-0">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent truncate">
                 Indexers
               </h1>
-              <p className="text-xs sm:text-sm text-foreground/60 mt-1">
+              <p className="text-xs sm:text-sm text-foreground/60 mt-0.5 sm:mt-1">
                 Manage your torrent and NZB indexers
               </p>
             </div>
@@ -391,7 +391,7 @@ const Indexers = () => {
         </div>
 
       {/* Content */}
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
+      <div className="w-full max-w-[min(1600px,100%)] mx-auto px-3 sm:px-4 md:px-6 lg:px-8 pt-20 sm:pt-24 pb-4 sm:pb-6 lg:pb-8">
         {loading ? (
           <div className="flex justify-center items-center py-20">
             <Spinner size="lg" color="secondary" />
@@ -422,7 +422,7 @@ const Indexers = () => {
             </CardBody>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 3xl:grid-cols-7 gap-3 sm:gap-4 lg:gap-5">
+          <div className="indexers-grid">
             {indexers.map((indexer) => (
               <Card 
                             key={indexer.id}
@@ -430,7 +430,7 @@ const Indexers = () => {
                 isPressable
                 onPress={() => handleEditIndexer(indexer)}
                           >
-                <CardHeader className="flex-col items-start pb-2 gap-2">
+                <CardHeader className="flex-col items-start pt-4 sm:pt-5 px-4 sm:px-5 pb-2 gap-2">
                   <div className="flex items-start gap-2 sm:gap-3 w-full">
                     {getStatusIcon(indexer)}
                     <div className="flex-1 min-w-0">
@@ -461,7 +461,7 @@ const Indexers = () => {
                                 )}
                               </div>
                 </CardHeader>
-                <CardBody className="pt-0 space-y-2 sm:space-y-3">
+                <CardBody className="pt-0 px-4 sm:px-5 pb-4 sm:pb-5 space-y-2 sm:space-y-3">
                   {/* Test Results */}
                   {testResults[indexer.id!] && (
                     <div className={`flex items-start gap-1.5 sm:gap-2 p-1.5 sm:p-2 rounded-lg border ${
@@ -584,7 +584,7 @@ const Indexers = () => {
           scrollBehavior="inside"
         classNames={{
           backdrop: "bg-overlay/50 backdrop-blur-sm",
-          base: "bg-content1 border border-secondary/20 mx-2 sm:mx-4 shadow-xl shadow-secondary/10",
+          base: "bg-content1 border border-secondary/20 mx-2 sm:mx-4 shadow-xl shadow-secondary/10 !max-w-[min(48rem,calc(100vw-1rem))]",
         }}
         >
           <ModalContent>
@@ -801,7 +801,7 @@ const Indexers = () => {
           shouldBlockScroll={true}
         classNames={{
           backdrop: "bg-overlay/50 backdrop-blur-sm",
-          base: "bg-content1 border border-secondary/20 mx-2 sm:mx-4",
+          base: "bg-content1 border border-secondary/20 mx-2 sm:mx-4 !max-w-[min(42rem,calc(100vw-1rem))]",
         }}
         >
           <ModalContent>

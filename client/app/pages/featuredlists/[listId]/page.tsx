@@ -28,6 +28,8 @@ import axios from "axios";
 import AddMovieModal from "@/components/AddMovieModal";
 import AddSeriesModal from "@/components/AddSeriesModal";
 import { ScrollToTop } from "@/components/ScrollToTop";
+import { PlexBadge } from "@/components/PlexBadge";
+import { usePlexLibrary } from "@/hooks/usePlexLibrary";
 import { useAuth } from "@/context/AuthContext";
 import "@/styles/FeaturedLists.scss";
 
@@ -74,6 +76,7 @@ const FeaturedListDetail = () => {
   const params = useParams();
   const router = useRouter();
   const { user } = useAuth();
+  const { hasConnection, isInPlex } = usePlexLibrary();
   const listSlug = params.listId as string;
 
   const [listData, setListData] = useState<LetterboxdList | null>(null);
@@ -130,7 +133,32 @@ const FeaturedListDetail = () => {
 
   const fetchMediaForList = async (list: LetterboxdList) => {
     try {
-      // Extract genre/type from list title for better TMDB searches
+      // Use scraped films when available - these are the actual movies from the list
+      const scraped = list.scrapedFilms || [];
+      if (scraped.length > 0) {
+        const mediaFromScraped: TMDBMedia[] = scraped.map((f: { slug?: string; title?: string; posterUrl?: string; position?: number }, idx: number) => {
+          const yearMatch = (f.slug || '').match(/-(\d{4})$/);
+          const year = yearMatch ? yearMatch[1] : null;
+          return {
+            id: 1000000 + idx,
+            title: f.title || 'Unknown',
+            overview: '',
+            poster_path: null,
+            posterUrl: f.posterUrl || null,
+            release_date: year ? `${year}-01-01` : undefined,
+            vote_average: 0,
+            genre_ids: [],
+            media_type: 'movie' as const,
+          };
+        });
+        // Preserve original list order (scraped films come in order from API)
+        setMedia(mediaFromScraped);
+        setHasMore(false);
+        setLoading(false);
+        return;
+      }
+
+      // Fallback: no scraped films - use TMDB keyword search from list title
       const titleLower = list.title.toLowerCase();
       let endpoint = '/movie/top_rated';
       let extraParams: Record<string, string> = {};
@@ -422,6 +450,7 @@ const FeaturedListDetail = () => {
   };
 
   // Sort and filter media
+  // Scraped films use id >= 1000000; preserve list order when sorting by popularity (default)
   const sortedMedia = [...media].sort((a, b) => {
     switch (sortBy) {
       case 'vote_average.desc':
@@ -436,6 +465,10 @@ const FeaturedListDetail = () => {
                new Date(b.release_date || b.first_air_date || 0).getTime();
       case 'popularity.desc':
       default:
+        // Preserve list order for scraped films (no TMDB popularity)
+        if ((a.id as number) >= 1000000 && (b.id as number) >= 1000000) {
+          return (a.id as number) - (b.id as number);
+        }
         return (b.popularity || 0) - (a.popularity || 0);
     }
   });
@@ -480,7 +513,12 @@ const FeaturedListDetail = () => {
               alt={title}
               className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-80"
             />
-          ) : (
+          ) : null}
+          <PlexBadge
+            show={!!user && hasConnection && isInPlex(title, year, (item.media_type || mediaType) === 'tv' ? 'tv' : 'movie')}
+            title="On Plex"
+          />
+          {!posterUrl && (
             <div className="w-full h-full bg-default-200 flex items-center justify-center">
               {mediaType === 'tv' ? (
                 <Tv size={48} className="text-default-400" />
@@ -608,7 +646,7 @@ const FeaturedListDetail = () => {
       <ScrollToTop />
       
       {/* Header */}
-      <div className="border-b border-secondary/20 sticky top-0 z-40 bg-background/95 backdrop-blur-sm">
+      <div className="border-b border-secondary/20 sticky top-16 z-40 bg-background/95 backdrop-blur-sm">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4">
           {/* Back button and title */}
           <div className="flex items-center gap-4 mb-4">
@@ -730,6 +768,11 @@ const FeaturedListDetail = () => {
           </div>
         ) : visibleMedia.length > 0 ? (
           <>
+            {!listData?.scrapedFilms?.length && (
+              <div className="mb-4 p-3 rounded-lg bg-warning/10 border border-warning/30 text-sm text-foreground/80">
+                This list hasn&apos;t been scraped yet. Click <strong>Refresh</strong> above to load the actual films from Letterboxd.
+              </div>
+            )}
             <div className="mb-4 text-xs sm:text-sm text-foreground/60">
               Showing {visibleMedia.length} {mediaType === 'tv' ? 'series' : 'movies'}
               {searchQuery && ` matching "${searchQuery}"`}

@@ -1,4 +1,50 @@
-// Download Clients page styles - minimal overrides, relying on global theme
-.DownloadClients {
-  // Empty - all styling handled by Tailwind and global theme
+// Download Clients page - responsive grid and layout
+.DownloadClients,
+[data-page="download-clients"] {
+  // Grid: 2 cols from tablet up so cards expand to fill width (2 cards = 50% each)
+  .download-clients-grid {
+    display: grid;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    gap: 0.75rem;
+    scroll-margin-top: 6rem;
+  }
+  @media (min-width: 475px) {
+    .download-clients-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+    }
+  }
+  @media (min-width: 768px) {
+    .download-clients-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1.25rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    .download-clients-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1.5rem;
+    }
+  }
+  @media (min-width: 1280px) {
+    .download-clients-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1.5rem;
+    }
+  }
+  @media (min-width: 1536px) {
+    .download-clients-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 1920px) {
+    .download-clients-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 2560px) {
+    .download-clients-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
 }

@@ -454,12 +454,48 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
     setLoadingDetails(true);
     try {
       const isTV = media.media_type === 'tv' || !!media.first_air_date;
-      const endpoint = isTV 
-        ? `${API_BASE_URL}/api/TMDB/tv/${media.id}`
-        : `${API_BASE_URL}/api/TMDB/movie/${media.id}`;
-      
+      const isScrapedFilm = (media.id as number) >= 1000000;
+
+      let realTmdbId = media.id as number;
+
+      // Scraped films from featuredlists have fake IDs (1000000+); search TMDB by title+year to get real ID
+      if (isScrapedFilm) {
+        const rawTitle = media.title || media.name || '';
+        const yearFromTitle = rawTitle.match(/\((\d{4})\)/);
+        const cleanTitle = rawTitle.replace(/\s*\(\d{4}\)\s*$/, '').trim();
+        const year = media.release_date
+          ? new Date(media.release_date).getFullYear()
+          : (media.first_air_date ? new Date(media.first_air_date).getFullYear() : null)
+          || (yearFromTitle ? parseInt(yearFromTitle[1], 10) : null);
+
+        const searchParams: Record<string, string> = {
+          query: cleanTitle || rawTitle,
+          type: isTV ? 'tv' : 'movie',
+        };
+        if (year) searchParams.year = String(year);
+
+        const searchResponse = await axios.get(`${API_BASE_URL}/api/TMDB/search`, {
+          params: searchParams,
+        });
+
+        const results = searchResponse.data?.results || [];
+        if (results.length > 0) {
+          const match = year
+            ? results.find((r: any) => {
+                const rYear = (r.release_date || r.first_air_date || '').slice(0, 4);
+                return rYear && parseInt(rYear, 10) === year;
+              }) || results[0]
+            : results[0];
+          realTmdbId = match.id;
+        }
+      }
+
+      const endpoint = isTV
+        ? `${API_BASE_URL}/api/TMDB/tv/${realTmdbId}`
+        : `${API_BASE_URL}/api/TMDB/movie/${realTmdbId}`;
+
       const response = await axios.get(endpoint);
-      
+
       if (response.data.success) {
         const details = isTV ? response.data.tv : response.data.movie;
         setMovieDetails(details);
@@ -1411,10 +1447,10 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
                             </Button>
                           </>
                         )}
-                        {media.id && (
+                        {(movieDetails?.id ?? media.id) && (
                           <Button
                             as="a"
-                            href={`https://www.themoviedb.org/movie/${media.id}`}
+                            href={`https://www.themoviedb.org/movie/${movieDetails?.id ?? media.id}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             size="sm"

@@ -904,7 +904,7 @@ const FileManagement = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <div className="border-b border-secondary/20 sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
+        <div className="border-b border-secondary/20 sticky top-16 z-10 bg-background/95 backdrop-blur-sm">
           <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-xl bg-primary/10">
@@ -935,7 +935,7 @@ const FileManagement = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="border-b border-primary/20 sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
+      <div className="border-b border-primary/20 sticky top-16 z-10 bg-background/95 backdrop-blur-sm">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

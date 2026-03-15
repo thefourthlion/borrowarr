@@ -27,6 +27,9 @@ router.post('/retest', plexController.retestConnection);
 // Get all media from all libraries
 router.get('/media', plexController.getAllMedia);
 
+// Get library keys for "in Plex" badge matching
+router.get('/library-keys', plexController.getLibraryKeys);
+
 // Get items from a specific library
 router.get('/library/:libraryKey/items', plexController.getLibraryItems);
 

@@ -180,7 +180,7 @@ const FeaturedLists = () => {
       </header>
 
       {/* Category Filter */}
-      <div className="z-10 border-b border-default-200 bg-background/80 backdrop-blur-xl sticky top-0">
+      <div className="z-10 border-b border-default-200 bg-background/80 backdrop-blur-xl sticky top-16">
         <div className="max-w-7xl mx-auto px-6 py-3">
           <div className="flex gap-2 overflow-x-auto scrollbar-hide">
             {categories.map(cat => (

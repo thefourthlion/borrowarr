@@ -535,11 +535,46 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
 
   const fetchTVShowDetails = async () => {
     if (!media) return;
-    
+
     setLoadingDetails(true);
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/TMDB/tv/${media.id}`);
-      
+      const isScrapedFilm = (media.id as number) >= 1000000;
+      let realTmdbId = media.id as number;
+
+      // Scraped films from featuredlists have fake IDs (1000000+); search TMDB by title+year to get real ID
+      if (isScrapedFilm) {
+        const rawTitle = media.title || media.name || '';
+        const yearFromTitle = rawTitle.match(/\((\d{4})\)/);
+        const cleanTitle = rawTitle.replace(/\s*\(\d{4}\)\s*$/, '').trim();
+        const year = media.release_date
+          ? new Date(media.release_date).getFullYear()
+          : (media.first_air_date ? new Date(media.first_air_date).getFullYear() : null)
+          || (yearFromTitle ? parseInt(yearFromTitle[1], 10) : null);
+
+        const searchParams: Record<string, string> = {
+          query: cleanTitle || rawTitle,
+          type: 'tv',
+        };
+        if (year) searchParams.year = String(year);
+
+        const searchResponse = await axios.get(`${API_BASE_URL}/api/TMDB/search`, {
+          params: searchParams,
+        });
+
+        const results = searchResponse.data?.results || [];
+        if (results.length > 0) {
+          const match = year
+            ? results.find((r: any) => {
+                const rYear = (r.first_air_date || '').slice(0, 4);
+                return rYear && parseInt(rYear, 10) === year;
+              }) || results[0]
+            : results[0];
+          realTmdbId = match.id;
+        }
+      }
+
+      const response = await axios.get(`${API_BASE_URL}/api/TMDB/tv/${realTmdbId}`);
+
       if (response.data.success) {
         const details = response.data.tv;
         setTvShowDetails(details);
@@ -1880,10 +1915,10 @@ const AddSeriesModal: React.FC<AddSeriesModalProps> = ({
                             </Button>
                           </>
                         )}
-                        {media.id && (
+                        {(tvShowDetails?.id ?? media.id) && (
                           <Button
                             as="a"
-                            href={`https://www.themoviedb.org/tv/${media.id}`}
+                            href={`https://www.themoviedb.org/tv/${tvShowDetails?.id ?? media.id}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             size="sm"

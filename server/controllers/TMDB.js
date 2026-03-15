@@ -46,7 +46,7 @@ function getGenreNames(genreIds, genres) {
  */
 exports.searchMovies = async (req, res) => {
   try {
-    const { query, page, type } = req.query; // type: 'movie', 'tv', 'both' (default: 'both')
+    const { query, page, type, year } = req.query; // type: 'movie', 'tv', 'both' (default: 'both'); year: optional filter
 
     if (!query || query.trim() === '') {
       return res.status(400).json({
@@ -57,11 +57,12 @@ exports.searchMovies = async (req, res) => {
 
     let results;
     const searchType = type || 'both';
+    const yearNum = year ? parseInt(year, 10) : null;
 
     if (searchType === 'movie') {
-      results = await tmdbService.searchMovies(query.trim(), parseInt(page) || 1);
+      results = await tmdbService.searchMovies(query.trim(), parseInt(page) || 1, yearNum);
     } else if (searchType === 'tv') {
-      results = await tmdbService.searchTVShows(query.trim(), parseInt(page) || 1);
+      results = await tmdbService.searchTVShows(query.trim(), parseInt(page) || 1, yearNum);
     } else {
       // Search both
       results = await tmdbService.searchMulti(query.trim(), parseInt(page) || 1);

@@ -120,11 +120,12 @@ export const Navbar = () => {
 
   return (
     <NextUINavbar
-      maxWidth="xl"
+      maxWidth="full"
       position="sticky"
-      className="bg-content1/80 backdrop-blur-xl border-b border-secondary/20 px-4 sm:px-6"
+      classNames={{ wrapper: "z-[9999] overflow-visible" }}
+      className="z-[9999] bg-content1/80 backdrop-blur-xl border-b border-secondary/20 px-4 sm:px-6 w-full"
     >
-      <NavbarContent className="basis-1/5 sm:basis-full min-w-0" justify="start">
+      <NavbarContent className="basis-1/5 sm:basis-full min-w-0 flex-shrink-0" justify="start">
         <NavbarBrand as="li" className="gap-3 max-w-fit">
           <NextLink className="flex justify-start items-center gap-2 group" href="/">
             <div className="text-secondary group-hover:scale-110 transition-transform">
@@ -149,7 +150,7 @@ export const Navbar = () => {
                 Discover
               </Button>
               {discoverDropdownOpen && (
-                <div className="absolute top-full left-0 mt-1 min-w-[160px] bg-content1 border border-secondary/30 rounded-lg shadow-xl shadow-secondary/10 backdrop-blur-xl z-50">
+                <div className="absolute top-full left-0 mt-1 min-w-[160px] bg-content1 border border-secondary/30 rounded-lg shadow-xl shadow-secondary/10 backdrop-blur-xl z-[99999]">
                   <div className="py-1">
                     <NextLink
                       href="/pages/discover"
@@ -212,7 +213,7 @@ export const Navbar = () => {
                 Settings
               </Button>
               {settingsDropdownOpen && (
-                <div className="absolute top-full left-0 mt-1 min-w-[180px] bg-content1 border border-secondary/30 rounded-lg shadow-xl shadow-secondary/10 backdrop-blur-xl z-50">
+                <div className="absolute top-full left-0 mt-1 min-w-[180px] bg-content1 border border-secondary/30 rounded-lg shadow-xl shadow-secondary/10 backdrop-blur-xl z-[99999]">
                   <div className="py-1">
                     <NextLink
                       href={user ? "/pages/indexers" : "/pages/login"}
@@ -312,7 +313,7 @@ export const Navbar = () => {
                 Account
               </Button>
               {accountDropdownOpen && (
-                <div className="absolute top-full left-0 mt-1 min-w-[160px] bg-content1 border border-secondary/30 rounded-lg shadow-xl shadow-secondary/10 backdrop-blur-xl z-50">
+                <div className="absolute top-full left-0 mt-1 min-w-[160px] bg-content1 border border-secondary/30 rounded-lg shadow-xl shadow-secondary/10 backdrop-blur-xl z-[99999]">
                   <div className="py-1">
                     <NextLink
                       href={user ? "/pages/medialibrary" : "/pages/login"}
@@ -415,10 +416,10 @@ export const Navbar = () => {
       </NavbarContent>
 
       <NavbarContent
-        className="hidden sm:flex basis-1/5 sm:basis-full min-w-0 flex-1"
+        className="hidden sm:flex basis-1/5 sm:basis-full min-w-0 flex-1 gap-2 flex-shrink-0"
         justify="end"
       >
-        <NavbarItem className="hidden md:flex flex-grow min-w-0 max-w-md gap-2">
+        <NavbarItem className="hidden md:flex flex-1 min-w-0 max-w-md gap-2">
           {indexers.length > 0 && (
             <Select
               aria-label="Select indexer"

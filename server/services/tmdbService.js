@@ -36,17 +36,17 @@ class TMDBService {
    * @param {number} page - Page number
    * @returns {Promise<Object>} Search results
    */
-  async searchMovies(query, page = 1) {
+  async searchMovies(query, page = 1, year = null) {
     try {
       const api = this.getAxiosInstance();
-      const response = await api.get('/search/movie', {
-        params: {
-          query: query,
-          page: page,
-          include_adult: false,
-          language: 'en-US',
-        },
-      });
+      const params = {
+        query: query,
+        page: page,
+        include_adult: false,
+        language: 'en-US',
+      };
+      if (year) params.primary_release_year = year;
+      const response = await api.get('/search/movie', { params });
 
       return {
         success: true,
@@ -74,17 +74,17 @@ class TMDBService {
    * @param {number} page - Page number
    * @returns {Promise<Object>} Search results
    */
-  async searchTVShows(query, page = 1) {
+  async searchTVShows(query, page = 1, year = null) {
     try {
       const api = this.getAxiosInstance();
-      const response = await api.get('/search/tv', {
-        params: {
-          query: query,
-          page: page,
-          include_adult: false,
-          language: 'en-US',
-        },
-      });
+      const params = {
+        query: query,
+        page: page,
+        include_adult: false,
+        language: 'en-US',
+      };
+      if (year) params.first_air_date_year = year;
+      const response = await api.get('/search/tv', { params });
 
       return {
         success: true,

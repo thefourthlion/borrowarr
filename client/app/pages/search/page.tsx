@@ -431,29 +431,46 @@ const Search = () => {
 
     return (
     <div className="Search page min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-secondary/20 sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
+      {/* Header with Search - sticky so search bar stays visible */}
+      <div className="border-b border-secondary/20 sticky top-16 z-40 bg-background/95 backdrop-blur-sm">
         <div className="max-w-[2400px] mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
-            <div className="min-w-0 flex items-center gap-3">
-              <Button
-                isIconOnly
-                variant="light"
-                size="sm"
-                onPress={() => router.back()}
-                aria-label="Go back"
-                className="flex-shrink-0"
-              >
-                <ChevronLeft size={20} />
-              </Button>
-              <div className="min-w-0">
-                <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent truncate">
-                  {searchQuery ? `Search: "${searchQuery}"` : 'Search Indexers'}
-                </h1>
-                <p className="text-xs sm:text-sm text-foreground/60 mt-1">
-                  {results.length > 0 ? `${results.length} results found` : 'Search torrents across all your indexers'}
-                </p>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
+              <div className="min-w-0 flex items-center gap-3">
+                <Button
+                  isIconOnly
+                  variant="light"
+                  size="sm"
+                  onPress={() => router.back()}
+                  aria-label="Go back"
+                  className="flex-shrink-0"
+                >
+                  <ChevronLeft size={20} />
+                </Button>
+                <div className="min-w-0">
+                  <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent truncate">
+                    {searchQuery ? `Search: "${searchQuery}"` : 'Search Indexers'}
+                  </h1>
+                  <p className="text-xs sm:text-sm text-foreground/60 mt-1">
+                    {results.length > 0 ? `${results.length} results found` : 'Search torrents across all your indexers'}
+                  </p>
+                </div>
               </div>
+            </div>
+            {/* Search Bar - inside sticky header */}
+            <div className="w-full">
+              <Input
+                placeholder="Search torrents (e.g., 'Shrek 2001', 'The Matrix')..."
+                value={query}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
+                onKeyPress={handleKeyPress}
+                startContent={<SearchIcon size={20} className="text-secondary" />}
+                size="lg"
+                classNames={{
+                  base: "w-full",
+                  inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40 focus-within:border-secondary/60 transition-colors",
+                }}
+              />
             </div>
           </div>
         </div>
@@ -462,22 +479,6 @@ const Search = () => {
       {/* Content */}
       <div className="max-w-[2400px] mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
         <div className="space-y-4 sm:space-y-6">
-          {/* Search Bar */}
-          <div className="w-full">
-            <Input
-              placeholder="Search torrents (e.g., 'Shrek 2001', 'The Matrix')..."
-              value={query}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
-              onKeyPress={handleKeyPress}
-              startContent={<SearchIcon size={20} className="text-secondary" />}
-              size="lg"
-              classNames={{
-                base: "w-full",
-                inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40 focus-within:border-secondary/60 transition-colors",
-              }}
-            />
-          </div>
-
           {/* Indexer Filter Section */}
           {fetchingIndexers ? (
             <div className="bg-content2/50 backdrop-blur-sm border border-secondary/20 rounded-2xl p-6 text-center">

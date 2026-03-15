@@ -784,7 +784,7 @@ const Discover = () => {
       </div>
 
       {/* Quick Access Bar */}
-      <div className="sticky top-0 z-40 backdrop-blur-glass border-b border-white/5 smooth-transition animate-slide-up">
+      <div className="sticky top-16 z-40 backdrop-blur-glass border-b border-white/5 smooth-transition animate-slide-up">
         <div className="container max-w-[2400px] mx-auto px-4 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto scrollbar-hide">
             <Button

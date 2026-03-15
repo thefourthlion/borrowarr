@@ -278,7 +278,7 @@ const HiddenMediaPage = () => {
   return (
     <div className="HiddenMedia min-h-screen bg-background">
       {/* Header */}
-      <div className="border-b border-secondary/20 sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
+      <div className="border-b border-secondary/20 sticky top-16 z-10 bg-background/95 backdrop-blur-sm">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
           <div className="flex items-center gap-3 mb-4">
             <Button

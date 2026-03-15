@@ -44,11 +44,11 @@ export default function RootLayout({
         <Providers>
           <AuthProvider>
           <AuthRouter>
-            <div className="relative flex flex-col min-h-screen min-w-0 w-full">
-              <header className="app-navbar-wrapper fixed top-0 left-0 right-0 z-[99999] isolate">
+            <div className="relative flex flex-col min-h-screen min-w-0 w-full overflow-x-hidden">
+              <div className="fixed top-0 left-0 right-0 z-[9999]">
                 <Navbar />
-              </header>
-              <main className="container mx-auto max-w-7xl pt-16 px-6 flex-grow overflow-x-hidden w-full relative z-0">
+              </div>
+              <main className="container mx-auto max-w-7xl pt-16 px-6 flex-grow overflow-x-hidden w-full">
                 {children}
               </main>
               <Footer />

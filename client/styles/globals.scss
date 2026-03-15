@@ -82,12 +82,6 @@ body {
   }
 }
 
-// App navbar must always stay on top of page content
-.app-navbar-wrapper {
-  z-index: 99999 !important;
-  position: fixed !important;
-}
-
 // ============================================
 // RESPONSIVE UTILITIES
 // ============================================

@@ -2,6 +2,7 @@ const FeaturedList = require("../models/FeaturedLists");
 const { scraper } = require("../services/letter-box-scrapper");
 const { Op } = require("sequelize");
 const axios = require("axios");
+const tmdbService = require("../services/tmdbService");
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY || '02ad41cf73db27ff46061d6f52a97342';
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
@@ -50,6 +51,55 @@ exports.getFeaturedLists = async (req, res) => {
 };
 
 /**
+ * Enrich a scraped film with TMDB poster when posterUrl is missing
+ */
+async function enrichFilmWithTmdbPoster(film) {
+  if (film.posterUrl) return film;
+
+  const title = film.title || film.slug || '';
+  const yearMatch = (film.slug || title).match(/-(\d{4})$/);
+  const yearFromSlug = yearMatch ? parseInt(yearMatch[1], 10) : null;
+  const yearFromTitle = title.match(/\((\d{4})\)/);
+  const year = yearFromSlug || (yearFromTitle ? parseInt(yearFromTitle[1], 10) : null);
+  const cleanTitle = title.replace(/\s*\(\d{4}\)\s*$/, '').trim() || film.slug?.replace(/-/g, ' ');
+
+  if (!cleanTitle) return film;
+
+  try {
+    const { results } = await tmdbService.searchMovies(cleanTitle, 1);
+    if (!results || results.length === 0) return film;
+
+    const match = year
+      ? results.find((r) => r.release_date && parseInt(r.release_date.slice(0, 4), 10) === year) || results[0]
+      : results[0];
+
+    if (match?.poster_path) {
+      return { ...film, posterUrl: tmdbService.getPosterUrl(match.poster_path, 'w500') };
+    }
+  } catch (err) {
+    // Ignore TMDB errors per-film
+  }
+  return film;
+}
+
+async function enrichScrapedFilmsWithPosters(scraped, maxEnrich = 150) {
+  const BATCH = 10;
+  const enriched = [];
+  for (let i = 0; i < scraped.length; i += BATCH) {
+    const batch = scraped.slice(i, i + BATCH);
+    const results = await Promise.all(
+      batch.map((f, j) => {
+        if (i + j >= maxEnrich) return f;
+        if (f.posterUrl) return f;
+        return enrichFilmWithTmdbPoster(f);
+      })
+    );
+    enriched.push(...results);
+  }
+  return enriched;
+}
+
+/**
  * Get a single featured list by slug
  */
 exports.getFeaturedListBySlug = async (req, res) => {
@@ -67,9 +117,16 @@ exports.getFeaturedListBySlug = async (req, res) => {
       });
     }
 
+    const listData = list.toJSON ? list.toJSON() : list;
+    const scraped = listData.scrapedFilms || [];
+
+    if (scraped.length > 0) {
+      listData.scrapedFilms = await enrichScrapedFilmsWithPosters(scraped, 150);
+    }
+
     res.json({
       success: true,
-      list,
+      list: listData,
     });
   } catch (error) {
     console.error("Error fetching featured list:", error);

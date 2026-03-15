@@ -27,6 +27,8 @@ import { useDebounce } from "@/hooks/useDebounce";
 import AddMovieModal from "@/components/AddMovieModal";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { useAuth } from "@/context/AuthContext";
+import { PlexBadge } from "@/components/PlexBadge";
+import { usePlexLibrary } from "@/hooks/usePlexLibrary";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 
@@ -59,6 +61,7 @@ const MoviesPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  const { hasConnection, isInPlex } = usePlexLibrary();
   const [media, setMedia] = useState<TMDBMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -893,6 +896,12 @@ const MoviesPage = () => {
                 <Film size={48} className="text-default-400" />
               </div>
             )}
+
+          {/* Plex badge - Bottom Left (when in library) */}
+          <PlexBadge
+            show={!!user && hasConnection && isInPlex(title, year, 'movie')}
+            title="On Plex"
+          />
           
           {/* Media Type Badge - Top Left */}
           <div className="absolute top-0.5 left-0.5 sm:top-1 sm:left-1 z-10">
@@ -1002,37 +1011,127 @@ const MoviesPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-secondary/20 sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
+      {/* Header with Search - sticky so search bar stays visible */}
+      <div className="border-b border-secondary/20 sticky top-16 z-40 bg-background/95 backdrop-blur-sm">
         <div className="max-w-[2400px] mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
-            <div className="min-w-0 flex items-center gap-3">
-              <Button
-                isIconOnly
-                variant="light"
-                size="sm"
-                onPress={() => router.back()}
-                aria-label="Go back"
-                className="flex-shrink-0"
-              >
-                <ChevronLeft size={20} />
-              </Button>
-              <div className="min-w-0">
-                <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent truncate">
-                  {selectedPersonName ? (
-                    <>Movies with {selectedPersonName}</>
-                  ) : searchQuery ? (
-                    <>
-                      Search: &quot;{searchQuery}&quot;
-                      {searchParams.get('type') === 'all' && ' (All Media)'}
-                    </>
-                  ) : (
-                    'Movies'
-                  )}
-                </h1>
-                <p className="text-xs sm:text-sm text-foreground/60 mt-1">
-                  {selectedPersonName ? `Browse all movies featuring ${selectedPersonName}` : 'Discover and explore movies'}
-                </p>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
+              <div className="min-w-0 flex items-center gap-3">
+                <Button
+                  isIconOnly
+                  variant="light"
+                  size="sm"
+                  onPress={() => router.back()}
+                  aria-label="Go back"
+                  className="flex-shrink-0"
+                >
+                  <ChevronLeft size={20} />
+                </Button>
+                <div className="min-w-0">
+                  <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent truncate">
+                    {selectedPersonName ? (
+                      <>Movies with {selectedPersonName}</>
+                    ) : searchQuery ? (
+                      <>
+                        Search: &quot;{searchQuery}&quot;
+                        {searchParams.get('type') === 'all' && ' (All Media)'}
+                      </>
+                    ) : (
+                      'Movies'
+                    )}
+                  </h1>
+                  <p className="text-xs sm:text-sm text-foreground/60 mt-1">
+                    {selectedPersonName ? `Browse all movies featuring ${selectedPersonName}` : 'Discover and explore movies'}
+                  </p>
+                </div>
+              </div>
+            </div>
+            {/* Search and Controls - inside sticky header */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex gap-2 flex-1">
+                <Input
+                  placeholder="Search Movies & TV"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  startContent={<Search size={18} className="text-secondary" />}
+                  className="flex-1"
+                  size="sm"
+                  classNames={{
+                    inputWrapper: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
+                  }}
+                />
+                {selectedPersonName && (
+                  <Chip
+                    size="sm"
+                    variant="flat"
+                    color="secondary"
+                    onClose={() => {
+                      router.push('/pages/discover/movies');
+                    }}
+                    className="flex-shrink-0"
+                  >
+                    <span className="flex items-center gap-1">
+                      <Users size={12} />
+                      {selectedPersonName}
+                    </span>
+                  </Chip>
+                )}
+                {indexers.length > 0 && (
+                  <Select
+                    aria-label="Select indexer"
+                    selectedKeys={new Set([selectedIndexer])}
+                    onSelectionChange={(keys) => {
+                      const selected = Array.from(keys)[0] as string;
+                      setSelectedIndexer(selected || "all");
+                    }}
+                    placeholder="All Indexers"
+                    className="w-32 flex-shrink-0"
+                    size="sm"
+                    classNames={{
+                      trigger: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
+                    }}
+                    items={[{ id: 'all', name: 'All Indexers' }, ...indexers]}
+                  >
+                    {(indexer: any) => (
+                      <SelectItem key={indexer.id.toString()} value={indexer.id.toString()}>
+                        {indexer.name}
+                      </SelectItem>
+                    )}
+                  </Select>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Select
+                  aria-label="Sort movies"
+                  selectedKeys={new Set([sortBy])}
+                  onSelectionChange={(keys) => {
+                    const selected = Array.from(keys)[0] as string;
+                    setSortBy(selected || "popularity.desc");
+                  }}
+                  placeholder="Sort by"
+                  className="w-40 sm:w-48"
+                  size="sm"
+                  classNames={{
+                    trigger: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
+                  }}
+                >
+                  <SelectItem key="popularity.desc" value="popularity.desc">Popularity Descending</SelectItem>
+                  <SelectItem key="popularity.asc" value="popularity.asc">Popularity Ascending</SelectItem>
+                  <SelectItem key="vote_average.desc" value="vote_average.desc">Rating Descending</SelectItem>
+                  <SelectItem key="release_date.desc" value="release_date.desc">Release Date Descending</SelectItem>
+                  <SelectItem key="release_date.asc" value="release_date.asc">Release Date Ascending</SelectItem>
+                </Select>
+                <Button
+                  variant={activeFilters > 0 ? "solid" : "bordered"}
+                  color={activeFilters > 0 ? "secondary" : "default"}
+                  startContent={<Filter size={18} />}
+                  onPress={() => setFiltersOpen(!filtersOpen)}
+                  size="sm"
+                  className={activeFilters > 0 ? "btn-glow" : "border-2 border-secondary/20 hover:border-secondary/40"}
+                >
+                  <span className="hidden sm:inline">{activeFilters} Active</span>
+                  <span className="sm:hidden">{activeFilters}</span>
+                </Button>
               </div>
             </div>
           </div>
@@ -1041,101 +1140,10 @@ const MoviesPage = () => {
 
       {/* Content */}
       <div className="max-w-[2400px] mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
-        {/* Search and Controls */}
-        <div className="mb-6 space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex gap-2 flex-1">
-              <Input
-                placeholder="Search Movies & TV"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                startContent={<Search size={18} className="text-secondary" />}
-                className="flex-1"
-                size="sm"
-                classNames={{
-                  inputWrapper: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
-                }}
-              />
-              {selectedPersonName && (
-                <Chip
-                  size="sm"
-                  variant="flat"
-                  color="secondary"
-                  onClose={() => {
-                    router.push('/pages/discover/movies');
-                  }}
-                  className="flex-shrink-0"
-                >
-                  <span className="flex items-center gap-1">
-                    <Users size={12} />
-                    {selectedPersonName}
-                  </span>
-                </Chip>
-              )}
-              {indexers.length > 0 && (
-                <Select
-                  aria-label="Select indexer"
-                  selectedKeys={new Set([selectedIndexer])}
-                  onSelectionChange={(keys) => {
-                    const selected = Array.from(keys)[0] as string;
-                    setSelectedIndexer(selected || "all");
-                  }}
-                  placeholder="All Indexers"
-                  className="w-32 flex-shrink-0"
-                  size="sm"
-                  classNames={{
-                    trigger: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
-                  }}
-                  items={[{ id: 'all', name: 'All Indexers' }, ...indexers]}
-                >
-                  {(indexer: any) => (
-                    <SelectItem key={indexer.id.toString()} value={indexer.id.toString()}>
-                      {indexer.name}
-                    </SelectItem>
-                  )}
-                </Select>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Select
-                aria-label="Sort movies"
-                selectedKeys={new Set([sortBy])}
-                onSelectionChange={(keys) => {
-                  const selected = Array.from(keys)[0] as string;
-                  setSortBy(selected || "popularity.desc");
-                }}
-                placeholder="Sort by"
-                className="w-40 sm:w-48"
-                size="sm"
-                classNames={{
-                  trigger: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
-                }}
-              >
-                <SelectItem key="popularity.desc" value="popularity.desc">Popularity Descending</SelectItem>
-                <SelectItem key="popularity.asc" value="popularity.asc">Popularity Ascending</SelectItem>
-                <SelectItem key="vote_average.desc" value="vote_average.desc">Rating Descending</SelectItem>
-                <SelectItem key="release_date.desc" value="release_date.desc">Release Date Descending</SelectItem>
-                <SelectItem key="release_date.asc" value="release_date.asc">Release Date Ascending</SelectItem>
-              </Select>
-              <Button
-                variant={activeFilters > 0 ? "solid" : "bordered"}
-                color={activeFilters > 0 ? "secondary" : "default"}
-                startContent={<Filter size={18} />}
-                onPress={() => setFiltersOpen(!filtersOpen)}
-                size="sm"
-                className={activeFilters > 0 ? "btn-glow" : "border-2 border-secondary/20 hover:border-secondary/40"}
-              >
-                <span className="hidden sm:inline">{activeFilters} Active</span>
-                <span className="sm:hidden">{activeFilters}</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-
         {/* Filters Panel */}
         {filtersOpen && (
-          <Card className="mb-6 card-interactive border-2 border-secondary/20 relative z-50">
-            <CardBody className="p-4 sm:p-6 relative z-50">
+          <Card className="mb-6 card-interactive border-2 border-secondary/20">
+            <CardBody className="p-4 sm:p-6">
               <div className="flex justify-between items-center mb-4 sm:mb-6">
                 <h2 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent">
                   Filters

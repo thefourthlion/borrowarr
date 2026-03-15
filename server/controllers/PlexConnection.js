@@ -629,3 +629,85 @@ exports.getAllMedia = async (req, res) => {
   }
 };
 
+/**
+ * Get normalized keys of all media in Plex (for "in library" badge matching)
+ * Returns Set-like array: ["movie:inception:2010", "show:breaking bad"]
+ */
+const normalizeKey = (title, year, type) => {
+  const t = (title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const y = year ? String(year) : '';
+  return `${type}:${t}:${y}`;
+};
+
+exports.getLibraryKeys = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const connection = await PlexConnection.findOne({ where: { userId } });
+
+    if (!connection || !connection.isConnected) {
+      return res.json({ success: true, keys: [], connected: false });
+    }
+
+    let cleanUrl = connection.serverUrl.trim().replace(/\/$/, '');
+    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+      cleanUrl = `http://${cleanUrl}`;
+    }
+
+    const librariesResponse = await axios.get(`${cleanUrl}/library/sections`, {
+      headers: {
+        'X-Plex-Token': connection.authToken,
+        'Accept': 'application/json',
+      },
+      timeout: 10000,
+    });
+
+    const libraries = (librariesResponse.data?.MediaContainer?.Directory || [])
+      .filter(lib => lib.type === 'movie' || lib.type === 'show');
+
+    const keysSet = new Set();
+    const MAX_PER_LIBRARY = 10000;
+
+    for (const library of libraries) {
+      try {
+        let offset = 0;
+        let hasMore = true;
+        while (hasMore) {
+          const response = await axios.get(`${cleanUrl}/library/sections/${library.key}/all`, {
+            headers: {
+              'X-Plex-Token': connection.authToken,
+              'Accept': 'application/json',
+            },
+            params: {
+              'X-Plex-Container-Start': offset,
+              'X-Plex-Container-Size': 500,
+            },
+            timeout: 15000,
+          });
+
+          const metadata = response.data?.MediaContainer?.Metadata || [];
+          const total = response.data?.MediaContainer?.totalSize || 0;
+
+          for (const item of metadata) {
+            const key = normalizeKey(item.title, item.year, item.type);
+            keysSet.add(key);
+          }
+
+          offset += metadata.length;
+          hasMore = metadata.length > 0 && offset < Math.min(total, MAX_PER_LIBRARY);
+        }
+      } catch (err) {
+        console.error(`Error fetching library ${library.title}:`, err.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      keys: Array.from(keysSet),
+      connected: true,
+    });
+  } catch (error) {
+    console.error('Error fetching library keys:', error);
+    res.status(500).json({ success: false, keys: [], error: error.message });
+  }
+};
+

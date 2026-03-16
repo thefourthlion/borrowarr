@@ -1479,7 +1479,7 @@ const AddMovieModal: React.FC<AddMovieModalProps> = ({
                         )}
                         <Button
                           as="a"
-                          href={`http://localhost:3012/pages/search?q=${encodeURIComponent(media.title || media.name || '')}`}
+                          href={`/pages/search?q=${encodeURIComponent(media.title || media.name || '')}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           size="sm"

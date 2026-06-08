@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { Button } from "@nextui-org/button";
-import { Card, CardBody, CardHeader } from "@nextui-org/card";
+import { Card, CardBody } from "@nextui-org/card";
 import { Input } from "@nextui-org/input";
 import { Spinner } from "@nextui-org/spinner";
 import { Chip } from "@nextui-org/chip";
@@ -32,6 +32,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { PageContent, PageHeader } from "@/components/page-header";
 import "../../../styles/Requests.scss";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
@@ -59,13 +60,13 @@ interface MediaRequest {
   requestedBy?: {
     id: string;
     username: string;
-    email: string;
+    email?: string | null;
     avatarUrl?: string;
   };
   reviewedByUser?: {
     id: string;
     username: string;
-    email: string;
+    email?: string | null;
     avatarUrl?: string;
   };
 }
@@ -76,15 +77,24 @@ const Requests = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState("pending");
-  const [counts, setCounts] = useState({ pending: 0, approved: 0, denied: 0, total: 0 });
-  
+  const [counts, setCounts] = useState({
+    pending: 0,
+    approved: 0,
+    denied: 0,
+    total: 0,
+  });
+
   // Modal state
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const [reviewingRequest, setReviewingRequest] = useState<MediaRequest | null>(null);
-  const [reviewAction, setReviewAction] = useState<"approve" | "deny">("approve");
+  const [reviewingRequest, setReviewingRequest] = useState<MediaRequest | null>(
+    null,
+  );
+  const [reviewAction, setReviewAction] = useState<"approve" | "deny">(
+    "approve",
+  );
   const [reviewNote, setReviewNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  
+
   // Notification state
   const [notification, setNotification] = useState<{
     show: boolean;
@@ -93,25 +103,31 @@ const Requests = () => {
   }>({ show: false, type: "success", message: "" });
 
   // Check if user can manage requests
-  const canManageRequests = user?.permissions?.admin || user?.permissions?.manage_requests;
+  const canManageRequests =
+    user?.permissions?.admin || user?.permissions?.manage_requests;
 
   const showNotification = (type: "success" | "error", message: string) => {
     setNotification({ show: true, type, message });
-    setTimeout(() => setNotification(prev => ({ ...prev, show: false })), 3000);
+    setTimeout(
+      () => setNotification((prev) => ({ ...prev, show: false })),
+      3000,
+    );
   };
 
   const fetchRequests = useCallback(async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem("accessToken");
-      
+
       // Fetch requests based on user permissions
-      const endpoint = canManageRequests ? "/api/MediaRequests/all" : "/api/MediaRequests/my";
+      const endpoint = canManageRequests
+        ? "/api/MediaRequests/all"
+        : "/api/MediaRequests/my";
       const response = await axios.get(`${API_BASE_URL}${endpoint}`, {
         headers: { Authorization: `Bearer ${token}` },
         params: { status: selectedTab === "all" ? undefined : selectedTab },
       });
-      
+
       setRequests(response.data.requests || []);
     } catch (error) {
       console.error("Error fetching requests:", error);
@@ -124,10 +140,20 @@ const Requests = () => {
   const fetchCounts = useCallback(async () => {
     try {
       const token = localStorage.getItem("accessToken");
-      const response = await axios.get(`${API_BASE_URL}/api/MediaRequests/counts`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setCounts(response.data.counts || { pending: 0, approved: 0, denied: 0, total: 0 });
+      const response = await axios.get(
+        `${API_BASE_URL}/api/MediaRequests/counts`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      setCounts(
+        response.data.counts || {
+          pending: 0,
+          approved: 0,
+          denied: 0,
+          total: 0,
+        },
+      );
     } catch (error) {
       console.error("Error fetching counts:", error);
     }
@@ -140,7 +166,10 @@ const Requests = () => {
     }
   }, [user, fetchRequests, fetchCounts]);
 
-  const openReviewModal = (request: MediaRequest, action: "approve" | "deny") => {
+  const openReviewModal = (
+    request: MediaRequest,
+    action: "approve" | "deny",
+  ) => {
     setReviewingRequest(request);
     setReviewAction(action);
     setReviewNote("");
@@ -149,24 +178,32 @@ const Requests = () => {
 
   const handleReview = async () => {
     if (!reviewingRequest) return;
-    
+
     try {
       setSubmitting(true);
       const token = localStorage.getItem("accessToken");
-      
+
       await axios.post(
         `${API_BASE_URL}/api/MediaRequests/${reviewingRequest.id}/${reviewAction}`,
         { reviewNote },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
-      
-      showNotification("success", `Request ${reviewAction === "approve" ? "approved" : "denied"} successfully`);
+
+      showNotification(
+        "success",
+        `Request ${reviewAction === "approve" ? "approved" : "denied"} successfully`,
+      );
       setShowReviewModal(false);
       fetchRequests();
       fetchCounts();
     } catch (error: any) {
-      console.error("Error reviewing request:", error);
-      showNotification("error", error.response?.data?.error || "Failed to review request");
+      if (!error.response?.data?.error) {
+        console.error("Error reviewing request:", error);
+      }
+      showNotification(
+        "error",
+        error.response?.data?.error || "Failed to review request",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -174,7 +211,7 @@ const Requests = () => {
 
   const handleDelete = async (requestId: string) => {
     if (!confirm("Are you sure you want to delete this request?")) return;
-    
+
     try {
       const token = localStorage.getItem("accessToken");
       await axios.delete(`${API_BASE_URL}/api/MediaRequests/${requestId}`, {
@@ -185,30 +222,85 @@ const Requests = () => {
       fetchCounts();
     } catch (error: any) {
       console.error("Error deleting request:", error);
-      showNotification("error", error.response?.data?.error || "Failed to delete request");
+      showNotification(
+        "error",
+        error.response?.data?.error || "Failed to delete request",
+      );
     }
   };
 
   const getStatusChip = (status: string) => {
     switch (status) {
       case "pending":
-        return <Chip size="sm" color="warning" variant="flat" startContent={<Clock size={12} />}>Pending</Chip>;
+        return (
+          <Chip
+            color="warning"
+            size="sm"
+            startContent={<Clock size={12} />}
+            variant="flat"
+          >
+            Pending
+          </Chip>
+        );
       case "approved":
-        return <Chip size="sm" color="success" variant="flat" startContent={<CheckCircle2 size={12} />}>Approved</Chip>;
+        return (
+          <Chip
+            color="success"
+            size="sm"
+            startContent={<CheckCircle2 size={12} />}
+            variant="flat"
+          >
+            Approved
+          </Chip>
+        );
       case "denied":
-        return <Chip size="sm" color="danger" variant="flat" startContent={<XCircle size={12} />}>Denied</Chip>;
+        return (
+          <Chip
+            color="danger"
+            size="sm"
+            startContent={<XCircle size={12} />}
+            variant="flat"
+          >
+            Denied
+          </Chip>
+        );
       case "downloading":
-        return <Chip size="sm" color="primary" variant="flat" startContent={<Spinner size="sm" />}>Downloading</Chip>;
+        return (
+          <Chip
+            color="primary"
+            size="sm"
+            startContent={<Spinner size="sm" />}
+            variant="flat"
+          >
+            Downloading
+          </Chip>
+        );
       case "completed":
-        return <Chip size="sm" color="success" variant="flat" startContent={<CheckCircle2 size={12} />}>Completed</Chip>;
+        return (
+          <Chip
+            color="success"
+            size="sm"
+            startContent={<CheckCircle2 size={12} />}
+            variant="flat"
+          >
+            Completed
+          </Chip>
+        );
       default:
-        return <Chip size="sm" variant="flat">{status}</Chip>;
+        return (
+          <Chip size="sm" variant="flat">
+            {status}
+          </Chip>
+        );
     }
   };
 
-  const filteredRequests = requests.filter(request =>
-    request.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    request.requestedBy?.username.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredRequests = requests.filter(
+    (request) =>
+      request.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      request.requestedBy?.username
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase()),
   );
 
   if (!user) {
@@ -216,7 +308,7 @@ const Requests = () => {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Card className="max-w-md mx-4">
           <CardBody className="text-center py-8">
-            <AlertTriangle size={48} className="mx-auto mb-4 text-warning" />
+            <AlertTriangle className="mx-auto mb-4 text-warning" size={48} />
             <h2 className="text-xl font-bold mb-2">Authentication Required</h2>
             <p className="text-default-500">Please sign in to view requests.</p>
           </CardBody>
@@ -227,37 +319,25 @@ const Requests = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-secondary/20 sticky top-16 z-10 bg-background/95 backdrop-blur-sm">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-secondary/10">
-                <Inbox className="w-6 h-6 text-secondary" />
-              </div>
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent">
-                  {canManageRequests ? "Manage Requests" : "My Requests"}
-                </h1>
-                <p className="text-xs sm:text-sm text-foreground/60 mt-1">
-                  {canManageRequests 
-                    ? "Review and manage media requests from users"
-                    : "View your media request history"
-                  }
-                </p>
-              </div>
-            </div>
-            {counts.pending > 0 && canManageRequests && (
-              <Chip color="warning" variant="shadow" size="lg">
-                {counts.pending} Pending
-              </Chip>
-            )}
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        actions={
+          counts.pending > 0 && canManageRequests ? (
+            <Chip color="warning" size="lg" variant="shadow">
+              {counts.pending} Pending
+            </Chip>
+          ) : null
+        }
+        description={
+          canManageRequests
+            ? "Review and manage media requests from users"
+            : "View your media request history"
+        }
+        icon={<Inbox className="h-6 w-6" />}
+        title={canManageRequests ? "Manage Requests" : "My Requests"}
+      />
 
       {/* Content */}
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <PageContent>
         {/* Notification */}
         {notification.show && (
           <div
@@ -267,7 +347,11 @@ const Requests = () => {
                 : "bg-danger/10 border-danger/20 text-danger"
             }`}
           >
-            {notification.type === "success" ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
+            {notification.type === "success" ? (
+              <CheckCircle2 size={18} />
+            ) : (
+              <XCircle size={18} />
+            )}
             {notification.message}
           </div>
         )}
@@ -275,42 +359,44 @@ const Requests = () => {
         {/* Tab Buttons */}
         <div className="flex flex-wrap gap-2 border-b border-secondary/20 pb-4">
           <Button
-            variant={selectedTab === "pending" ? "solid" : "flat"}
+            className="gap-2"
             color={selectedTab === "pending" ? "secondary" : "default"}
+            onPress={() => setSelectedTab("pending")}
             size="sm"
             startContent={<Clock size={16} />}
-            onPress={() => setSelectedTab("pending")}
-            className="gap-2"
+            variant={selectedTab === "pending" ? "solid" : "flat"}
           >
             Pending
             {counts.pending > 0 && (
-              <Chip size="sm" color="warning" variant="flat" className="ml-1">{counts.pending}</Chip>
+              <Chip className="ml-1" color="warning" size="sm" variant="flat">
+                {counts.pending}
+              </Chip>
             )}
           </Button>
           <Button
-            variant={selectedTab === "approved" ? "solid" : "flat"}
             color={selectedTab === "approved" ? "secondary" : "default"}
+            onPress={() => setSelectedTab("approved")}
             size="sm"
             startContent={<CheckCircle2 size={16} />}
-            onPress={() => setSelectedTab("approved")}
+            variant={selectedTab === "approved" ? "solid" : "flat"}
           >
             Approved
           </Button>
           <Button
-            variant={selectedTab === "denied" ? "solid" : "flat"}
             color={selectedTab === "denied" ? "secondary" : "default"}
+            onPress={() => setSelectedTab("denied")}
             size="sm"
             startContent={<XCircle size={16} />}
-            onPress={() => setSelectedTab("denied")}
+            variant={selectedTab === "denied" ? "solid" : "flat"}
           >
             Denied
           </Button>
           <Button
-            variant={selectedTab === "all" ? "solid" : "flat"}
             color={selectedTab === "all" ? "secondary" : "default"}
+            onPress={() => setSelectedTab("all")}
             size="sm"
             startContent={<Inbox size={16} />}
-            onPress={() => setSelectedTab("all")}
+            variant={selectedTab === "all" ? "solid" : "flat"}
           >
             All
           </Button>
@@ -319,40 +405,145 @@ const Requests = () => {
         {/* Search */}
         <div className="my-6">
           <Input
-            placeholder="Search requests..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            startContent={<Search size={18} className="text-default-400" />}
             classNames={{
-              inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+              inputWrapper:
+                "bg-content2 border border-secondary/20 hover:border-secondary/40",
             }}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search requests..."
+            startContent={<Search className="text-default-400" size={18} />}
+            value={searchQuery}
           />
         </div>
 
         {/* Requests List */}
         {loading ? (
           <div className="flex justify-center py-20">
-            <Spinner size="lg" color="secondary" />
+            <Spinner color="secondary" size="lg" />
           </div>
         ) : filteredRequests.length === 0 ? (
           <Card className="border border-secondary/20">
             <CardBody className="text-center py-16">
-              <Inbox size={48} className="mx-auto mb-4 text-default-400" />
+              <Inbox className="mx-auto mb-4 text-default-400" size={48} />
               <h3 className="text-lg font-semibold mb-2">No Requests Found</h3>
               <p className="text-default-500">
-                {selectedTab === "pending" 
+                {selectedTab === "pending"
                   ? "No pending requests to review"
-                  : `No ${selectedTab} requests`
-                }
+                  : `No ${selectedTab} requests`}
               </p>
             </CardBody>
           </Card>
+        ) : canManageRequests ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {filteredRequests.map((request) => {
+              const isPending = request.status === "pending";
+
+              return (
+                <div key={request.id} className="group">
+                  <Card className="border border-secondary/20 bg-content1 overflow-hidden">
+                    <CardBody className="p-0">
+                      <div className="relative aspect-[2/3] w-full">
+                        {request.posterPath ? (
+                          <img
+                            alt={request.title}
+                            className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-80"
+                            src={`${TMDB_IMAGE_BASE}${request.posterPath}`}
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-content2 flex items-center justify-center">
+                            {request.mediaType === "movie" ? (
+                              <Film className="text-default-400" size={28} />
+                            ) : (
+                              <Tv className="text-default-400" size={28} />
+                            )}
+                          </div>
+                        )}
+
+                        <div className="absolute top-1 left-1 z-10">
+                          {getStatusChip(request.status)}
+                        </div>
+
+                        <div className="absolute top-1 right-1 z-10">
+                          <Chip
+                            size="sm"
+                            startContent={
+                              request.mediaType === "movie" ? (
+                                <Film size={12} />
+                              ) : (
+                                <Tv size={12} />
+                              )
+                            }
+                            variant="flat"
+                          >
+                            {request.mediaType === "movie" ? "Movie" : "Series"}
+                          </Chip>
+                        </div>
+
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent p-2">
+                          <h3 className="text-white text-sm font-semibold line-clamp-2">
+                            {request.title}
+                          </h3>
+                          <p className="text-white/70 text-[11px] mt-1">
+                            {request.releaseDate
+                              ? new Date(request.releaseDate).getFullYear()
+                              : "Unknown year"}
+                          </p>
+                          {request.requestedBy && (
+                            <p className="text-white/70 text-[11px] line-clamp-1">
+                              @{request.requestedBy.username}
+                            </p>
+                          )}
+
+                          <div className="flex items-center gap-1 mt-2">
+                            {isPending && (
+                              <>
+                                <Button
+                                  isIconOnly
+                                  color="success"
+                                  onPress={() => openReviewModal(request, "approve")}
+                                  size="sm"
+                                  title="Approve"
+                                  variant="flat"
+                                >
+                                  <CheckCircle2 size={14} />
+                                </Button>
+                                <Button
+                                  isIconOnly
+                                  color="danger"
+                                  onPress={() => openReviewModal(request, "deny")}
+                                  size="sm"
+                                  title="Deny"
+                                  variant="flat"
+                                >
+                                  <XCircle size={14} />
+                                </Button>
+                              </>
+                            )}
+                            <Button
+                              isIconOnly
+                              color="danger"
+                              onPress={() => handleDelete(request.id)}
+                              size="sm"
+                              title="Delete request"
+                              variant="flat"
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </CardBody>
+                  </Card>
+                </div>
+              );
+            })}
+          </div>
         ) : (
           <div className="space-y-4">
             {filteredRequests.map((request) => (
               <Card
-                key={request.id}
                 className="border border-secondary/20 bg-content1 overflow-hidden"
+                key={request.id}
               >
                 <CardBody className="p-0">
                   <div className="flex flex-col sm:flex-row">
@@ -360,16 +551,16 @@ const Requests = () => {
                     <div className="sm:w-32 sm:min-h-[180px] flex-shrink-0">
                       {request.posterPath ? (
                         <img
-                          src={`${TMDB_IMAGE_BASE}${request.posterPath}`}
                           alt={request.title}
                           className="w-full h-full object-cover"
+                          src={`${TMDB_IMAGE_BASE}${request.posterPath}`}
                         />
                       ) : (
                         <div className="w-full h-full min-h-[180px] bg-content2 flex items-center justify-center">
                           {request.mediaType === "movie" ? (
-                            <Film size={32} className="text-default-400" />
+                            <Film className="text-default-400" size={32} />
                           ) : (
-                            <Tv size={32} className="text-default-400" />
+                            <Tv className="text-default-400" size={32} />
                           )}
                         </div>
                       )}
@@ -381,17 +572,27 @@ const Requests = () => {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 flex-wrap mb-2">
                             {getStatusChip(request.status)}
-                            <Chip 
-                              size="sm" 
+                            <Chip
+                              size="sm"
+                              startContent={
+                                request.mediaType === "movie" ? (
+                                  <Film size={12} />
+                                ) : (
+                                  <Tv size={12} />
+                                )
+                              }
                               variant="flat"
-                              startContent={request.mediaType === "movie" ? <Film size={12} /> : <Tv size={12} />}
                             >
-                              {request.mediaType === "movie" ? "Movie" : "Series"}
+                              {request.mediaType === "movie"
+                                ? "Movie"
+                                : "Series"}
                             </Chip>
                           </div>
-                          
-                          <h3 className="text-lg font-semibold">{request.title}</h3>
-                          
+
+                          <h3 className="text-lg font-semibold">
+                            {request.title}
+                          </h3>
+
                           {request.releaseDate && (
                             <p className="text-sm text-default-500 flex items-center gap-1 mt-1">
                               <Calendar size={14} />
@@ -430,36 +631,42 @@ const Requests = () => {
 
                         {/* Actions */}
                         <div className="flex flex-col gap-2 sm:items-end">
-                          {request.status === "pending" && canManageRequests && (
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                color="success"
-                                variant="flat"
-                                startContent={<ThumbsUp size={14} />}
-                                onPress={() => openReviewModal(request, "approve")}
-                              >
-                                Approve
-                              </Button>
-                              <Button
-                                size="sm"
-                                color="danger"
-                                variant="flat"
-                                startContent={<ThumbsDown size={14} />}
-                                onPress={() => openReviewModal(request, "deny")}
-                              >
-                                Deny
-                              </Button>
-                            </div>
-                          )}
-                          
-                          {(request.status === "pending" || canManageRequests) && (
+                          {request.status === "pending" &&
+                            canManageRequests && (
+                              <div className="flex gap-2">
+                                <Button
+                                  color="success"
+                                  onPress={() =>
+                                    openReviewModal(request, "approve")
+                                  }
+                                  size="sm"
+                                  startContent={<ThumbsUp size={14} />}
+                                  variant="flat"
+                                >
+                                  Approve
+                                </Button>
+                                <Button
+                                  color="danger"
+                                  onPress={() =>
+                                    openReviewModal(request, "deny")
+                                  }
+                                  size="sm"
+                                  startContent={<ThumbsDown size={14} />}
+                                  variant="flat"
+                                >
+                                  Deny
+                                </Button>
+                              </div>
+                            )}
+
+                          {(request.status === "pending" ||
+                            canManageRequests) && (
                             <Button
-                              size="sm"
-                              variant="light"
                               color="danger"
-                              startContent={<Trash2 size={14} />}
                               onPress={() => handleDelete(request.id)}
+                              size="sm"
+                              startContent={<Trash2 size={14} />}
+                              variant="light"
                             >
                               Delete
                             </Button>
@@ -472,17 +679,36 @@ const Requests = () => {
                         {request.requestedBy && (
                           <span className="flex items-center gap-1">
                             <User size={12} />
-                            Requested by <strong className="text-foreground">{request.requestedBy.username}</strong>
+                            Requested by{" "}
+                            <strong className="text-foreground">
+                              {request.requestedBy.username}
+                            </strong>
                           </span>
                         )}
                         <span className="flex items-center gap-1">
                           <Clock size={12} />
-                          {new Date(request.createdAt).toLocaleDateString()} at {new Date(request.createdAt).toLocaleTimeString()}
+                          {new Date(
+                            request.createdAt,
+                          ).toLocaleDateString()} at{" "}
+                          {new Date(request.createdAt).toLocaleTimeString()}
                         </span>
                         {request.reviewedByUser && (
                           <span className="flex items-center gap-1">
-                            {request.status === "approved" ? <CheckCircle2 size={12} className="text-success" /> : <XCircle size={12} className="text-danger" />}
-                            {request.status === "approved" ? "Approved" : "Denied"} by <strong className="text-foreground">{request.reviewedByUser.username}</strong>
+                            {request.status === "approved" ? (
+                              <CheckCircle2
+                                className="text-success"
+                                size={12}
+                              />
+                            ) : (
+                              <XCircle className="text-danger" size={12} />
+                            )}
+                            {request.status === "approved"
+                              ? "Approved"
+                              : "Denied"}{" "}
+                            by{" "}
+                            <strong className="text-foreground">
+                              {request.reviewedByUser.username}
+                            </strong>
                           </span>
                         )}
                       </div>
@@ -493,20 +719,20 @@ const Requests = () => {
             ))}
           </div>
         )}
-      </div>
+      </PageContent>
 
       {/* Review Modal */}
-      <Modal 
-        isOpen={showReviewModal} 
+      <Modal
+        isOpen={showReviewModal}
         onClose={() => setShowReviewModal(false)}
         size="lg"
       >
         <ModalContent>
           <ModalHeader className="flex items-center gap-2">
             {reviewAction === "approve" ? (
-              <CheckCircle2 size={24} className="text-success" />
+              <CheckCircle2 className="text-success" size={24} />
             ) : (
-              <XCircle size={24} className="text-danger" />
+              <XCircle className="text-danger" size={24} />
             )}
             {reviewAction === "approve" ? "Approve Request" : "Deny Request"}
           </ModalHeader>
@@ -516,16 +742,21 @@ const Requests = () => {
                 <div className="flex gap-4 items-start">
                   {reviewingRequest.posterPath && (
                     <img
-                      src={`${TMDB_IMAGE_BASE}${reviewingRequest.posterPath}`}
                       alt={reviewingRequest.title}
                       className="w-20 h-30 object-cover rounded-lg"
+                      src={`${TMDB_IMAGE_BASE}${reviewingRequest.posterPath}`}
                     />
                   )}
                   <div>
-                    <h3 className="font-semibold text-lg">{reviewingRequest.title}</h3>
+                    <h3 className="font-semibold text-lg">
+                      {reviewingRequest.title}
+                    </h3>
                     <p className="text-sm text-default-500">
-                      {reviewingRequest.mediaType === "movie" ? "Movie" : "Series"}
-                      {reviewingRequest.releaseDate && ` • ${new Date(reviewingRequest.releaseDate).getFullYear()}`}
+                      {reviewingRequest.mediaType === "movie"
+                        ? "Movie"
+                        : "Series"}
+                      {reviewingRequest.releaseDate &&
+                        ` • ${new Date(reviewingRequest.releaseDate).getFullYear()}`}
                     </p>
                     <p className="text-sm text-default-400 mt-1">
                       Requested by: {reviewingRequest.requestedBy?.username}
@@ -535,32 +766,32 @@ const Requests = () => {
 
                 <Textarea
                   label="Review Note (Optional)"
-                  placeholder={reviewAction === "approve" 
-                    ? "Add a note for the user..."
-                    : "Explain why this request was denied..."
+                  minRows={3}
+                  onChange={(e) => setReviewNote(e.target.value)}
+                  placeholder={
+                    reviewAction === "approve"
+                      ? "Add a note for the user..."
+                      : "Explain why this request was denied..."
                   }
                   value={reviewNote}
-                  onChange={(e) => setReviewNote(e.target.value)}
-                  minRows={3}
                 />
 
                 <p className="text-sm text-default-500">
                   {reviewAction === "approve"
                     ? "This will approve the request and add it to the user's monitored content."
-                    : "This will deny the request. The user will be notified."
-                  }
+                    : "This will deny the request. The user will be notified."}
                 </p>
               </div>
             )}
           </ModalBody>
           <ModalFooter>
-            <Button variant="flat" onPress={() => setShowReviewModal(false)}>
+            <Button onPress={() => setShowReviewModal(false)} variant="flat">
               Cancel
             </Button>
             <Button
               color={reviewAction === "approve" ? "success" : "danger"}
-              onPress={handleReview}
               isLoading={submitting}
+              onPress={handleReview}
             >
               {reviewAction === "approve" ? "Approve" : "Deny"}
             </Button>

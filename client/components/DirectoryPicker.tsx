@@ -43,14 +43,14 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
       return value;
     }
     // Default starting paths based on platform
-    if (typeof window !== 'undefined') {
-      const isWindows = navigator.platform.toLowerCase().includes('win');
+    if (typeof window !== "undefined") {
+      const isWindows = navigator.platform.toLowerCase().includes("win");
       if (isWindows) {
-        return 'C:\\';
+        return "C:\\";
       }
     }
     // macOS/Linux - start at root or /Volumes for network mounts
-    return '/';
+    return "/";
   };
 
   useEffect(() => {
@@ -70,7 +70,7 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
         `${API_BASE_URL}/api/Settings/browse?currentPath=${encodeURIComponent(path)}`,
         {
           headers: { Authorization: `Bearer ${token}` },
-        }
+        },
       );
 
       setCurrentPath(response.data.currentPath);
@@ -110,19 +110,19 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
   return (
     <div className="directory-picker">
       <label>{label}</label>
-      
+
       <div className="input-with-button">
         <input
-          type="text"
-          value={value || ""}
+          className="directory-input"
           onChange={handleManualInput}
           placeholder={placeholder}
-          className="directory-input"
+          type="text"
+          value={value || ""}
         />
         <button
-          type="button"
-          onClick={() => setIsOpen(true)}
           className="browse-button"
+          onClick={() => setIsOpen(true)}
+          type="button"
         >
           Browse...
         </button>
@@ -161,15 +161,13 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
                   )}
 
                   {directories.length === 0 && !loading && (
-                    <div className="empty-message">
-                      No subdirectories found
-                    </div>
+                    <div className="empty-message">No subdirectories found</div>
                   )}
 
                   {directories.map((dir) => (
                     <div
-                      key={dir.path}
                       className="directory-item"
+                      key={dir.path}
                       onClick={() => handleDirectoryClick(dir)}
                     >
                       <span className="icon">📁</span>
@@ -196,4 +194,3 @@ const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
 };
 
 export default DirectoryPicker;
-

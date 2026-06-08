@@ -17,7 +17,7 @@ export const getSubscriptionStatus = async (app: FirebaseApp) => {
   const subscriptionsRef = collection(db, "customers", userId, "subscriptions");
   const q = query(
     subscriptionsRef,
-    where("status", "in", ["trialing", "active"])
+    where("status", "in", ["trialing", "active"]),
   );
 
   return new Promise<any[]>((resolve, reject) => {
@@ -43,7 +43,7 @@ export const getSubscriptionStatus = async (app: FirebaseApp) => {
         }
         unsubscribe();
       },
-      reject
+      reject,
     );
   });
 };

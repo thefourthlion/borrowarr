@@ -2,8 +2,14 @@ const Indexers = require("../models/Indexers");
 const AvailableIndexers = require("../models/AvailableIndexers");
 const { getBaseUrlsForIndexer } = require("../data/indexerBaseUrls");
 
+const canManageIndexerSettings = (user) => Boolean(user?.permissions?.admin);
+
 exports.createIndexer = async (req, res) => {
   try {
+    if (!canManageIndexerSettings(req.user)) {
+      return res.status(403).json({ error: "Only admins can manage indexers" });
+    }
+
     // Get available base URLs for this indexer and store them
     const availableBaseUrls = getBaseUrlsForIndexer(req.body.name);
     
@@ -43,7 +49,7 @@ exports.createIndexer = async (req, res) => {
       indexerType: req.body.indexerType || "Cardigann",
       status: req.body.status || "enabled",
       cardigannId: cardigannId, // Set the cardigann ID for Cardigann indexers
-      userId: req.userId, // Associate with authenticated user
+      userId: req.userId, // Keep owner for auditing, but indexers are shared globally
     });
     
     const response = newIndexer.toJSON();
@@ -62,7 +68,7 @@ exports.readIndexers = async (req, res) => {
   const offset = page * limit;
   try {
     const result = await Indexers.findAndCountAll({
-      where: { userId: req.userId }, // Only fetch indexers for the authenticated user
+      where: {}, // Indexers are shared across all users
       limit,
       offset,
       order: [["createdAt", "DESC"]],
@@ -101,7 +107,7 @@ exports.readIndexers = async (req, res) => {
 exports.readIndexerFromID = async (req, res) => {
   try {
     const result = await Indexers.findOne({
-      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this indexer
+      where: { id: req.params.id },
     });
     if (!result) {
       return res.status(404).json({ error: "Record not found" });
@@ -121,6 +127,10 @@ exports.readIndexerFromID = async (req, res) => {
 
 exports.updateIndexer = async (req, res) => {
   try {
+    if (!canManageIndexerSettings(req.user)) {
+      return res.status(403).json({ error: "Only admins can manage indexers" });
+    }
+
     // Generate cardigann_id from indexer name if not provided
     let cardigannId = req.body.cardigannId;
     if (!cardigannId && req.body.name) {
@@ -158,7 +168,7 @@ exports.updateIndexer = async (req, res) => {
         cardigannId: cardigannId, // Set the cardigann ID
       },
       {
-        where: { id: req.params.id, userId: req.userId }, // Ensure user owns this indexer
+        where: { id: req.params.id },
         returning: true,
       }
     );
@@ -166,7 +176,7 @@ exports.updateIndexer = async (req, res) => {
       return res.status(404).json({ error: "Record not found" });
     }
     const result = await Indexers.findOne({
-      where: { id: req.params.id, userId: req.userId },
+      where: { id: req.params.id },
     });
     res.json(result);
   } catch (err) {
@@ -177,8 +187,12 @@ exports.updateIndexer = async (req, res) => {
 
 exports.deleteIndexer = async (req, res) => {
   try {
+    if (!canManageIndexerSettings(req.user)) {
+      return res.status(403).json({ error: "Only admins can manage indexers" });
+    }
+
     const deleted = await Indexers.destroy({
-      where: { id: req.params.id, userId: req.userId }, // Ensure user owns this indexer
+      where: { id: req.params.id },
     });
     if (deleted === 0) {
       return res.status(404).json({ error: "Record not found" });
@@ -204,7 +218,7 @@ exports.syncAppIndexers = async (req, res) => {
 exports.testAllIndexers = async (req, res) => {
   try {
     const indexers = await Indexers.findAll({
-      where: { enabled: true, userId: req.userId }, // Only test user's indexers
+      where: { enabled: true },
     });
     
     // Simulate testing each indexer
@@ -230,12 +244,16 @@ exports.testAllIndexers = async (req, res) => {
 
 exports.testIndexer = async (req, res) => {
   try {
+    if (!canManageIndexerSettings(req.user)) {
+      return res.status(403).json({ success: false, error: "Only admins can manage indexers" });
+    }
+
     let indexer;
     
     // If ID is provided, fetch from database
     if (req.params.id) {
       indexer = await Indexers.findOne({
-        where: { id: req.params.id, userId: req.userId }, // Ensure user owns this indexer
+        where: { id: req.params.id },
       });
       if (!indexer) {
         return res.status(404).json({ success: false, error: "Indexer not found" });

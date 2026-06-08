@@ -6,7 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const TMDBController = require('../controllers/TMDB');
-const { optionalAuth } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 // Search movies
 router.get('/search', TMDBController.searchMovies);
@@ -54,6 +54,12 @@ router.get('/movie/:id', TMDBController.getMovieDetails);
 // Get TV show details
 router.get('/tv/:id', TMDBController.getTVShowDetails);
 
+// Get company details
+router.get('/company/:id', TMDBController.getCompanyDetails);
+
+// Get network details
+router.get('/network/:id', TMDBController.getNetworkDetails);
+
 // Get TV show season details with episodes
 router.get('/tv/:id/season/:seasonNumber', TMDBController.getTVSeasonDetails);
 
@@ -63,11 +69,10 @@ router.get('/person/:id/movies', TMDBController.getMoviesByPerson);
 // Get TV shows by person (actor)
 router.get('/person/:id/tv', TMDBController.getTVShowsByPerson);
 
-// Search torrents for a specific movie (optional auth to filter by user's indexers)
-router.get('/movie/:id/torrents', optionalAuth, TMDBController.searchTorrentsForMovie);
+// Search torrents for a specific movie using admin-managed indexers
+router.get('/movie/:id/torrents', authenticateToken, TMDBController.searchTorrentsForMovie);
 
-// Search torrents for a specific TV episode (optional auth to filter by user's indexers)
-router.get('/tv/:id/torrents', optionalAuth, TMDBController.searchTorrentsForTVEpisode);
+// Search torrents for a specific TV episode using admin-managed indexers
+router.get('/tv/:id/torrents', authenticateToken, TMDBController.searchTorrentsForTVEpisode);
 
 module.exports = router;
-

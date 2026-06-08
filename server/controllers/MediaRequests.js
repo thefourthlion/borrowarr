@@ -2,7 +2,270 @@ const MediaRequest = require('../models/MediaRequest');
 const User = require('../models/User');
 const MonitoredMovies = require('../models/MonitoredMovies');
 const MonitoredSeries = require('../models/MonitoredSeries');
+const Indexers = require('../models/Indexers');
+const { searchIndexers } = require('../services/indexerSearch');
+const { grabReleaseInternal } = require('./DownloadClients');
 const { Op } = require('sequelize');
+
+const canManageRequests = (user) =>
+  Boolean(user?.permissions?.admin || user?.permissions?.manage_requests);
+
+const getYear = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return Number.isNaN(date.getTime()) ? '' : date.getFullYear();
+};
+
+const getQualityFromTitle = (title = '') => {
+  const lower = title.toLowerCase();
+  if (lower.includes('2160p') || lower.includes('4k') || lower.includes('uhd')) return '2160p';
+  if (lower.includes('1080p')) return '1080p';
+  if (lower.includes('720p')) return '720p';
+  return 'SD';
+};
+
+const filterByQuality = (results, qualityProfile) => {
+  if (!qualityProfile || qualityProfile === 'any') return results;
+
+  return results.filter((result) => {
+    const title = (result.title || '').toLowerCase();
+
+    switch (qualityProfile) {
+      case 'hd-720p-1080p':
+        return title.includes('720p') || title.includes('1080p');
+      case 'hd-720p':
+        return title.includes('720p');
+      case 'hd-1080p':
+        return title.includes('1080p');
+      case 'ultra-hd':
+        return title.includes('2160p') || title.includes('4k') || title.includes('uhd');
+      case 'sd':
+        return !title.includes('720p') && !title.includes('1080p') && !title.includes('2160p') && !title.includes('4k');
+      default:
+        return results;
+    }
+  });
+};
+
+const pickBestRelease = (results) => {
+  if (!results.length) return null;
+
+  return results.reduce((best, current) => {
+    const bestPriority = best.indexerPriority ?? 25;
+    const currentPriority = current.indexerPriority ?? 25;
+
+    if (currentPriority < bestPriority) return current;
+    if (currentPriority > bestPriority) return best;
+
+    return (current.seeders || 0) > (best.seeders || 0) ? current : best;
+  });
+};
+
+const normalizeReleaseTitle = (title = '') =>
+  title
+    .toLowerCase()
+    .replace(/[\s._-]+/g, ' ')
+    .trim();
+
+const pickRequestedRelease = (results, requestedRelease) => {
+  if (!requestedRelease?.releaseName) return null;
+
+  const requestedTitle = normalizeReleaseTitle(requestedRelease.releaseName);
+  return results.find((result) => normalizeReleaseTitle(result.title) === requestedTitle) || null;
+};
+
+const getSeriesEpisodeTarget = (request) => {
+  const episodes = Array.isArray(request.selectedEpisodes) ? request.selectedEpisodes : [];
+  const firstEpisode = episodes[0];
+
+  if (typeof firstEpisode === 'string') {
+    const match = firstEpisode.match(/(\d+)[^\d]+(\d+)/);
+    if (match) {
+      return {
+        seasonNumber: parseInt(match[1], 10),
+        episodeNumber: parseInt(match[2], 10),
+      };
+    }
+  }
+
+  if (firstEpisode && typeof firstEpisode === 'object') {
+    const seasonNumber = firstEpisode.seasonNumber ?? firstEpisode.season ?? firstEpisode.season_number;
+    const episodeNumber = firstEpisode.episodeNumber ?? firstEpisode.episode ?? firstEpisode.episode_number;
+    if (seasonNumber && episodeNumber) {
+      return {
+        seasonNumber: parseInt(seasonNumber, 10),
+        episodeNumber: parseInt(episodeNumber, 10),
+      };
+    }
+  }
+
+  return null;
+};
+
+const buildApprovalSearch = (request) => {
+  const year = getYear(request.releaseDate);
+  const requestedRelease = parseRequestedRelease(request.requestNote);
+
+  if (request.mediaType === 'movie') {
+    return {
+      query: requestedRelease?.releaseName || (year ? `${request.title} ${year}` : request.title),
+      categoryIds: [2000],
+      downloadMediaType: 'movies',
+      preferredIndexer: requestedRelease?.indexer || null,
+      requestedRelease,
+    };
+  }
+
+  const episodeTarget = getSeriesEpisodeTarget(request);
+  if (episodeTarget) {
+    const season = String(episodeTarget.seasonNumber).padStart(2, '0');
+    const episode = String(episodeTarget.episodeNumber).padStart(2, '0');
+    return {
+      query: requestedRelease?.releaseName || `${request.title} S${season}E${episode}`,
+      categoryIds: [5000],
+      downloadMediaType: 'tv',
+      preferredIndexer: requestedRelease?.indexer || null,
+      requestedRelease,
+      ...episodeTarget,
+    };
+  }
+
+  return {
+    query: requestedRelease?.releaseName || (year ? `${request.title} ${year}` : request.title),
+    categoryIds: [5000],
+    downloadMediaType: 'tv',
+    preferredIndexer: requestedRelease?.indexer || null,
+    requestedRelease,
+  };
+};
+
+const parseRequestedRelease = (requestNote = '') => {
+  if (!requestNote || typeof requestNote !== 'string') return null;
+
+  const releaseMatch = requestNote.match(/Release:\s*(.*?)(?:\s*\|\s*Indexer:|$)/i);
+  const indexerMatch = requestNote.match(/Indexer:\s*(.*?)\s*$/i);
+  const releaseName = releaseMatch?.[1]?.trim();
+
+  if (!releaseName) return null;
+
+  return {
+    releaseName,
+    indexer: indexerMatch?.[1]?.trim() || null,
+  };
+};
+
+const findReleaseForRequest = async (request) => {
+  const search = buildApprovalSearch(request);
+  const indexers = await Indexers.findAll({
+    where: { enabled: true },
+    attributes: ['id', 'name', 'baseUrl', 'username', 'password', 'apiKey', 'protocol', 'indexerType', 'enabled', 'categories', 'verified', 'priority', 'cardigannId'],
+    raw: true,
+  });
+
+  if (indexers.length === 0) {
+    const error = new Error('No enabled indexers are configured');
+    error.statusCode = 422;
+    throw error;
+  }
+
+  const { results } = await searchIndexers(indexers, search.query, search.categoryIds, 100, 0);
+  const allResults = results || [];
+  const preferredIndexerResults = search.preferredIndexer
+    ? allResults.filter((result) => result.indexer?.toLowerCase() === search.preferredIndexer.toLowerCase())
+    : allResults;
+  const candidates = preferredIndexerResults.length > 0 ? preferredIndexerResults : allResults;
+  const matchingQuality = filterByQuality(candidates, request.qualityProfile || 'any');
+  const bestRelease = pickRequestedRelease(matchingQuality, search.requestedRelease) || pickBestRelease(matchingQuality);
+
+  if (!bestRelease) {
+    const error = new Error(`No matching release found for "${search.query}"`);
+    error.statusCode = 422;
+    throw error;
+  }
+
+  return {
+    search,
+    release: bestRelease,
+  };
+};
+
+const approveAndDownload = async (request, reviewerId, reviewNote) => {
+  const { search, release } = await findReleaseForRequest(request);
+  const quality = getQualityFromTitle(release.title);
+
+  const downloadResult = await grabReleaseInternal({
+    downloadUrl: release.downloadUrl,
+    protocol: release.protocol,
+    releaseName: release.title,
+    indexer: release.indexer,
+    indexerId: release.indexerId,
+    size: release.size,
+    sizeFormatted: release.sizeFormatted,
+    seeders: release.seeders,
+    leechers: release.leechers,
+    quality,
+    source: 'MediaRequestApproval',
+    mediaType: search.downloadMediaType,
+    mediaTitle: request.title,
+    tmdbId: request.tmdbId,
+    seasonNumber: search.seasonNumber || null,
+    episodeNumber: search.episodeNumber || null,
+  }, request.userId);
+
+  if (request.mediaType === 'movie') {
+    const [movie] = await MonitoredMovies.findOrCreate({
+      where: { userId: request.userId, tmdbId: request.tmdbId },
+      defaults: {
+        userId: request.userId,
+        tmdbId: request.tmdbId,
+        title: request.title,
+        overview: request.overview,
+        posterUrl: request.posterPath,
+        releaseDate: request.releaseDate,
+        qualityProfile: request.qualityProfile || 'any',
+        status: 'downloading',
+        downloadedTorrentId: release.id,
+        downloadedTorrentTitle: release.title,
+      },
+    });
+
+    await movie.update({
+      status: 'downloading',
+      downloadedTorrentId: release.id,
+      downloadedTorrentTitle: release.title,
+    });
+  } else if (request.mediaType === 'series') {
+    const [series] = await MonitoredSeries.findOrCreate({
+      where: { userId: request.userId, tmdbId: request.tmdbId },
+      defaults: {
+        userId: request.userId,
+        tmdbId: request.tmdbId,
+        title: request.title,
+        overview: request.overview,
+        posterUrl: request.posterPath,
+        firstAirDate: request.releaseDate,
+        selectedSeasons: JSON.stringify(request.selectedSeasons || []),
+        selectedEpisodes: JSON.stringify(request.selectedEpisodes || []),
+        qualityProfile: request.qualityProfile || 'any',
+        status: 'downloading',
+      },
+    });
+
+    await series.update({ status: 'downloading' });
+  }
+
+  await request.update({
+    status: 'approved',
+    reviewedBy: reviewerId,
+    reviewedAt: new Date(),
+    reviewNote,
+  });
+
+  return {
+    release,
+    downloadResult,
+  };
+};
 
 /**
  * Create a new media request
@@ -28,6 +291,10 @@ exports.createRequest = async (req, res) => {
     const user = await User.findByPk(userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (!user.permissions?.request && !user.permissions?.admin) {
+      return res.status(403).json({ error: 'You do not have permission to create requests' });
     }
 
     const hasAutoApprove = user.permissions?.auto_approve || user.permissions?.admin;
@@ -124,6 +391,10 @@ exports.createRequest = async (req, res) => {
  */
 exports.getAllRequests = async (req, res) => {
   try {
+    if (!canManageRequests(req.user)) {
+      return res.status(403).json({ error: 'Not authorized to manage requests' });
+    }
+
     const { status, mediaType, userId: filterUserId } = req.query;
     
     const where = {};
@@ -194,6 +465,10 @@ exports.getMyRequests = async (req, res) => {
  */
 exports.approveRequest = async (req, res) => {
   try {
+    if (!canManageRequests(req.user)) {
+      return res.status(403).json({ error: 'Not authorized to approve requests' });
+    }
+
     const { id } = req.params;
     const reviewerId = req.userId;
     const { reviewNote } = req.body;
@@ -207,57 +482,24 @@ exports.approveRequest = async (req, res) => {
       return res.status(400).json({ error: 'Request is not pending' });
     }
 
-    // Update request status
-    await request.update({
-      status: 'approved',
-      reviewedBy: reviewerId,
-      reviewedAt: new Date(),
-      reviewNote,
-    });
-
-    // Add to monitored content for the requesting user
-    if (request.mediaType === 'movie') {
-      await MonitoredMovies.findOrCreate({
-        where: { userId: request.userId, tmdbId: request.tmdbId },
-        defaults: {
-          userId: request.userId,
-          tmdbId: request.tmdbId,
-          title: request.title,
-          overview: request.overview,
-          posterPath: request.posterPath,
-          backdropPath: request.backdropPath,
-          releaseDate: request.releaseDate,
-          qualityProfile: request.qualityProfile || 'any',
-          status: 'monitoring',
-        },
-      });
-    } else if (request.mediaType === 'series') {
-      await MonitoredSeries.findOrCreate({
-        where: { userId: request.userId, tmdbId: request.tmdbId },
-        defaults: {
-          userId: request.userId,
-          tmdbId: request.tmdbId,
-          title: request.title,
-          overview: request.overview,
-          posterPath: request.posterPath,
-          backdropPath: request.backdropPath,
-          firstAirDate: request.releaseDate,
-          selectedSeasons: JSON.stringify(request.selectedSeasons || []),
-          selectedEpisodes: JSON.stringify(request.selectedEpisodes || []),
-          qualityProfile: request.qualityProfile || 'any',
-          status: 'monitoring',
-        },
-      });
-    }
+    const approvalResult = await approveAndDownload(request, reviewerId, reviewNote);
 
     res.json({
       success: true,
-      message: 'Request approved',
-      request,
+      message: 'Request approved and sent to download client',
+      request: request.toJSON(),
+      release: {
+        title: approvalResult.release.title,
+        indexer: approvalResult.release.indexer,
+        protocol: approvalResult.release.protocol,
+      },
+      download: approvalResult.downloadResult,
     });
   } catch (error) {
     console.error('Error approving request:', error);
-    res.status(500).json({ error: 'Failed to approve request' });
+    res.status(error.statusCode || 500).json({
+      error: error.message || 'Failed to approve request',
+    });
   }
 };
 
@@ -266,6 +508,10 @@ exports.approveRequest = async (req, res) => {
  */
 exports.denyRequest = async (req, res) => {
   try {
+    if (!canManageRequests(req.user)) {
+      return res.status(403).json({ error: 'Not authorized to deny requests' });
+    }
+
     const { id } = req.params;
     const reviewerId = req.userId;
     const { reviewNote } = req.body;
@@ -340,10 +586,12 @@ exports.deleteRequest = async (req, res) => {
  */
 exports.getRequestCounts = async (req, res) => {
   try {
-    const pending = await MediaRequest.count({ where: { status: 'pending' } });
-    const approved = await MediaRequest.count({ where: { status: 'approved' } });
-    const denied = await MediaRequest.count({ where: { status: 'denied' } });
-    const total = await MediaRequest.count();
+    const where = canManageRequests(req.user) ? {} : { userId: req.userId };
+
+    const pending = await MediaRequest.count({ where: { ...where, status: 'pending' } });
+    const approved = await MediaRequest.count({ where: { ...where, status: 'approved' } });
+    const denied = await MediaRequest.count({ where: { ...where, status: 'denied' } });
+    const total = await MediaRequest.count({ where });
 
     res.json({
       success: true,

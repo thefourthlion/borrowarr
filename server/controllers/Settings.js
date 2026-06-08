@@ -1,4 +1,5 @@
 const Settings = require('../models/Settings');
+const User = require("../models/User");
 const fs = require('fs').promises;
 const path = require('path');
 const { importMoviesFromDirectory } = require('../services/libraryImporter');
@@ -58,11 +59,18 @@ exports.getSettings = async (req, res) => {
  */
 exports.getPublicRegistrationStatus = async (req, res) => {
   try {
+    const userCount = await User.count();
+    const isFirstRun = userCount === 0;
+
+    if (isFirstRun) {
+      return res.json({ enabled: true });
+    }
+
     // Get the first user's settings (admin settings) or default
     const settings = await Settings.findOne({ order: [['createdAt', 'ASC']] });
     
     res.json({ 
-      enabled: settings ? settings.publicRegistrationEnabled : true 
+      enabled: settings ? settings.publicRegistrationEnabled : false,
     });
   } catch (error) {
     console.error('Error fetching registration status:', error);
@@ -77,6 +85,13 @@ exports.updateSettings = async (req, res) => {
   try {
     const userId = req.userId;
     const updates = req.body;
+
+    if (
+      Object.prototype.hasOwnProperty.call(updates, "publicRegistrationEnabled") &&
+      !req.user?.permissions?.admin
+    ) {
+      return res.status(403).json({ error: "Only admins can change public registration" });
+    }
 
     // Validate media directories if provided (skip if null, undefined, or empty)
     // These are separate from download watcher directories

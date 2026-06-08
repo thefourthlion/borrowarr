@@ -1,23 +1,35 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { ArrowRight, Film, Tv, Heart, Download, Check, Eye, EyeOff } from 'lucide-react';
-import { Spinner } from '@nextui-org/spinner';
-import { Chip } from '@nextui-org/chip';
-import { Button } from '@nextui-org/button';
-import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from '@nextui-org/modal';
-import Link from 'next/link';
-import axios from 'axios';
-import { useAuth } from '@/context/AuthContext';
-import AddMovieModal from './AddMovieModal';
-import AddSeriesModal from './AddSeriesModal';
-import { PlexBadge } from './PlexBadge';
-import { usePlexLibrary } from '@/hooks/usePlexLibrary';
+import React, { useState, useEffect } from "react";
+import {
+  ArrowRight,
+  Film,
+  Tv,
+  Heart,
+  Download,
+  Check,
+  Eye,
+  EyeOff,
+} from "lucide-react";
+import { Spinner } from "@nextui-org/spinner";
+import { Chip } from "@nextui-org/chip";
+import { Button } from "@nextui-org/button";
+import {
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@nextui-org/modal";
+import axios from "axios";
+import AddMovieModal from "./AddMovieModal";
+import AddSeriesModal from "./AddSeriesModal";
+import { PlexBadge } from "./PlexBadge";
+import { useAuth } from "@/context/AuthContext";
+import { usePlexLibrary } from "@/hooks/usePlexLibrary";
 import {
   Carousel,
   CarouselContent,
   CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
   type CarouselApi,
 } from "@/components/ui/carousel";
 import "../styles/SideScrollMovieList.scss";
@@ -40,7 +52,7 @@ interface TMDBMedia {
   language?: string;
   network?: string;
   number_of_seasons?: number;
-  media_type?: 'movie' | 'tv';
+  media_type?: "movie" | "tv";
 }
 
 interface TorrentResult {
@@ -81,43 +93,49 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
   const [canScrollPrev, setCanScrollPrev] = useState(false);
   const [canScrollNext, setCanScrollNext] = useState(false);
   const [hasLoadedMore, setHasLoadedMore] = useState(false);
-  
+
   // Modal states
   const [selectedMedia, setSelectedMedia] = useState<TMDBMedia | null>(null);
   const [isMovieModalOpen, setIsMovieModalOpen] = useState(false);
   const [isSeriesModalOpen, setIsSeriesModalOpen] = useState(false);
-  
+
   // Favorites state
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [favoritingIds, setFavoritingIds] = useState<Set<number>>(new Set());
-  
+
   // Hidden media state
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
   const [hidingIds, setHidingIds] = useState<Set<number>>(new Set());
-  
+
   // Download state
   const [downloading, setDownloading] = useState<Set<number>>(new Set());
-  const [downloadSuccess, setDownloadSuccess] = useState<Set<number>>(new Set());
-  
+  const [downloadSuccess, setDownloadSuccess] = useState<Set<number>>(
+    new Set(),
+  );
+
   // Notification modal
   const [notificationModal, setNotificationModal] = useState<{
     isOpen: boolean;
     title: string;
     message: string;
-    type: 'success' | 'error' | 'info' | 'warning';
+    type: "success" | "error" | "info" | "warning";
   }>({
     isOpen: false,
-    title: '',
-    message: '',
-    type: 'info',
+    title: "",
+    message: "",
+    type: "info",
   });
 
-  const showNotification = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+  const showNotification = (
+    title: string,
+    message: string,
+    type: "success" | "error" | "info" | "warning" = "info",
+  ) => {
     setNotificationModal({ isOpen: true, title, message, type });
   };
 
   const closeNotification = () => {
-    setNotificationModal(prev => ({ ...prev, isOpen: false }));
+    setNotificationModal((prev) => ({ ...prev, isOpen: false }));
   };
 
   // Fetch favorites on mount
@@ -135,7 +153,7 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
     const updateScrollButtons = () => {
       setCanScrollPrev(api.canScrollPrev());
       setCanScrollNext(api.canScrollNext());
-      
+
       // Check if near the end for infinite scroll
       if (onLoadMore && !loadingMore && !hasLoadedMore) {
         const scrollProgress = api.scrollProgress();
@@ -148,14 +166,14 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
     };
 
     updateScrollButtons();
-    api.on('select', updateScrollButtons);
-    api.on('scroll', updateScrollButtons);
-    api.on('reInit', updateScrollButtons);
+    api.on("select", updateScrollButtons);
+    api.on("scroll", updateScrollButtons);
+    api.on("reInit", updateScrollButtons);
 
     return () => {
-      api.off('select', updateScrollButtons);
-      api.off('scroll', updateScrollButtons);
-      api.off('reInit', updateScrollButtons);
+      api.off("select", updateScrollButtons);
+      api.off("scroll", updateScrollButtons);
+      api.off("reInit", updateScrollButtons);
     };
   }, [api, onLoadMore, loadingMore, hasLoadedMore]);
 
@@ -177,7 +195,9 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
 
       if (response.data.success && response.data.favorites) {
         const ids = new Set<string>(
-          response.data.favorites.map((fav: any) => `${fav.tmdbId}-${fav.mediaType}`)
+          response.data.favorites.map(
+            (fav: any) => `${fav.tmdbId}-${fav.mediaType}`,
+          ),
         );
         setFavoriteIds(ids);
       }
@@ -199,7 +219,7 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
         // Combine both movies and series hidden IDs
         const allHiddenIds = [
           ...response.data.hiddenIds.movies,
-          ...response.data.hiddenIds.series
+          ...response.data.hiddenIds.series,
         ];
         setHiddenIds(new Set(allHiddenIds));
       }
@@ -209,14 +229,17 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
   };
 
   const handleMediaClick = (item: TMDBMedia) => {
-    const isTV = item.media_type === 'tv' || !!item.first_air_date || !!item.name;
+    const isTV =
+      item.media_type === "tv" || !!item.first_air_date || !!item.name;
     const mediaWithPosterUrl = {
       ...item,
-      posterUrl: item.posterUrl || (item.poster_path ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}` : null),
+      posterUrl:
+        item.posterUrl ||
+        (item.poster_path ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}` : null),
     };
-    
+
     setSelectedMedia(mediaWithPosterUrl);
-    
+
     if (isTV) {
       setIsSeriesModalOpen(true);
     } else {
@@ -232,15 +255,24 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
 
   const handleQuickDownload = async (item: TMDBMedia, e: React.MouseEvent) => {
     e.stopPropagation();
-    
+
     if (!user) {
-      showNotification('Login Required', 'Please log in to download', 'warning');
+      showNotification(
+        "Login Required",
+        "Please log in to download",
+        "warning",
+      );
       return;
     }
 
-    const isTV = item.media_type === 'tv' || !!item.first_air_date || !!item.name;
+    const isTV =
+      item.media_type === "tv" || !!item.first_air_date || !!item.name;
     if (isTV) {
-      showNotification('Not Supported', 'Quick download is not supported for TV shows. Please use the modal to select episodes.', 'info');
+      showNotification(
+        "Not Supported",
+        "Quick download is not supported for TV shows. Please use the modal to select episodes.",
+        "info",
+      );
       return;
     }
 
@@ -248,36 +280,79 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
     setDownloading((prev) => new Set(prev).add(movieId));
 
     try {
-      const title = item.title || item.name || '';
-      const year = item.release_date ? new Date(item.release_date).getFullYear() : '';
+      const title = item.title || item.name || "";
+      const year = item.release_date
+        ? new Date(item.release_date).getFullYear()
+        : "";
+      const hasAutoApprove =
+        user?.permissions?.auto_approve || user?.permissions?.admin;
+
+      if (!hasAutoApprove) {
+        await axios.post(`${API_BASE_URL}/api/MediaRequests`, {
+          mediaType: "movie",
+          tmdbId: item.id,
+          title,
+          overview: item.overview,
+          posterPath: item.poster_path,
+          releaseDate: item.release_date || null,
+          qualityProfile: "any",
+        });
+
+        setDownloadSuccess((prev) => new Set(prev).add(movieId));
+        showNotification(
+          "Request Submitted",
+          `${title} has been submitted for admin approval.`,
+          "info",
+        );
+        setTimeout(() => {
+          setDownloadSuccess((prev) => {
+            const next = new Set(prev);
+            next.delete(movieId);
+            return next;
+          });
+        }, 3000);
+        return;
+      }
+
+      const token = localStorage.getItem("accessToken");
 
       // Fetch torrents
       const torrentResponse = await axios.get(
         `${API_BASE_URL}/api/TMDB/movie/${item.id}/torrents`,
         {
-          params: { title, year, categoryIds: '2000' },
+          params: { title, year, categoryIds: "2000" },
+          headers: token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : undefined,
           timeout: 30000,
-        }
+        },
       );
 
-      if (!torrentResponse.data.success || torrentResponse.data.results.length === 0) {
+      if (
+        !torrentResponse.data.success ||
+        torrentResponse.data.results.length === 0
+      ) {
         throw new Error("No torrents found");
       }
 
-      const bestTorrent = torrentResponse.data.results.reduce((best: TorrentResult, current: TorrentResult) => {
-        const bestPriority = (best as any).indexerPriority ?? 25;
-        const currentPriority = (current as any).indexerPriority ?? 25;
-        if (currentPriority < bestPriority) return current;
-        if (currentPriority > bestPriority) return best;
-        
-        const bestSeeders = best.seeders || 0;
-        const currentSeeders = current.seeders || 0;
-        return currentSeeders > bestSeeders ? current : best;
-      });
+      const bestTorrent = torrentResponse.data.results.reduce(
+        (best: TorrentResult, current: TorrentResult) => {
+          const bestPriority = (best as any).indexerPriority ?? 25;
+          const currentPriority = (current as any).indexerPriority ?? 25;
+          if (currentPriority < bestPriority) return current;
+          if (currentPriority > bestPriority) return best;
 
-      const posterUrl = item.poster_path 
-        ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}` 
-        : (item.posterUrl || null);
+          const bestSeeders = best.seeders || 0;
+          const currentSeeders = current.seeders || 0;
+          return currentSeeders > bestSeeders ? current : best;
+        },
+      );
+
+      const posterUrl = item.poster_path
+        ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}`
+        : item.posterUrl || null;
 
       // Save to monitored movies
       await axios.post(`${API_BASE_URL}/api/MonitoredMovies`, {
@@ -294,32 +369,40 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
 
       // Extract quality
       const titleLower = bestTorrent.title.toLowerCase();
-      let quality = 'SD';
-      if (titleLower.includes('2160p') || titleLower.includes('4k')) quality = '2160p';
-      else if (titleLower.includes('1080p')) quality = '1080p';
-      else if (titleLower.includes('720p')) quality = '720p';
+      let quality = "SD";
+      if (titleLower.includes("2160p") || titleLower.includes("4k"))
+        quality = "2160p";
+      else if (titleLower.includes("1080p")) quality = "1080p";
+      else if (titleLower.includes("720p")) quality = "720p";
 
       // Download the torrent with history
-      const downloadResponse = await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, {
-        downloadUrl: bestTorrent.downloadUrl,
-        protocol: bestTorrent.protocol,
-        releaseName: bestTorrent.title,
-        indexer: bestTorrent.indexer,
-        indexerId: bestTorrent.indexerId,
-        size: bestTorrent.size,
-        sizeFormatted: bestTorrent.sizeFormatted,
-        seeders: bestTorrent.seeders,
-        leechers: bestTorrent.leechers,
-        quality: quality,
-        source: 'DiscoverQuickDownload',
-        mediaType: 'movie',
-        mediaTitle: title,
-        tmdbId: item.id,
-      });
+      const downloadResponse = await axios.post(
+        `${API_BASE_URL}/api/DownloadClients/grab`,
+        {
+          downloadUrl: bestTorrent.downloadUrl,
+          protocol: bestTorrent.protocol,
+          releaseName: bestTorrent.title,
+          indexer: bestTorrent.indexer,
+          indexerId: bestTorrent.indexerId,
+          size: bestTorrent.size,
+          sizeFormatted: bestTorrent.sizeFormatted,
+          seeders: bestTorrent.seeders,
+          leechers: bestTorrent.leechers,
+          quality: quality,
+          source: "DiscoverQuickDownload",
+          mediaType: "movie",
+          mediaTitle: title,
+          tmdbId: item.id,
+        },
+      );
 
       if (downloadResponse.data.success) {
         setDownloadSuccess((prev) => new Set(prev).add(movieId));
-        showNotification('Download Started', `Downloading: ${bestTorrent.title}`, 'success');
+        showNotification(
+          "Download Started",
+          `Downloading: ${bestTorrent.title}`,
+          "success",
+        );
         setTimeout(() => {
           setDownloadSuccess((prev) => {
             const next = new Set(prev);
@@ -331,8 +414,9 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
         throw new Error(downloadResponse.data.error || "Failed to download");
       }
     } catch (error: any) {
-      const errorMsg = error.response?.data?.error || error.message || "Download failed";
-      showNotification('Download Error', errorMsg, 'error');
+      const errorMsg =
+        error.response?.data?.error || error.message || "Download failed";
+      showNotification("Download Error", errorMsg, "error");
     } finally {
       setDownloading((prev) => {
         const next = new Set(prev);
@@ -344,58 +428,66 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
 
   const toggleFavorite = async (item: TMDBMedia, e: React.MouseEvent) => {
     e.stopPropagation();
-    
+
     if (!user) {
-      showNotification('Login Required', 'Please log in to add favorites', 'warning');
+      showNotification(
+        "Login Required",
+        "Please log in to add favorites",
+        "warning",
+      );
       return;
     }
 
-    const isTV = item.media_type === 'tv' || !!item.first_air_date || !!item.name;
-    const mediaType = isTV ? 'tv' : 'movie';
+    const isTV =
+      item.media_type === "tv" || !!item.first_air_date || !!item.name;
+    const mediaType = isTV ? "tv" : "movie";
     const favoriteKey = `${item.id}-${mediaType}`;
     const isFavorited = favoriteIds.has(favoriteKey);
-    
+
     setFavoritingIds((prev) => new Set(prev).add(item.id));
 
     try {
       const token = localStorage.getItem("accessToken");
-      
+
       if (isFavorited) {
         await axios.delete(`${API_BASE_URL}/api/Favorites`, {
           headers: { Authorization: `Bearer ${token}` },
           data: { tmdbId: item.id, mediaType },
         });
-        
+
         setFavoriteIds((prev) => {
           const next = new Set(prev);
           next.delete(favoriteKey);
           return next;
         });
       } else {
-        const posterUrl = item.poster_path 
-          ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}` 
-          : (item.posterUrl || null);
+        const posterUrl = item.poster_path
+          ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}`
+          : item.posterUrl || null;
 
         await axios.post(
           `${API_BASE_URL}/api/Favorites`,
           {
             tmdbId: item.id,
             mediaType,
-            title: item.title || item.name || '',
+            title: item.title || item.name || "",
             posterUrl,
             overview: item.overview,
             releaseDate: isTV ? item.first_air_date : item.release_date,
             voteAverage: item.vote_average,
           },
-          { headers: { Authorization: `Bearer ${token}` } }
+          { headers: { Authorization: `Bearer ${token}` } },
         );
-        
+
         setFavoriteIds((prev) => new Set(prev).add(favoriteKey));
       }
     } catch (error: any) {
-      console.error('Error toggling favorite:', error);
-      const errorMsg = error.response?.data?.error || error.message || "Failed to update favorite";
-      showNotification('Error', errorMsg, 'error');
+      console.error("Error toggling favorite:", error);
+      const errorMsg =
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to update favorite";
+      showNotification("Error", errorMsg, "error");
     } finally {
       setFavoritingIds((prev) => {
         const next = new Set(prev);
@@ -407,21 +499,26 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
 
   const toggleHidden = async (item: TMDBMedia, e: React.MouseEvent) => {
     e.stopPropagation();
-    
+
     if (!user) {
-      showNotification('Login Required', 'Please log in to hide content', 'warning');
+      showNotification(
+        "Login Required",
+        "Please log in to hide content",
+        "warning",
+      );
       return;
     }
 
-    const isTV = item.media_type === 'tv' || !!item.first_air_date || !!item.name;
-    const mediaType = isTV ? 'series' : 'movie';
+    const isTV =
+      item.media_type === "tv" || !!item.first_air_date || !!item.name;
+    const mediaType = isTV ? "series" : "movie";
     const isHidden = hiddenIds.has(item.id);
-    
+
     setHidingIds((prev) => new Set(prev).add(item.id));
 
     try {
       const token = localStorage.getItem("accessToken");
-      
+
       if (isHidden) {
         // Unhide
         await axios.post(
@@ -432,9 +529,9 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
           },
           {
             headers: { Authorization: `Bearer ${token}` },
-          }
+          },
         );
-        
+
         setHiddenIds((prev) => {
           const next = new Set(prev);
           next.delete(item.id);
@@ -449,20 +546,23 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
           {
             tmdbId: item.id,
             mediaType,
-            title: item.title || item.name || '',
+            title: item.title || item.name || "",
             posterPath,
           },
           {
             headers: { Authorization: `Bearer ${token}` },
-          }
+          },
         );
-        
+
         setHiddenIds((prev) => new Set(prev).add(item.id));
       }
     } catch (error: any) {
-      console.error('Error toggling hidden:', error);
-      const errorMsg = error.response?.data?.error || error.message || "Failed to update hidden status";
-      showNotification('Error', errorMsg, 'error');
+      console.error("Error toggling hidden:", error);
+      const errorMsg =
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to update hidden status";
+      showNotification("Error", errorMsg, "error");
     } finally {
       setHidingIds((prev) => {
         const next = new Set(prev);
@@ -472,57 +572,72 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
     }
   };
 
-  const getMediaTitle = (item: TMDBMedia) => item.title || item.name || 'Unknown';
+  const getMediaTitle = (item: TMDBMedia) =>
+    item.title || item.name || "Unknown";
   const getMediaYear = (item: TMDBMedia) => {
     const date = item.release_date || item.first_air_date;
-    return date ? new Date(date).getFullYear() : '';
+    return date ? new Date(date).getFullYear() : "";
   };
 
   const renderMediaCard = (item: TMDBMedia) => {
     const title = getMediaTitle(item);
-    const posterUrl = item.posterUrl || (item.poster_path ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}` : null);
-    const isTV = item.media_type === 'tv' || !!item.first_air_date || !!item.name;
+    const posterUrl =
+      item.posterUrl ||
+      (item.poster_path ? `${TMDB_IMAGE_BASE_URL}${item.poster_path}` : null);
+    const isTV =
+      item.media_type === "tv" || !!item.first_air_date || !!item.name;
     const isDownloading = downloading.has(item.id);
     const isDownloaded = downloadSuccess.has(item.id);
-    const isFavorited = favoriteIds.has(`${item.id}-${isTV ? 'tv' : 'movie'}`);
+    const canAutoApprove = Boolean(
+      user?.permissions?.auto_approve || user?.permissions?.admin,
+    );
+    const isFavorited = favoriteIds.has(`${item.id}-${isTV ? "tv" : "movie"}`);
     const isFavoriting = favoritingIds.has(item.id);
     const isHidden = hiddenIds.has(item.id);
     const isHiding = hidingIds.has(item.id);
 
     return (
       <div
-        onClick={() => handleMediaClick(item)}
         className="cursor-pointer group transition-all duration-300"
+        onClick={() => handleMediaClick(item)}
       >
         <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg border border-secondary/20 hover:border-secondary/60 hover:shadow-2xl hover:shadow-secondary/20 transition-all duration-300">
           {posterUrl ? (
             <img
-              src={posterUrl}
               alt={title}
               className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-80"
               loading="lazy"
+              src={posterUrl}
             />
           ) : (
             <div className="w-full h-full bg-default-200 flex items-center justify-center">
-              {isTV ? <Tv size={48} className="text-default-400" /> : <Film size={48} className="text-default-400" />}
+              {isTV ? (
+                <Tv className="text-default-400" size={48} />
+              ) : (
+                <Film className="text-default-400" size={48} />
+              )}
             </div>
           )}
-          
+
           {/* Plex badge - Bottom Left (when in library) */}
           <PlexBadge
-            show={!!user && hasConnection && isInPlex(title, getMediaYear(item), isTV ? 'tv' : 'movie')}
+            show={
+              !!user &&
+              hasConnection &&
+              isInPlex(title, getMediaYear(item), isTV ? "tv" : "movie")
+            }
             title="On Plex"
           />
 
           {/* Media Type Badge - Top Left */}
           <div className="absolute top-1 left-1 z-10">
-            <Chip 
-              size="sm" 
-              color={isTV ? "primary" : "secondary"}
-              variant="flat" 
+            <Chip
               className="text-[10px] sm:text-xs font-bold uppercase backdrop-blur-md px-1 py-0.5"
+              color={isTV ? "primary" : "secondary"}
+              size="sm"
+              variant="flat"
             >
-              {isTV ? 'TV' : 'Movie'}
+              {isTV ? "TV" : "Movie"}
             </Chip>
           </div>
 
@@ -538,27 +653,21 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
           {/* Hide Button - Bottom Right (left of favorite) */}
           {user && (
             <button
-              onClick={(e) => toggleHidden(item, e)}
-              disabled={isHiding}
               className={`absolute bottom-1 right-[4.5rem] z-10 p-1.5 rounded-full backdrop-blur-md transition-all duration-200 ${
                 isHidden
-                  ? 'bg-warning/90 hover:bg-warning'
-                  : 'bg-default-500/60 hover:bg-default-500/80'
-              } ${isHiding ? 'opacity-50 cursor-not-allowed' : ''}`}
-              title={isHidden ? 'Unhide' : 'Hide (never show again)'}
+                  ? "bg-warning/90 hover:bg-warning"
+                  : "bg-default-500/60 hover:bg-default-500/80"
+              } ${isHiding ? "opacity-50 cursor-not-allowed" : ""}`}
+              disabled={isHiding}
+              onClick={(e) => toggleHidden(item, e)}
+              title={isHidden ? "Unhide" : "Hide (never show again)"}
             >
               {isHiding ? (
-                <Spinner size="sm" color="white" className="w-4 h-4" />
+                <Spinner className="w-4 h-4" color="white" size="sm" />
               ) : isHidden ? (
-                <EyeOff 
-                  size={16} 
-                  className="text-white" 
-                />
+                <EyeOff className="text-white" size={16} />
               ) : (
-                <Eye 
-                  size={16} 
-                  className="text-white" 
-                />
+                <Eye className="text-white" size={16} />
               )}
             </button>
           )}
@@ -566,21 +675,21 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
           {/* Favorite Button - Bottom Right (left of download) */}
           {user && (
             <button
-              onClick={(e) => toggleFavorite(item, e)}
-              disabled={isFavoriting}
               className={`absolute bottom-1 right-10 z-10 p-1.5 rounded-full backdrop-blur-md transition-all duration-200 ${
                 isFavorited
-                  ? 'bg-danger/90 hover:bg-danger'
-                  : 'bg-secondary/60 hover:bg-secondary/80'
-              } ${isFavoriting ? 'opacity-50 cursor-not-allowed' : ''}`}
-              title={isFavorited ? 'Remove from Favorites' : 'Add to Favorites'}
+                  ? "bg-danger/90 hover:bg-danger"
+                  : "bg-secondary/60 hover:bg-secondary/80"
+              } ${isFavoriting ? "opacity-50 cursor-not-allowed" : ""}`}
+              disabled={isFavoriting}
+              onClick={(e) => toggleFavorite(item, e)}
+              title={isFavorited ? "Remove from Favorites" : "Add to Favorites"}
             >
               {isFavoriting ? (
-                <Spinner size="sm" color="white" className="w-4 h-4" />
+                <Spinner className="w-4 h-4" color="white" size="sm" />
               ) : (
-                <Heart 
-                  size={16} 
-                  className={`text-white ${isFavorited ? 'fill-white' : ''}`}
+                <Heart
+                  className={`text-white ${isFavorited ? "fill-white" : ""}`}
+                  size={16}
                 />
               )}
             </button>
@@ -589,28 +698,43 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
           {/* Download Button - Bottom Right */}
           {user && !isTV && (
             <button
-              onClick={(e) => handleQuickDownload(item, e)}
-              disabled={isDownloading || isDownloaded}
               className={`absolute bottom-1 right-1 z-10 p-1.5 rounded-full backdrop-blur-md transition-all duration-200 ${
                 isDownloaded
-                  ? 'bg-success/90'
-                  : 'bg-primary/60 hover:bg-primary/80'
-              } ${isDownloading || isDownloaded ? 'opacity-50 cursor-not-allowed' : ''}`}
-              title={isDownloaded ? 'Downloaded' : 'Quick Download'}
+                  ? "bg-success/90"
+                  : "bg-primary/60 hover:bg-primary/80"
+              } ${isDownloading || isDownloaded ? "opacity-50 cursor-not-allowed" : ""}`}
+              disabled={isDownloading || isDownloaded}
+              onClick={(e) => handleQuickDownload(item, e)}
+              title={
+                isDownloaded
+                  ? canAutoApprove
+                    ? "Downloaded"
+                    : "Requested"
+                  : isDownloading
+                    ? canAutoApprove
+                      ? "Downloading..."
+                      : "Requesting..."
+                    : canAutoApprove
+                      ? "Quick Download"
+                      : "Quick Request"
+              }
             >
               {isDownloading ? (
-                <Spinner size="sm" color="white" className="w-4 h-4" />
+                <Spinner className="w-4 h-4" color="white" size="sm" />
               ) : isDownloaded ? (
-                <Check size={16} className="text-white" />
+                <Check className="text-white" size={16} />
               ) : (
-                <Download size={16} className="text-white" />
+                <Download className="text-white" size={16} />
               )}
             </button>
           )}
 
           {/* Title Overlay */}
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-            <h3 className="text-white font-semibold text-sm line-clamp-2" title={title}>
+            <h3
+              className="text-white font-semibold text-sm line-clamp-2"
+              title={title}
+            >
               {title}
             </h3>
             {getMediaYear(item) && (
@@ -631,29 +755,31 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 sm:gap-3">
                 {icon && <div className="flex-shrink-0">{icon}</div>}
-                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-left">{title}</h2>
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-left">
+                  {title}
+                </h2>
               </div>
               <div className="flex items-center gap-2">
                 {/* Carousel Navigation Arrows */}
                 {!loading && items.length > 0 && (
                   <div className="flex items-center gap-1">
                     <Button
+                      className="bg-default-100 hover:bg-default-200 transition-all min-w-9 h-9 rounded-full"
+                      isDisabled={!canScrollPrev}
                       isIconOnly
+                      onPress={() => api?.scrollPrev()}
                       size="sm"
                       variant="flat"
-                      className="bg-default-100 hover:bg-default-200 transition-all min-w-9 h-9 rounded-full"
-                      onPress={() => api?.scrollPrev()}
-                      isDisabled={!canScrollPrev}
                     >
-                      <ArrowRight size={18} className="rotate-180" />
+                      <ArrowRight className="rotate-180" size={18} />
                     </Button>
                     <Button
+                      className="bg-default-100 hover:bg-default-200 transition-all min-w-9 h-9 rounded-full"
+                      isDisabled={!canScrollNext}
                       isIconOnly
+                      onPress={() => api?.scrollNext()}
                       size="sm"
                       variant="flat"
-                      className="bg-default-100 hover:bg-default-200 transition-all min-w-9 h-9 rounded-full"
-                      onPress={() => api?.scrollNext()}
-                      isDisabled={!canScrollNext}
                     >
                       <ArrowRight size={18} />
                     </Button>
@@ -666,7 +792,7 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
           {/* Content */}
           {loading ? (
             <div className="flex justify-center items-center py-12">
-              <Spinner size="lg" color="secondary" />
+              <Spinner color="secondary" size="lg" />
             </div>
           ) : items.length === 0 ? (
             <div className="text-center py-12">
@@ -675,6 +801,7 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
           ) : (
             <div className="relative">
               <Carousel
+                className="w-full"
                 opts={{
                   align: "start",
                   loop: false,
@@ -682,24 +809,27 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
                   dragFree: true,
                 }}
                 setApi={setApi}
-                className="w-full"
               >
                 <CarouselContent className="-ml-2 sm:-ml-3">
-                  {items.filter(item => !hiddenIds.has(item.id)).map((item) => (
-                    <CarouselItem 
-                      key={`${item.media_type || 'movie'}-${item.id}`}
-                      className="pl-2 sm:pl-3 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/5 xl:basis-1/6 2xl:basis-1/7 3xl:basis-1/8 4xl:basis-1/10 5xl:basis-1/12"
-                      style={{ flexBasis: `clamp(160px, ${100 / Math.min(items.length, 12)}%, 280px)` }}
-                    >
-                      {renderMediaCard(item)}
-                    </CarouselItem>
-                  ))}
-                  
+                  {items
+                    .filter((item) => !hiddenIds.has(item.id))
+                    .map((item) => (
+                      <CarouselItem
+                        className="pl-2 sm:pl-3 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/5 xl:basis-1/6 2xl:basis-1/7 3xl:basis-1/8 4xl:basis-1/10 5xl:basis-1/12"
+                        key={`${item.media_type || "movie"}-${item.id}`}
+                        style={{
+                          flexBasis: `clamp(160px, ${100 / Math.min(items.length, 12)}%, 280px)`,
+                        }}
+                      >
+                        {renderMediaCard(item)}
+                      </CarouselItem>
+                    ))}
+
                   {/* Loading More Indicator */}
                   {loadingMore && (
                     <CarouselItem className="pl-2 sm:pl-3 basis-1/2 sm:basis-1/3 md:basis-1/4 lg:basis-1/5 xl:basis-1/6 2xl:basis-1/7 3xl:basis-1/8 4xl:basis-1/10 5xl:basis-1/12">
                       <div className="flex items-center justify-center h-full min-h-[300px]">
-                        <Spinner size="lg" color="secondary" />
+                        <Spinner color="secondary" size="lg" />
                       </div>
                     </CarouselItem>
                   )}
@@ -714,12 +844,12 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
       {selectedMedia && !isSeriesModalOpen && (
         <AddMovieModal
           isOpen={isMovieModalOpen}
-          onClose={closeModals}
           media={selectedMedia}
           onAddMovie={() => {
             closeModals();
             fetchFavorites();
           }}
+          onClose={closeModals}
         />
       )}
 
@@ -727,32 +857,40 @@ const SideScrollMovieList: React.FC<SideScrollMovieListProps> = ({
       {selectedMedia && !isMovieModalOpen && (
         <AddSeriesModal
           isOpen={isSeriesModalOpen}
-          onClose={closeModals}
           media={selectedMedia}
           onAddSeries={() => {
             closeModals();
             fetchFavorites();
           }}
+          onClose={closeModals}
         />
       )}
 
       {/* Notification Modal */}
       <Modal
-        isOpen={notificationModal.isOpen}
-        onClose={closeNotification}
-        size="md"
         classNames={{
           base: "bg-background",
           header: "border-b border-divider",
         }}
+        isOpen={notificationModal.isOpen}
+        onClose={closeNotification}
+        size="md"
       >
         <ModalContent>
           <ModalHeader>
             <div className="flex items-center gap-2">
-              {notificationModal.type === 'success' && <span className="text-2xl">✅</span>}
-              {notificationModal.type === 'error' && <span className="text-2xl">❌</span>}
-              {notificationModal.type === 'warning' && <span className="text-2xl">⚠️</span>}
-              {notificationModal.type === 'info' && <span className="text-2xl">ℹ️</span>}
+              {notificationModal.type === "success" && (
+                <span className="text-2xl">✅</span>
+              )}
+              {notificationModal.type === "error" && (
+                <span className="text-2xl">❌</span>
+              )}
+              {notificationModal.type === "warning" && (
+                <span className="text-2xl">⚠️</span>
+              )}
+              {notificationModal.type === "info" && (
+                <span className="text-2xl">ℹ️</span>
+              )}
               <span>{notificationModal.title}</span>
             </div>
           </ModalHeader>

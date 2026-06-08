@@ -4,11 +4,11 @@ import { Button } from "@nextui-org/button";
 import { Input } from "@nextui-org/input";
 import { Card, CardBody } from "@nextui-org/card";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
-import { Mail, Lock, User, AlertCircle, ShieldX } from "lucide-react";
+import { Lock, User, AlertCircle, ShieldX } from "lucide-react";
 import { Spinner } from "@nextui-org/spinner";
 import axios from "axios";
+import { useAuth } from "@/context/AuthContext";
 import "../../../styles/Register.scss";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
@@ -17,7 +17,6 @@ const Register = () => {
   const router = useRouter();
   const { register } = useAuth();
   const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
@@ -28,7 +27,9 @@ const Register = () => {
   useEffect(() => {
     const checkRegistrationStatus = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/Settings/public-registration-status`);
+        const response = await axios.get(
+          `${API_BASE_URL}/api/Settings/public-registration-status`,
+        );
         setRegistrationEnabled(response.data.enabled);
       } catch (error) {
         console.error("Error checking registration status:", error);
@@ -48,8 +49,6 @@ const Register = () => {
 
     // Trim inputs
     const trimmedUsername = username.trim();
-    const trimmedEmail = email.trim();
-
     // Validate username
     if (!trimmedUsername) {
       setError("Username is required");
@@ -68,19 +67,6 @@ const Register = () => {
       return;
     }
 
-    // Validate email
-    if (!trimmedEmail) {
-      setError("Email is required");
-      return;
-    }
-
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmedEmail)) {
-      setError("Please enter a valid email address");
-      return;
-    }
-
     // Validate password
     if (password !== confirmPassword) {
       setError("Passwords do not match");
@@ -95,7 +81,7 @@ const Register = () => {
     setLoading(true);
 
     try {
-      await register(trimmedUsername, trimmedEmail, password);
+      await register(trimmedUsername, password);
       router.push("/pages/account");
     } catch (err: any) {
       setError(err.message || "Registration failed");
@@ -108,7 +94,7 @@ const Register = () => {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="flex flex-col items-center gap-4">
-          <Spinner size="lg" color="secondary" />
+          <Spinner color="secondary" size="lg" />
           <p className="text-foreground/60">Checking registration status...</p>
         </div>
       </div>
@@ -128,13 +114,14 @@ const Register = () => {
               </div>
               <h1 className="text-2xl font-bold mb-2">Registration Disabled</h1>
               <p className="text-foreground/60 mb-6">
-                Public registration is currently disabled. Please contact your administrator to create an account.
+                Public registration is currently disabled. Please contact your
+                administrator to create an account.
               </p>
               <Button
                 as={Link}
-                href="/pages/login"
-                color="secondary"
                 className="btn-glow"
+                color="secondary"
+                href="/pages/login"
                 size="lg"
               >
                 Go to Login
@@ -156,7 +143,7 @@ const Register = () => {
                 Create Account
               </h1>
               <p className="text-foreground/60 text-sm">
-                Join BorrowArr and start managing your media
+                Create your local BorrowArr account
               </p>
             </div>
 
@@ -167,12 +154,19 @@ const Register = () => {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form className="space-y-4" onSubmit={handleSubmit}>
               <Input
+                classNames={{
+                  inputWrapper:
+                    "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
+                }}
+                description="3-30 characters, letters, numbers, and underscores only"
+                errorMessage={
+                  error && error.includes("Username") ? error : undefined
+                }
+                isInvalid={!!error && error.includes("Username")}
+                isRequired
                 label="Username"
-                type="text"
-                placeholder="Choose a username"
-                value={username}
                 onChange={(e) => {
                   const value = e.target.value;
                   // Only allow letters, numbers, and underscores
@@ -180,69 +174,58 @@ const Register = () => {
                     setUsername(value);
                   }
                 }}
-                startContent={<User size={18} className="text-secondary" />}
-                isRequired
-                isInvalid={!!error && error.includes("Username")}
-                errorMessage={error && error.includes("Username") ? error : undefined}
-                description="3-30 characters, letters, numbers, and underscores only"
-                classNames={{
-                  inputWrapper: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
-                }}
+                placeholder="Choose a username"
+                startContent={<User className="text-secondary" size={18} />}
+                type="text"
+                value={username}
               />
 
               <Input
-                label="Email"
-                type="email"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                startContent={<Mail size={18} className="text-secondary" />}
-                isRequired
-                isInvalid={!!error && (error.includes("Email") || error.includes("email"))}
-                errorMessage={error && (error.includes("Email") || error.includes("email")) ? error : undefined}
                 classNames={{
-                  inputWrapper: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
+                  inputWrapper:
+                    "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
                 }}
-              />
-
-              <Input
-                label="Password"
-                type="password"
-                placeholder="Create a password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                startContent={<Lock size={18} className="text-secondary" />}
-                isRequired
-                isInvalid={!!error && error.includes("Password")}
-                errorMessage={error && error.includes("Password") ? error : undefined}
                 description="At least 8 characters"
-                classNames={{
-                  inputWrapper: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
-                }}
+                errorMessage={
+                  error && error.includes("Password") ? error : undefined
+                }
+                isInvalid={!!error && error.includes("Password")}
+                isRequired
+                label="Password"
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Create a password"
+                startContent={<Lock className="text-secondary" size={18} />}
+                type="password"
+                value={password}
               />
 
               <Input
-                label="Confirm Password"
-                type="password"
-                placeholder="Confirm your password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                startContent={<Lock size={18} className="text-secondary" />}
-                isRequired
-                isInvalid={!!error && error.includes("Passwords do not match")}
-                errorMessage={error && error.includes("Passwords do not match") ? error : undefined}
                 classNames={{
-                  inputWrapper: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
+                  inputWrapper:
+                    "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
                 }}
+                errorMessage={
+                  error && error.includes("Passwords do not match")
+                    ? error
+                    : undefined
+                }
+                isInvalid={!!error && error.includes("Passwords do not match")}
+                isRequired
+                label="Confirm Password"
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm your password"
+                startContent={<Lock className="text-secondary" size={18} />}
+                type="password"
+                value={confirmPassword}
               />
 
               <Button
-                type="submit"
-                color="secondary"
                 className="btn-glow w-full font-semibold"
-                size="lg"
-                isLoading={loading}
+                color="secondary"
                 disabled={loading}
+                isLoading={loading}
+                size="lg"
+                type="submit"
               >
                 {loading ? "Creating account..." : "Create Account"}
               </Button>
@@ -252,8 +235,8 @@ const Register = () => {
               <p className="text-sm text-foreground/60">
                 Already have an account?{" "}
                 <Link
-                  href="/pages/login"
                   className="text-secondary hover:text-secondary-600 font-medium transition-colors"
+                  href="/pages/login"
                 >
                   Sign In
                 </Link>
@@ -267,4 +250,3 @@ const Register = () => {
 };
 
 export default Register;
-

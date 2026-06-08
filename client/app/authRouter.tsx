@@ -7,7 +7,12 @@ const LOGIN_ROUTE = "/pages/login";
 const ACCOUNT_ROUTE = "/pages/account";
 
 // Routes that require authentication
-const protectedRoutes = ["/pages/account", "/pages/monitored", "/pages/indexers", "/pages/settings"];
+const protectedRoutes = [
+  "/pages/account",
+  "/pages/monitored",
+  "/pages/indexers",
+  "/pages/settings",
+];
 
 const AuthRouter = (props: any) => {
   const { user, loading } = useAuth();
@@ -18,12 +23,12 @@ const AuthRouter = (props: any) => {
     if (loading) return; // Wait for auth check to complete
 
     if (user) {
-        // User is logged in
+      // User is logged in
       if (pathName === LOGIN_ROUTE || pathName === "/pages/register") {
         router.push(ACCOUNT_ROUTE);
-        }
-      } else {
-        // User is not logged in
+      }
+    } else {
+      // User is not logged in
       if (protectedRoutes.some((route) => pathName.startsWith(route))) {
         router.push(LOGIN_ROUTE);
       }
@@ -34,7 +39,7 @@ const AuthRouter = (props: any) => {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-3 border-content3 border-t-secondary rounded-full animate-spin"></div>
+          <div className="w-10 h-10 border-3 border-content3 border-t-secondary rounded-full animate-spin" />
           <p className="text-foreground opacity-70">Loading...</p>
         </div>
       </div>

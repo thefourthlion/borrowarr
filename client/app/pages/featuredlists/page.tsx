@@ -2,10 +2,10 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@nextui-org/button";
-import { 
-  Sparkles, 
-  Film, 
-  RefreshCw, 
+import {
+  Sparkles,
+  Film,
+  RefreshCw,
   Search,
   Heart,
   ArrowRight,
@@ -50,12 +50,15 @@ const FeaturedLists = () => {
   const fetchLetterboxdLists = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/FeaturedLists/enriched`, {
-        params: { featured: true, limit: 200 },
-      });
+      const response = await axios.get(
+        `${API_BASE_URL}/api/FeaturedLists/enriched`,
+        {
+          params: { featured: true, limit: 200 },
+        },
+      );
       setLists(response.data.lists || []);
     } catch (err) {
-      console.error('Error fetching lists:', err);
+      console.error("Error fetching lists:", err);
     } finally {
       setLoading(false);
     }
@@ -65,12 +68,16 @@ const FeaturedLists = () => {
     setScraping(true);
     try {
       const token = localStorage.getItem("accessToken");
-      await axios.post(`${API_BASE_URL}/api/FeaturedLists/scrape`, {}, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axios.post(
+        `${API_BASE_URL}/api/FeaturedLists/scrape`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       await fetchLetterboxdLists();
     } catch (err) {
-      console.error('Error scraping:', err);
+      console.error("Error scraping:", err);
     } finally {
       setScraping(false);
     }
@@ -81,53 +88,78 @@ const FeaturedLists = () => {
   };
 
   // Get unique categories
-  const categories = ["all", ...Array.from(new Set(lists.map(l => {
-    const title = l.title.toLowerCase();
-    if (title.includes('horror')) return 'horror';
-    if (title.includes('sci-fi') || title.includes('science')) return 'sci-fi';
-    if (title.includes('documentary')) return 'documentary';
-    if (title.includes('animated') || title.includes('animation')) return 'animation';
-    if (title.includes('comedy')) return 'comedy';
-    if (title.includes('drama')) return 'drama';
-    if (title.includes('thriller')) return 'thriller';
-    if (title.includes('romance')) return 'romance';
-    return 'featured';
-  })))];
+  const categories = [
+    "all",
+    ...Array.from(
+      new Set(
+        lists.map((l) => {
+          const title = l.title.toLowerCase();
+          if (title.includes("horror")) return "horror";
+          if (title.includes("sci-fi") || title.includes("science"))
+            return "sci-fi";
+          if (title.includes("documentary")) return "documentary";
+          if (title.includes("animated") || title.includes("animation"))
+            return "animation";
+          if (title.includes("comedy")) return "comedy";
+          if (title.includes("drama")) return "drama";
+          if (title.includes("thriller")) return "thriller";
+          if (title.includes("romance")) return "romance";
+          return "featured";
+        }),
+      ),
+    ),
+  ];
 
   // Filter lists
-  const filteredLists = lists.filter(list => {
-    const matchesSearch = list.title.toLowerCase().includes(searchQuery.toLowerCase());
-    if (activeCategory === 'all') return matchesSearch;
-    
+  const filteredLists = lists.filter((list) => {
+    const matchesSearch = list.title
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
+    if (activeCategory === "all") return matchesSearch;
+
     const title = list.title.toLowerCase();
-    if (activeCategory === 'horror') return matchesSearch && title.includes('horror');
-    if (activeCategory === 'sci-fi') return matchesSearch && (title.includes('sci-fi') || title.includes('science'));
-    if (activeCategory === 'documentary') return matchesSearch && title.includes('documentary');
-    if (activeCategory === 'animation') return matchesSearch && (title.includes('animated') || title.includes('animation'));
-    if (activeCategory === 'comedy') return matchesSearch && title.includes('comedy');
-    if (activeCategory === 'drama') return matchesSearch && title.includes('drama');
-    if (activeCategory === 'thriller') return matchesSearch && title.includes('thriller');
-    if (activeCategory === 'romance') return matchesSearch && title.includes('romance');
+    if (activeCategory === "horror")
+      return matchesSearch && title.includes("horror");
+    if (activeCategory === "sci-fi")
+      return (
+        matchesSearch && (title.includes("sci-fi") || title.includes("science"))
+      );
+    if (activeCategory === "documentary")
+      return matchesSearch && title.includes("documentary");
+    if (activeCategory === "animation")
+      return (
+        matchesSearch &&
+        (title.includes("animated") || title.includes("animation"))
+      );
+    if (activeCategory === "comedy")
+      return matchesSearch && title.includes("comedy");
+    if (activeCategory === "drama")
+      return matchesSearch && title.includes("drama");
+    if (activeCategory === "thriller")
+      return matchesSearch && title.includes("thriller");
+    if (activeCategory === "romance")
+      return matchesSearch && title.includes("romance");
     return matchesSearch;
   });
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative w-12 h-12">
-              <div className="absolute inset-0 rounded-full border-2 border-secondary/20" />
-              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-secondary animate-spin" />
-            </div>
-            <span className="text-sm text-foreground/60 tracking-widest uppercase">Loading</span>
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative w-12 h-12">
+            <div className="absolute inset-0 rounded-full border-2 border-secondary/20" />
+            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-secondary animate-spin" />
           </div>
+          <span className="text-sm text-foreground/60 tracking-widest uppercase">
+            Loading
+          </span>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen text-foreground">
-
       {/* Header */}
       <header className="relative z-10 border-b border-default-200">
         <div className="max-w-7xl mx-auto px-6 py-6">
@@ -138,8 +170,12 @@ const FeaturedLists = () => {
                 <Sparkles className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold tracking-tight">Featured Lists</h1>
-                <p className="text-xs text-foreground/60">{lists.length} curated collections</p>
+                <h1 className="text-xl font-semibold tracking-tight">
+                  Featured Lists
+                </h1>
+                <p className="text-xs text-foreground/60">
+                  {lists.length} curated collections
+                </p>
               </div>
             </div>
 
@@ -148,16 +184,16 @@ const FeaturedLists = () => {
               <div className="relative group">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40 group-focus-within:text-secondary transition-colors" />
                 <input
-                  type="text"
-                  placeholder="Search collections..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-11 pr-10 py-3 bg-default-100 border border-default-200 rounded-xl text-sm text-foreground placeholder:text-foreground/40 focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/30 transition-all"
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search collections..."
+                  type="text"
+                  value={searchQuery}
                 />
                 {searchQuery && (
-                  <button 
-                    onClick={() => setSearchQuery("")}
+                  <button
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-default-200 transition-colors"
+                    onClick={() => setSearchQuery("")}
                   >
                     <X className="w-4 h-4 text-foreground/40" />
                   </button>
@@ -167,13 +203,15 @@ const FeaturedLists = () => {
 
             {/* Sync Button */}
             <Button
-              onPress={handleScrape}
-              isLoading={scraping}
-              size="sm"
               className="bg-default-100 hover:bg-default-200 border border-default-200 text-foreground rounded-xl px-4 h-11 font-medium transition-all"
+              isLoading={scraping}
+              onPress={handleScrape}
+              size="sm"
             >
-              <RefreshCw className={`w-4 h-4 mr-2 ${scraping ? 'animate-spin' : ''}`} />
-              {scraping ? 'Syncing' : 'Sync'}
+              <RefreshCw
+                className={`w-4 h-4 mr-2 ${scraping ? "animate-spin" : ""}`}
+              />
+              {scraping ? "Syncing" : "Sync"}
             </Button>
           </div>
         </div>
@@ -183,15 +221,15 @@ const FeaturedLists = () => {
       <div className="z-10 border-b border-default-200 bg-background/80 backdrop-blur-xl sticky top-16">
         <div className="max-w-7xl mx-auto px-6 py-3">
           <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-            {categories.map(cat => (
+            {categories.map((cat) => (
               <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all duration-200 ${
                   activeCategory === cat
-                    ? 'bg-secondary text-white'
-                    : 'text-foreground/60 hover:text-foreground hover:bg-default-100'
+                    ? "bg-secondary text-white"
+                    : "text-foreground/60 hover:text-foreground hover:bg-default-100"
                 }`}
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
               >
                 {cat.charAt(0).toUpperCase() + cat.slice(1)}
               </button>
@@ -205,54 +243,68 @@ const FeaturedLists = () => {
         {filteredLists.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredLists.map((list, index) => {
-              const scraped = list.scrapedFilms?.filter(f => f.posterUrl).slice(0, 4).map(f => f.posterUrl!) ?? [];
-              const fromPosterUrls = list.posterUrls?.filter(u => !u.includes('empty-poster')) ?? [];
+              const scraped =
+                list.scrapedFilms
+                  ?.filter((f) => f.posterUrl)
+                  .slice(0, 4)
+                  .map((f) => f.posterUrl!) ?? [];
+              const fromPosterUrls =
+                list.posterUrls?.filter((u) => !u.includes("empty-poster")) ??
+                [];
               const fromTmdb = list.tmdbPosters ?? [];
               const posters = (
-                scraped.length > 0 ? scraped :
-                fromTmdb.length > 0 ? fromTmdb :
-                fromPosterUrls
+                scraped.length > 0
+                  ? scraped
+                  : fromTmdb.length > 0
+                    ? fromTmdb
+                    : fromPosterUrls
               ).slice(0, 4);
               const isHovered = hoveredCard === list.id;
-              
+
               return (
                 <article
+                  className="group relative cursor-pointer"
                   key={list.id}
                   onClick={() => handleViewList(list.slug)}
                   onMouseEnter={() => setHoveredCard(list.id)}
                   onMouseLeave={() => setHoveredCard(null)}
-                  className="group relative cursor-pointer"
-                  style={{ 
+                  style={{
                     animationDelay: `${index * 40}ms`,
-                    animation: 'fadeSlideUp 0.5s ease-out forwards',
+                    animation: "fadeSlideUp 0.5s ease-out forwards",
                     opacity: 0,
                   }}
                 >
-                  <div                   className={`relative rounded-2xl overflow-hidden bg-default-100/50 border border-default-200 transition-all duration-500 ${
-                    isHovered ? 'border-secondary/40 shadow-xl shadow-secondary/10 scale-[1.02]' : ''
-                  }`}>
-                    
+                  <div
+                    className={`relative rounded-2xl overflow-hidden bg-default-100/50 border border-default-200 transition-all duration-500 ${
+                      isHovered
+                        ? "border-secondary/40 shadow-xl shadow-secondary/10 scale-[1.02]"
+                        : ""
+                    }`}
+                  >
                     {/* Poster Grid - Clean 4-poster layout */}
                     <div className="relative aspect-[16/10] overflow-hidden bg-gradient-to-br from-default-200/30 to-default-100/30">
                       {posters.length >= 4 ? (
                         <div className="absolute inset-0 grid grid-cols-4 gap-0.5">
                           {posters.slice(0, 4).map((poster, idx) => (
                             <div
-                              key={idx}
                               className="relative overflow-hidden transition-transform duration-500"
+                              key={idx}
                               style={{
-                                transform: isHovered ? `scale(1.05)` : 'scale(1)',
+                                transform: isHovered
+                                  ? `scale(1.05)`
+                                  : "scale(1)",
                                 transitionDelay: `${idx * 50}ms`,
                               }}
                             >
                               <img
-                                src={poster}
                                 alt=""
                                 className="w-full h-full object-cover"
                                 loading="lazy"
                                 onError={(e) => {
-                                  e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 150"><rect fill="%231a1a2e" width="100" height="150"/></svg>';
+                                  e.currentTarget.src =
+                                    'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 150"><rect fill="%231a1a2e" width="100" height="150"/></svg>';
                                 }}
+                                src={poster}
                               />
                             </div>
                           ))}
@@ -261,17 +313,19 @@ const FeaturedLists = () => {
                         <div className="absolute inset-0 flex">
                           {posters.slice(0, 3).map((poster, idx) => (
                             <div
-                              key={idx}
                               className="flex-1 overflow-hidden transition-transform duration-500"
+                              key={idx}
                               style={{
-                                transform: isHovered ? `scale(1.05)` : 'scale(1)',
+                                transform: isHovered
+                                  ? `scale(1.05)`
+                                  : "scale(1)",
                               }}
                             >
                               <img
-                                src={poster}
                                 alt=""
                                 className="w-full h-full object-cover"
                                 loading="lazy"
+                                src={poster}
                               />
                             </div>
                           ))}
@@ -281,10 +335,10 @@ const FeaturedLists = () => {
                           <Film className="w-12 h-12 text-foreground/20" />
                         </div>
                       )}
-                      
+
                       {/* Gradient Overlay */}
                       <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
-                      
+
                       {/* Film Count Badge */}
                       {list.filmCount > 0 && (
                         <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-background/80 backdrop-blur-sm border border-default-200 text-xs font-medium text-foreground/80">
@@ -295,12 +349,14 @@ const FeaturedLists = () => {
 
                     {/* Content */}
                     <div className="p-5">
-                      <h3 className={`font-semibold text-base leading-snug mb-2 transition-colors duration-300 line-clamp-2 ${
-                        isHovered ? 'text-secondary' : 'text-foreground'
-                      }`}>
+                      <h3
+                        className={`font-semibold text-base leading-snug mb-2 transition-colors duration-300 line-clamp-2 ${
+                          isHovered ? "text-secondary" : "text-foreground"
+                        }`}
+                      >
                         {list.title}
                       </h3>
-                      
+
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3 text-xs text-foreground/50">
                           {list.likes > 0 && (
@@ -310,10 +366,14 @@ const FeaturedLists = () => {
                             </span>
                           )}
                         </div>
-                        
-                        <div className={`flex items-center gap-1 text-xs font-medium transition-all duration-300 ${
-                          isHovered ? 'text-secondary translate-x-0 opacity-100' : 'text-transparent -translate-x-2 opacity-0'
-                        }`}>
+
+                        <div
+                          className={`flex items-center gap-1 text-xs font-medium transition-all duration-300 ${
+                            isHovered
+                              ? "text-secondary translate-x-0 opacity-100"
+                              : "text-transparent -translate-x-2 opacity-0"
+                          }`}
+                        >
                           <span>Explore</span>
                           <ArrowRight className="w-3.5 h-3.5" />
                         </div>
@@ -331,14 +391,18 @@ const FeaturedLists = () => {
             </div>
             <h3 className="text-lg font-medium mb-2">No collections found</h3>
             <p className="text-sm text-foreground/60 mb-6">
-              {searchQuery ? `No results for "${searchQuery}"` : 'No featured lists available yet.'}
+              {searchQuery
+                ? `No results for "${searchQuery}"`
+                : "No featured lists available yet."}
             </p>
             <Button
-              onPress={handleScrape}
-              isLoading={scraping}
               className="bg-secondary hover:bg-secondary-600 text-white rounded-xl px-5"
+              isLoading={scraping}
+              onPress={handleScrape}
             >
-              <RefreshCw className={`w-4 h-4 mr-2 ${scraping ? 'animate-spin' : ''}`} />
+              <RefreshCw
+                className={`w-4 h-4 mr-2 ${scraping ? "animate-spin" : ""}`}
+              />
               Sync from Letterboxd
             </Button>
           </div>
@@ -346,7 +410,7 @@ const FeaturedLists = () => {
       </main>
 
       {/* Styles */}
-      <style jsx global>{`
+      <style global jsx>{`
         @keyframes fadeSlideUp {
           from {
             opacity: 0;
@@ -357,7 +421,7 @@ const FeaturedLists = () => {
             transform: translateY(0);
           }
         }
-        
+
         .scrollbar-hide {
           -ms-overflow-style: none;
           scrollbar-width: none;

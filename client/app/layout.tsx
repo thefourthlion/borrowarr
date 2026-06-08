@@ -1,10 +1,10 @@
 import "@/styles/globals.scss";
 import { Metadata, Viewport } from "next";
 import clsx from "clsx";
-import Footer from "@/components/footer";
 import { Providers } from "./providers";
-import { AuthProvider } from "@/context/AuthContext";
 import AuthRouter from "./authRouter";
+import Footer from "@/components/footer";
+import { AuthProvider } from "@/context/AuthContext";
 import { siteConfig } from "@/config/site";
 import { fontSans } from "@/config/fonts";
 import { Navbar } from "@/components/navbar";
@@ -33,27 +33,27 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html suppressHydrationWarning lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head />
       <body
         className={clsx(
           "min-h-screen bg-background font-sans antialiased overflow-x-hidden",
-          fontSans.variable
+          fontSans.variable,
         )}
       >
         <Providers>
           <AuthProvider>
-          <AuthRouter>
-            <div className="relative flex flex-col min-h-screen min-w-0 w-full overflow-x-hidden">
-              <div className="fixed top-0 left-0 right-0 z-[9999]">
-                <Navbar />
+            <AuthRouter>
+              <div className="relative flex flex-col min-h-screen min-w-0 w-full overflow-x-hidden">
+                <div className="fixed top-0 left-0 right-0 z-[9999]">
+                  <Navbar />
+                </div>
+                <main className="container mx-auto max-w-7xl pt-16 px-6 flex-grow overflow-x-hidden w-full">
+                  {children}
+                </main>
+                <Footer />
               </div>
-              <main className="container mx-auto max-w-7xl pt-16 px-6 flex-grow overflow-x-hidden w-full">
-                {children}
-              </main>
-              <Footer />
-            </div>
-          </AuthRouter>
+            </AuthRouter>
           </AuthProvider>
         </Providers>
       </body>

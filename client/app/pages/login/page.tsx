@@ -4,9 +4,9 @@ import { Button } from "@nextui-org/button";
 import { Input } from "@nextui-org/input";
 import { Card, CardBody } from "@nextui-org/card";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
-import { Mail, Lock, AlertCircle } from "lucide-react";
+import { User, Lock, AlertCircle } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 import "../../../styles/Login.scss";
 
 const Login = () => {
@@ -53,42 +53,44 @@ const Login = () => {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form className="space-y-4" onSubmit={handleSubmit}>
               <Input
-                label="Username or Email"
-                type="text"
-                placeholder="Enter your username or email"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                startContent={<Mail size={18} className="text-secondary" />}
-                isRequired
-                isInvalid={!!error}
                 classNames={{
-                  inputWrapper: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
+                  inputWrapper:
+                    "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
                 }}
+                isInvalid={!!error}
+                isRequired
+                label="Username"
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter your username"
+                startContent={<User className="text-secondary" size={18} />}
+                type="text"
+                value={username}
               />
 
               <Input
-                label="Password"
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                startContent={<Lock size={18} className="text-secondary" />}
-                isRequired
-                isInvalid={!!error}
                 classNames={{
-                  inputWrapper: "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
+                  inputWrapper:
+                    "bg-content2 border-2 border-secondary/20 hover:border-secondary/40 focus-within:border-secondary transition-all",
                 }}
+                isInvalid={!!error}
+                isRequired
+                label="Password"
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                startContent={<Lock className="text-secondary" size={18} />}
+                type="password"
+                value={password}
               />
 
               <Button
-                type="submit"
-                color="secondary"
                 className="btn-glow w-full font-semibold"
-                size="lg"
-                isLoading={loading}
+                color="secondary"
                 disabled={loading}
+                isLoading={loading}
+                size="lg"
+                type="submit"
               >
                 {loading ? "Signing in..." : "Sign In"}
               </Button>
@@ -98,8 +100,8 @@ const Login = () => {
               <p className="text-sm text-foreground/60">
                 Don't have an account?{" "}
                 <Link
-                  href="/pages/register"
                   className="text-secondary hover:text-secondary-600 font-medium transition-colors"
+                  href="/pages/register"
                 >
                   Sign Up
                 </Link>
@@ -113,4 +115,3 @@ const Login = () => {
 };
 
 export default Login;
-

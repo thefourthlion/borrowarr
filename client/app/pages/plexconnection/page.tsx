@@ -19,7 +19,6 @@ import {
   AlertCircle,
   Trash2,
   RefreshCw,
-  ExternalLink,
   Film,
   Tv,
   Music,
@@ -31,6 +30,7 @@ import {
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
+import { PageContent, PageHeader } from "@/components/page-header";
 import "../../../styles/PlexConnection.scss";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
@@ -56,7 +56,9 @@ interface PlexLibrary {
 const PlexConnection = () => {
   const { user } = useAuth();
   const router = useRouter();
-  const [connection, setConnection] = useState<PlexConnection>({ connected: false });
+  const [connection, setConnection] = useState<PlexConnection>({
+    connected: false,
+  });
   const [loading, setLoading] = useState(true);
   const [serverUrl, setServerUrl] = useState("");
   const [authToken, setAuthToken] = useState("");
@@ -70,6 +72,7 @@ const PlexConnection = () => {
   } | null>(null);
   const [libraries, setLibraries] = useState<PlexLibrary[]>([]);
   const [loadingLibraries, setLoadingLibraries] = useState(false);
+  const [librariesError, setLibrariesError] = useState<string | null>(null);
   const [showInstructions, setShowInstructions] = useState(true);
 
   const {
@@ -92,14 +95,14 @@ const PlexConnection = () => {
     }
   }, [connection.connected, user]);
 
-  const fetchConnection = async () => {
+  const fetchConnection = async (silent = false) => {
     if (!user) {
       setLoading(false);
       return;
     }
 
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await axios.get(`${API_BASE_URL}/api/PlexConnection`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
@@ -109,7 +112,7 @@ const PlexConnection = () => {
     } catch (error) {
       console.error("Error fetching Plex connection:", error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -118,16 +121,31 @@ const PlexConnection = () => {
 
     try {
       setLoadingLibraries(true);
-      const response = await axios.get(`${API_BASE_URL}/api/PlexConnection/libraries`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+      setLibrariesError(null);
+      const response = await axios.get(
+        `${API_BASE_URL}/api/PlexConnection/libraries`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+          },
         },
-      });
+      );
       if (response.data.success) {
         setLibraries(response.data.libraries || []);
+        await fetchConnection(true);
+      } else {
+        setLibraries([]);
+        setLibrariesError(response.data.error || "Failed to fetch libraries");
+        await fetchConnection(true);
       }
-    } catch (error) {
-      console.error("Error fetching libraries:", error);
+    } catch (error: any) {
+      setLibraries([]);
+      setLibrariesError(
+        error.response?.data?.error ||
+          error.message ||
+          "Failed to fetch libraries",
+      );
+      await fetchConnection(true);
     } finally {
       setLoadingLibraries(false);
     }
@@ -150,7 +168,7 @@ const PlexConnection = () => {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
           },
-        }
+        },
       );
 
       setTestResult(response.data);
@@ -180,7 +198,7 @@ const PlexConnection = () => {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
           },
-        }
+        },
       );
 
       if (response.data.success) {
@@ -193,7 +211,10 @@ const PlexConnection = () => {
     } catch (error: any) {
       setTestResult({
         success: false,
-        error: error.response?.data?.error || error.message || "Failed to save connection",
+        error:
+          error.response?.data?.error ||
+          error.message ||
+          "Failed to save connection",
       });
     } finally {
       setSaving(false);
@@ -226,7 +247,7 @@ const PlexConnection = () => {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
           },
-        }
+        },
       );
       await fetchConnection();
       setTestResult(response.data);
@@ -257,62 +278,54 @@ const PlexConnection = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-secondary/20 sticky top-16 z-10 bg-background/95 backdrop-blur-sm">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
-            <div className="min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent truncate">
-                Plex Connection
-              </h1>
-              <p className="text-xs sm:text-sm text-foreground/60 mt-1">
-                Connect to your Plex Media Server and access your library
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {connection.connected ? (
-                <>
-                  <Button
-                    color="secondary"
-                    variant="flat"
-                    size="sm"
-                    startContent={<RefreshCw size={16} />}
-                    onPress={handleRetest}
-                    isLoading={testing}
-                  >
-                    Test Connection
-                  </Button>
-                  <Button
-                    color="secondary"
-                    className="btn-glow"
-                    size="sm"
-                    startContent={<Server size={16} />}
-                    onPress={onSetupModalOpen}
-                  >
-                    Update Connection
-                  </Button>
-                </>
-              ) : (
+      <PageHeader
+        actions={
+          <>
+            {connection.connected ? (
+              <>
                 <Button
                   color="secondary"
+                  isLoading={testing}
+                  onPress={handleRetest}
+                  size="sm"
+                  startContent={<RefreshCw size={16} />}
+                  variant="flat"
+                >
+                  Test Connection
+                </Button>
+                <Button
                   className="btn-glow"
+                  color="secondary"
+                  onPress={onSetupModalOpen}
                   size="sm"
                   startContent={<Server size={16} />}
-                  onPress={onSetupModalOpen}
                 >
-                  Connect to Plex
+                  Update Connection
                 </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+              </>
+            ) : (
+              <Button
+                className="btn-glow"
+                color="secondary"
+                onPress={onSetupModalOpen}
+                size="sm"
+                startContent={<Server size={16} />}
+              >
+                Connect to Plex
+              </Button>
+            )}
+          </>
+        }
+        description="Connect to your Plex Media Server and access your library"
+        icon={<Server className="h-6 w-6" />}
+        title="Plex Connection"
+      />
 
       {/* Content */}
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
+      <PageContent>
         {loading ? (
           <div className="flex justify-center items-center py-20">
-            <Spinner size="lg" color="secondary" />
+            <Spinner color="secondary" size="lg" />
           </div>
         ) : !connection.connected ? (
           <div className="max-w-4xl mx-auto space-y-6">
@@ -328,14 +341,15 @@ const PlexConnection = () => {
                       Not Connected to Plex
                     </h3>
                     <p className="text-sm text-foreground/60 mb-4">
-                      Connect your Plex Media Server to view and manage your library
+                      Connect your Plex Media Server to view and manage your
+                      library
                     </p>
                     <Button
-                      color="secondary"
                       className="btn-glow"
+                      color="secondary"
+                      onPress={onSetupModalOpen}
                       size="sm"
                       startContent={<Server size={16} />}
-                      onPress={onSetupModalOpen}
                     >
                       Connect to Plex
                     </Button>
@@ -371,19 +385,35 @@ const PlexConnection = () => {
                     <ul className="text-sm text-foreground/70 space-y-1 ml-4">
                       <li className="flex items-start gap-2">
                         <span className="text-secondary mt-0.5">•</span>
-                        <span><code className="px-2 py-0.5 bg-secondary/10 rounded text-xs">http://192.168.1.100:32400</code> (Local network)</span>
+                        <span>
+                          <code className="px-2 py-0.5 bg-secondary/10 rounded text-xs">
+                            http://192.168.1.100:32400
+                          </code>{" "}
+                          (Local network)
+                        </span>
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="text-secondary mt-0.5">•</span>
-                        <span><code className="px-2 py-0.5 bg-secondary/10 rounded text-xs">http://localhost:32400</code> (Same machine)</span>
+                        <span>
+                          <code className="px-2 py-0.5 bg-secondary/10 rounded text-xs">
+                            http://localhost:32400
+                          </code>{" "}
+                          (Same machine)
+                        </span>
                       </li>
                       <li className="flex items-start gap-2">
                         <span className="text-secondary mt-0.5">•</span>
-                        <span><code className="px-2 py-0.5 bg-secondary/10 rounded text-xs">https://your-plex-domain.com</code> (Remote/Custom domain)</span>
+                        <span>
+                          <code className="px-2 py-0.5 bg-secondary/10 rounded text-xs">
+                            https://your-plex-domain.com
+                          </code>{" "}
+                          (Remote/Custom domain)
+                        </span>
                       </li>
                     </ul>
                     <p className="text-sm text-foreground/70 mt-3">
-                      💡 <strong>Tip:</strong> Find your server IP in Plex Web App → Settings → Network
+                      💡 <strong>Tip:</strong> Find your server IP in Plex Web
+                      App → Settings → Network
                     </p>
                   </div>
                 </div>
@@ -405,33 +435,75 @@ const PlexConnection = () => {
                     </p>
                     <ol className="text-sm text-foreground/70 space-y-2">
                       <li className="flex items-start gap-2">
-                        <span className="text-secondary font-semibold min-w-[20px]">1.</span>
-                        <span>Sign in to <a href="https://app.plex.tv" target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline">Plex Web App</a></span>
+                        <span className="text-secondary font-semibold min-w-[20px]">
+                          1.
+                        </span>
+                        <span>
+                          Sign in to{" "}
+                          <a
+                            className="text-secondary hover:underline"
+                            href="https://app.plex.tv"
+                            rel="noopener noreferrer"
+                            target="_blank"
+                          >
+                            Plex Web App
+                          </a>
+                        </span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <span className="text-secondary font-semibold min-w-[20px]">2.</span>
-                        <span>Open any item (movie, show, etc.) in your library</span>
+                        <span className="text-secondary font-semibold min-w-[20px]">
+                          2.
+                        </span>
+                        <span>
+                          Open any item (movie, show, etc.) in your library
+                        </span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <span className="text-secondary font-semibold min-w-[20px]">3.</span>
-                        <span>Click "Get Info" or press <kbd className="px-1.5 py-0.5 bg-secondary/10 rounded text-xs">i</kbd></span>
+                        <span className="text-secondary font-semibold min-w-[20px]">
+                          3.
+                        </span>
+                        <span>
+                          Click "Get Info" or press{" "}
+                          <kbd className="px-1.5 py-0.5 bg-secondary/10 rounded text-xs">
+                            i
+                          </kbd>
+                        </span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <span className="text-secondary font-semibold min-w-[20px]">4.</span>
+                        <span className="text-secondary font-semibold min-w-[20px]">
+                          4.
+                        </span>
                         <span>Click "View XML" at the bottom</span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <span className="text-secondary font-semibold min-w-[20px]">5.</span>
-                        <span>Look for <code className="px-1.5 py-0.5 bg-secondary/10 rounded text-xs">X-Plex-Token=</code> in the URL</span>
+                        <span className="text-secondary font-semibold min-w-[20px]">
+                          5.
+                        </span>
+                        <span>
+                          Look for{" "}
+                          <code className="px-1.5 py-0.5 bg-secondary/10 rounded text-xs">
+                            X-Plex-Token=
+                          </code>{" "}
+                          in the URL
+                        </span>
                       </li>
                       <li className="flex items-start gap-2">
-                        <span className="text-secondary font-semibold min-w-[20px]">6.</span>
-                        <span>Copy everything after the <code className="px-1.5 py-0.5 bg-secondary/10 rounded text-xs">=</code> sign</span>
+                        <span className="text-secondary font-semibold min-w-[20px]">
+                          6.
+                        </span>
+                        <span>
+                          Copy everything after the{" "}
+                          <code className="px-1.5 py-0.5 bg-secondary/10 rounded text-xs">
+                            =
+                          </code>{" "}
+                          sign
+                        </span>
                       </li>
                     </ol>
                     <div className="mt-3 p-3 bg-warning/10 border border-warning/30 rounded-lg">
                       <p className="text-xs text-warning-600 dark:text-warning-400">
-                        ⚠️ <strong>Important:</strong> Keep your token private! It provides full access to your Plex account.
+                        ⚠️ <strong>Important:</strong> Keep your token private!
+                        It provides full access to your Plex account.
                       </p>
                     </div>
                   </div>
@@ -447,30 +519,56 @@ const PlexConnection = () => {
                   <div className="flex-1">
                     <h4 className="font-semibold mb-2">Connect Your Server</h4>
                     <p className="text-sm text-foreground/70 mb-3">
-                      Click "Connect to Plex" above and enter your Server URL and Token. Test the connection before saving!
+                      Click "Connect to Plex" above and enter your Server URL
+                      and Token. Test the connection before saving!
                     </p>
                   </div>
                 </div>
 
                 {/* Alternative Method */}
                 <div className="border-t border-secondary/20 pt-6">
-                  <h4 className="font-semibold mb-3 text-sm">Alternative: Find Token in Plex Settings</h4>
+                  <h4 className="font-semibold mb-3 text-sm">
+                    Alternative: Find Token in Plex Settings
+                  </h4>
                   <ol className="text-sm text-foreground/70 space-y-2">
                     <li className="flex items-start gap-2">
-                      <span className="text-secondary font-semibold min-w-[20px]">1.</span>
-                      <span>Go to <a href="https://app.plex.tv/desktop" target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline">Plex Settings</a></span>
+                      <span className="text-secondary font-semibold min-w-[20px]">
+                        1.
+                      </span>
+                      <span>
+                        Go to{" "}
+                        <a
+                          className="text-secondary hover:underline"
+                          href="https://app.plex.tv/desktop"
+                          rel="noopener noreferrer"
+                          target="_blank"
+                        >
+                          Plex Settings
+                        </a>
+                      </span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <span className="text-secondary font-semibold min-w-[20px]">2.</span>
+                      <span className="text-secondary font-semibold min-w-[20px]">
+                        2.
+                      </span>
                       <span>Click your profile icon → Account</span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <span className="text-secondary font-semibold min-w-[20px]">3.</span>
+                      <span className="text-secondary font-semibold min-w-[20px]">
+                        3.
+                      </span>
                       <span>Open browser developer tools (F12)</span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <span className="text-secondary font-semibold min-w-[20px]">4.</span>
-                      <span>Go to Console tab and type: <code className="px-2 py-0.5 bg-secondary/10 rounded text-xs">localStorage.getItem('myPlexAccessToken')</code></span>
+                      <span className="text-secondary font-semibold min-w-[20px]">
+                        4.
+                      </span>
+                      <span>
+                        Go to Console tab and type:{" "}
+                        <code className="px-2 py-0.5 bg-secondary/10 rounded text-xs">
+                          localStorage.getItem('myPlexAccessToken')
+                        </code>
+                      </span>
                     </li>
                   </ol>
                 </div>
@@ -488,7 +586,9 @@ const PlexConnection = () => {
                       <CheckCircle2 className="w-6 h-6 text-success" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold">Connected to Plex</h3>
+                      <h3 className="text-lg font-semibold">
+                        Connected to Plex
+                      </h3>
                       <p className="text-sm text-foreground/60">
                         {connection.serverName || "Plex Media Server"}
                       </p>
@@ -496,10 +596,10 @@ const PlexConnection = () => {
                   </div>
                   <Button
                     color="danger"
-                    variant="flat"
+                    onPress={handleDelete}
                     size="sm"
                     startContent={<Trash2 size={16} />}
-                    onPress={handleDelete}
+                    variant="flat"
                   >
                     Disconnect
                   </Button>
@@ -508,19 +608,24 @@ const PlexConnection = () => {
               <CardBody className="p-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
-                    <p className="text-xs text-foreground/60 mb-1">Server URL</p>
-                    <p className="text-sm font-medium truncate">{connection.serverUrl}</p>
+                    <p className="text-xs text-foreground/60 mb-1">
+                      Server URL
+                    </p>
+                    <p className="text-sm font-medium truncate">
+                      {connection.serverUrl}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-foreground/60 mb-1">Version</p>
-                    <p className="text-sm font-medium">{connection.serverVersion || "Unknown"}</p>
+                    <p className="text-sm font-medium">
+                      {connection.serverVersion || "Unknown"}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-foreground/60 mb-1">Status</p>
                     <Chip
-                      size="sm"
                       color={connection.isConnected ? "success" : "danger"}
-                      variant="flat"
+                      size="sm"
                       startContent={
                         connection.isConnected ? (
                           <CheckCircle2 className="w-3 h-3" />
@@ -528,12 +633,15 @@ const PlexConnection = () => {
                           <AlertCircle className="w-3 h-3" />
                         )
                       }
+                      variant="flat"
                     >
                       {connection.isConnected ? "Connected" : "Disconnected"}
                     </Chip>
                   </div>
                   <div>
-                    <p className="text-xs text-foreground/60 mb-1">Last Checked</p>
+                    <p className="text-xs text-foreground/60 mb-1">
+                      Last Checked
+                    </p>
                     <p className="text-sm font-medium">
                       {connection.lastChecked
                         ? new Date(connection.lastChecked).toLocaleString()
@@ -548,10 +656,13 @@ const PlexConnection = () => {
                       <div className="p-3 bg-success/10 border border-success rounded-lg flex items-start gap-2">
                         <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
                         <div>
-                          <p className="text-sm text-success font-medium">Connection successful!</p>
+                          <p className="text-sm text-success font-medium">
+                            Connection successful!
+                          </p>
                           {testResult.serverName && (
                             <p className="text-xs text-success/80 mt-1">
-                              Server: {testResult.serverName} (v{testResult.serverVersion})
+                              Server: {testResult.serverName} (v
+                              {testResult.serverVersion})
                             </p>
                           )}
                         </div>
@@ -559,7 +670,9 @@ const PlexConnection = () => {
                     ) : (
                       <div className="p-3 bg-danger/10 border border-danger rounded-lg flex items-start gap-2">
                         <AlertCircle className="w-5 h-5 text-danger flex-shrink-0 mt-0.5" />
-                        <p className="text-sm text-danger">{testResult.error}</p>
+                        <p className="text-sm text-danger">
+                          {testResult.error}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -577,11 +690,11 @@ const PlexConnection = () => {
                   </div>
                   <Button
                     color="secondary"
-                    variant="flat"
+                    isLoading={loadingLibraries}
+                    onPress={fetchLibraries}
                     size="sm"
                     startContent={<RefreshCw size={16} />}
-                    onPress={fetchLibraries}
-                    isLoading={loadingLibraries}
+                    variant="flat"
                   >
                     Refresh
                   </Button>
@@ -592,14 +705,27 @@ const PlexConnection = () => {
                   <div className="flex justify-center py-8">
                     <Spinner color="secondary" />
                   </div>
+                ) : librariesError ? (
+                  <div className="text-center py-8 space-y-2">
+                    <p className="text-sm text-danger">{librariesError}</p>
+                    <p className="text-xs text-foreground/60">
+                      Try &quot;Test Connection&quot; above, then refresh
+                      libraries.
+                    </p>
+                  </div>
                 ) : libraries.length === 0 ? (
                   <div className="text-center py-8">
-                    <p className="text-sm text-foreground/60">No libraries found</p>
+                    <p className="text-sm text-foreground/60">
+                      No libraries found
+                    </p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {libraries.map((library) => (
-                      <Card key={library.key} className="card-interactive border border-secondary/20">
+                      <Card
+                        className="card-interactive border border-secondary/20"
+                        key={library.key}
+                      >
                         <CardBody className="p-4">
                           <div className="flex items-start gap-3">
                             <div className="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center text-secondary flex-shrink-0">
@@ -610,9 +736,15 @@ const PlexConnection = () => {
                                 {library.title}
                               </h4>
                               <p className="text-xs text-foreground/60">
-                                {library.type.charAt(0).toUpperCase() + library.type.slice(1)}
+                                {library.type.charAt(0).toUpperCase() +
+                                  library.type.slice(1)}
                               </p>
-                              <Chip size="sm" variant="flat" color="secondary" className="mt-2">
+                              <Chip
+                                className="mt-2"
+                                color="secondary"
+                                size="sm"
+                                variant="flat"
+                              >
                                 {library.count} items
                               </Chip>
                             </div>
@@ -626,18 +758,18 @@ const PlexConnection = () => {
             </Card>
           </div>
         )}
-      </div>
+      </PageContent>
 
       {/* Setup Modal */}
       <Modal
-        isOpen={isSetupModalOpen}
-        onClose={onSetupModalClose}
-        size="2xl"
-        scrollBehavior="inside"
         classNames={{
           backdrop: "bg-overlay/50 backdrop-blur-sm",
           base: "bg-content1 border border-secondary/20 mx-2 sm:mx-4",
         }}
+        isOpen={isSetupModalOpen}
+        onClose={onSetupModalClose}
+        scrollBehavior="inside"
+        size="2xl"
       >
         <ModalContent>
           <ModalHeader className="border-b border-secondary/20 px-4 sm:px-6">
@@ -658,10 +790,13 @@ const PlexConnection = () => {
                   <div className="p-3 bg-success/10 border border-success rounded-lg flex items-start gap-2">
                     <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm text-success font-medium">Connection successful!</p>
+                      <p className="text-sm text-success font-medium">
+                        Connection successful!
+                      </p>
                       {testResult.serverName && (
                         <p className="text-xs text-success/80 mt-1">
-                          Server: {testResult.serverName} (v{testResult.serverVersion})
+                          Server: {testResult.serverName} (v
+                          {testResult.serverVersion})
                         </p>
                       )}
                     </div>
@@ -676,58 +811,61 @@ const PlexConnection = () => {
             )}
 
             <Input
+              classNames={{
+                inputWrapper:
+                  "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                label: "text-sm",
+                description: "text-xs",
+              }}
+              description="The URL where your Plex server is accessible (e.g., http://192.168.1.100:32400)"
               label="Plex Server URL"
-              placeholder="http://192.168.1.100:32400"
-              value={serverUrl}
               onChange={(e) => {
                 setServerUrl(e.target.value);
                 setTestResult(null);
               }}
-              description="The URL where your Plex server is accessible (e.g., http://192.168.1.100:32400)"
+              placeholder="http://192.168.1.100:32400"
               size="sm"
               startContent={<LinkIcon className="w-4 h-4 text-foreground/50" />}
-              classNames={{
-                inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
-                label: "text-sm",
-                description: "text-xs",
-              }}
+              value={serverUrl}
             />
 
             <Input
+              classNames={{
+                inputWrapper:
+                  "bg-content2 border border-secondary/20 hover:border-secondary/40",
+                label: "text-sm",
+                description: "text-xs",
+              }}
+              description="Your Plex authentication token (see instructions above)"
               label="X-Plex-Token"
-              placeholder="Your Plex authentication token"
-              type="password"
-              value={authToken}
               onChange={(e) => {
                 setAuthToken(e.target.value);
                 setTestResult(null);
               }}
-              description="Your Plex authentication token (see instructions above)"
+              placeholder="Your Plex authentication token"
               size="sm"
               startContent={<Key className="w-4 h-4 text-foreground/50" />}
-              classNames={{
-                inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
-                label: "text-sm",
-                description: "text-xs",
-              }}
+              type="password"
+              value={authToken}
             />
 
             {/* Quick Help */}
             <div className="p-3 bg-secondary/5 border border-secondary/20 rounded-lg">
               <p className="text-xs text-foreground/70">
-                💡 <strong>Need help?</strong> Close this modal to see detailed instructions on how to find your server URL and token.
+                💡 <strong>Need help?</strong> Close this modal to see detailed
+                instructions on how to find your server URL and token.
               </p>
             </div>
 
             {/* Test Button */}
             <Button
               color="secondary"
-              variant="flat"
+              fullWidth
+              isLoading={testing}
+              onPress={handleTest}
               size="sm"
               startContent={<RefreshCw size={16} />}
-              onPress={handleTest}
-              isLoading={testing}
-              fullWidth
+              variant="flat"
             >
               Test Connection
             </Button>
@@ -735,20 +873,20 @@ const PlexConnection = () => {
           <ModalFooter className="border-t border-secondary/20 px-4 sm:px-6 py-4">
             <div className="flex gap-2 w-full">
               <Button
-                variant="flat"
-                size="sm"
-                onPress={onSetupModalClose}
                 className="flex-1 sm:flex-none"
+                onPress={onSetupModalClose}
+                size="sm"
+                variant="flat"
               >
                 Cancel
               </Button>
               <Button
-                color="secondary"
                 className="btn-glow flex-1 sm:flex-none"
-                size="sm"
-                onPress={handleSave}
-                isLoading={saving}
+                color="secondary"
                 isDisabled={!testResult?.success}
+                isLoading={saving}
+                onPress={handleSave}
+                size="sm"
               >
                 Save Connection
               </Button>

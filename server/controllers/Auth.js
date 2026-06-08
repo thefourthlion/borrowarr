@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const Settings = require("../models/Settings");
 const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
 const rateLimit = require("express-rate-limit");
@@ -88,38 +89,74 @@ const generateTokens = (userId) => {
 exports.register = async (req, res) => {
   try {
     const { username, email, password } = req.body;
+    const normalizedUsername = typeof username === "string" ? username.trim() : "";
+    const normalizedEmail = typeof email === "string" ? email.toLowerCase().trim() : null;
 
     // Validation
-    if (!username || !email || !password) {
-      return res.status(400).json({ error: "Username, email, and password are required" });
+    if (!normalizedUsername || !password) {
+      return res.status(400).json({ error: "Username and password are required" });
     }
 
     if (password.length < 8) {
       return res.status(400).json({ error: "Password must be at least 8 characters long" });
     }
 
+    const userCount = await User.count();
+    const isFirstUser = userCount === 0;
+
+    if (!isFirstUser) {
+      const settings = await Settings.findOne({ order: [["createdAt", "ASC"]] });
+      const publicRegistrationEnabled = settings ? settings.publicRegistrationEnabled : false;
+      if (!publicRegistrationEnabled) {
+        return res.status(403).json({ error: "Public registration is disabled" });
+      }
+    }
+
     // Check if user already exists
+    const conflictChecks = [{ username: normalizedUsername }];
+    if (normalizedEmail) {
+      conflictChecks.push({ email: normalizedEmail });
+    }
+
     const existingUser = await User.findOne({
       where: {
-        [Op.or]: [{ email: email.toLowerCase().trim() }, { username }],
+        [Op.or]: conflictChecks,
       },
     });
 
     if (existingUser) {
-      if (existingUser.email === email) {
+      if (normalizedEmail && existingUser.email === normalizedEmail) {
         return res.status(409).json({ error: "Email already registered" });
       }
-      if (existingUser.username === username) {
+      if (existingUser.username === normalizedUsername) {
         return res.status(409).json({ error: "Username already taken" });
       }
     }
 
+    const defaultPermissions = {
+      admin: false,
+      manage_users: false,
+      request: true,
+      auto_approve: false,
+      manage_requests: false,
+    };
+
+    const superAdminPermissions = {
+      admin: true,
+      manage_users: true,
+      request: true,
+      auto_approve: true,
+      manage_requests: true,
+      super_admin: true,
+    };
+
     // Create new user
     const user = await User.create({
       id: uuidv4(),
-      username,
-      email: email.toLowerCase().trim(),
+      username: normalizedUsername,
+      email: normalizedEmail || null,
       passwordHash: password, // Will be hashed by hook
+      permissions: isFirstUser ? superAdminPermissions : defaultPermissions,
     });
 
     // Generate tokens
@@ -150,19 +187,22 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { username, password } = req.body;
+    const normalizedLogin = typeof username === "string" ? username.trim() : "";
 
     // Validation
-    if (!username || !password) {
+    if (!normalizedLogin || !password) {
       return res.status(400).json({ error: "Username and password are required" });
     }
 
-    // Find user by username or email
+    // Find user by username first, optionally by email when provided
+    const loginConditions = [{ username: normalizedLogin }];
+    if (normalizedLogin.includes("@")) {
+      loginConditions.push({ email: normalizedLogin.toLowerCase() });
+    }
+
     const user = await User.findOne({
       where: {
-        [Op.or]: [
-          { username },
-          { email: username.toLowerCase().trim() },
-        ],
+        [Op.or]: loginConditions,
       },
     });
 
@@ -301,6 +341,9 @@ exports.getProfile = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const { username, email, avatarUrl } = req.body;
+    const normalizedUsername = typeof username === "string" ? username.trim() : undefined;
+    const normalizedEmailInput = typeof email === "string" ? email.toLowerCase().trim() : undefined;
+    const normalizedEmail = normalizedEmailInput === "" ? null : normalizedEmailInput;
     const user = await User.findByPk(req.userId);
 
     if (!user) {
@@ -308,15 +351,15 @@ exports.updateProfile = async (req, res) => {
     }
 
     // Check if username/email is already taken by another user
-    if (username && username !== user.username) {
-      const existingUser = await User.findOne({ where: { username } });
+    if (normalizedUsername && normalizedUsername !== user.username) {
+      const existingUser = await User.findOne({ where: { username: normalizedUsername } });
       if (existingUser) {
         return res.status(409).json({ error: "Username already taken" });
       }
     }
 
-    if (email && email !== user.email) {
-      const existingUser = await User.findOne({ where: { email: email.toLowerCase().trim() } });
+    if (normalizedEmail !== undefined && normalizedEmail !== user.email && normalizedEmail !== null) {
+      const existingUser = await User.findOne({ where: { email: normalizedEmail } });
       if (existingUser) {
         return res.status(409).json({ error: "Email already registered" });
       }
@@ -324,8 +367,8 @@ exports.updateProfile = async (req, res) => {
 
     // Update user
     const updateData = {};
-    if (username) updateData.username = username;
-    if (email) updateData.email = email.toLowerCase().trim();
+    if (normalizedUsername) updateData.username = normalizedUsername;
+    if (normalizedEmail !== undefined) updateData.email = normalizedEmail;
     if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
 
     await user.update(updateData);

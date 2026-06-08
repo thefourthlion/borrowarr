@@ -26,11 +26,28 @@ const User = sequelize.define(
     },
     email: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
       unique: true,
+      set(value) {
+        if (typeof value !== "string") {
+          this.setDataValue("email", null);
+          return;
+        }
+
+        const normalizedEmail = value.toLowerCase().trim();
+        this.setDataValue("email", normalizedEmail || null);
+      },
       validate: {
-        notEmpty: { msg: "Email is required" },
-        isEmail: { msg: "Please provide a valid email address" },
+        isValidEmailOrEmpty(value) {
+          if (!value) {
+            return;
+          }
+
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(value)) {
+            throw new Error("Please provide a valid email address");
+          }
+        },
       },
     },
     passwordHash: {

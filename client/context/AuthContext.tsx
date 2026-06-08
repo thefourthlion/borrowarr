@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  ReactNode,
+} from "react";
 import axios from "axios";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
@@ -16,7 +23,7 @@ interface UserPermissions {
 interface User {
   id: string;
   username: string;
-  email: string;
+  email?: string | null;
   avatarUrl?: string;
   permissions?: UserPermissions;
   createdAt: string;
@@ -27,7 +34,11 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
+  register: (
+    username: string,
+    password: string,
+    email?: string,
+  ) => Promise<void>;
   logout: () => void;
   refreshToken: () => Promise<void>;
   updateUser: (data: Partial<User>) => Promise<void>;
@@ -41,7 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Get tokens from localStorage
   const getTokens = () => {
-    if (typeof window === "undefined") return { accessToken: null, refreshToken: null };
+    if (typeof window === "undefined")
+      return { accessToken: null, refreshToken: null };
     return {
       accessToken: localStorage.getItem("accessToken"),
       refreshToken: localStorage.getItem("refreshToken"),
@@ -124,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (refreshError) {
           return Promise.reject(refreshError);
         }
-      }
+      },
     );
 
     return () => {
@@ -142,7 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         return config;
       },
-      (error) => Promise.reject(error)
+      (error) => Promise.reject(error),
     );
 
     return () => {
@@ -195,12 +207,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const register = async (username: string, email: string, password: string) => {
+  const register = async (
+    username: string,
+    password: string,
+    email?: string,
+  ) => {
     try {
       const response = await axios.post(`${API_BASE_URL}/api/auth/register`, {
         username,
-        email,
         password,
+        ...(email ? { email } : {}),
       });
 
       const { user, accessToken, refreshToken } = response.data;
@@ -246,7 +262,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
-        }
+        },
       );
 
       if (response.data.success) {
@@ -259,7 +275,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, register, logout, refreshToken, updateUser }}
+      value={{
+        user,
+        loading,
+        login,
+        register,
+        logout,
+        refreshToken,
+        updateUser,
+      }}
     >
       {children}
     </AuthContext.Provider>
@@ -273,4 +297,3 @@ export function useAuth() {
   }
   return context;
 }
-

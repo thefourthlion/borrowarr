@@ -10,7 +10,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 export const normalizePlexKey = (
   title: string,
   year: number | string | undefined,
-  type: "movie" | "tv"
+  type: "movie" | "tv",
 ) => {
   const t = (title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   const plexType = type === "tv" ? "show" : "movie";
@@ -30,7 +30,7 @@ export function usePlexLibrary() {
       const key = normalizePlexKey(title, year, type);
       return plexKeys.has(key);
     },
-    [hasConnection, user, plexKeys]
+    [hasConnection, user, plexKeys],
   );
 
   useEffect(() => {
@@ -58,8 +58,7 @@ export function usePlexLibrary() {
 
         if (cancelled) return;
 
-        const connected =
-          connRes.data?.connected && connRes.data?.isConnected;
+        const connected = connRes.data?.connected && connRes.data?.isConnected;
         setHasConnection(!!connected);
 
         if (keysRes.data?.success && keysRes.data?.keys) {

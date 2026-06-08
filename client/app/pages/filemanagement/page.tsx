@@ -19,7 +19,6 @@ import {
   FolderOpen,
   Film,
   Tv,
-  FileText,
   RefreshCw,
   Check,
   X,
@@ -39,10 +38,7 @@ import {
   FolderInput,
   FolderOutput,
   ArrowRight,
-  Copy,
-  Move,
   Activity,
-  FileVideo,
   FileCheck,
   Ban,
   CheckCircle2,
@@ -50,6 +46,7 @@ import {
 } from "lucide-react";
 import DirectoryPicker from "../../../components/DirectoryPicker";
 import { useAuth } from "@/context/AuthContext";
+import { PageContent, PageHeader } from "@/components/page-header";
 import "../../../styles/FileManagement.scss";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
@@ -78,11 +75,10 @@ interface PendingFile {
   filename: string;
   sourcePath: string;
   destinationPath: string;
-  type: 'movie' | 'series';
+  type: "movie" | "series";
   size: number;
   detectedAt: string;
 }
-
 
 interface WatcherStats {
   lastRun: string | null;
@@ -102,7 +98,7 @@ interface RenameItem {
   currentPath: string;
   currentName: string;
   newName: string;
-  type: 'movie' | 'series';
+  type: "movie" | "series";
 }
 
 // Default settings for new users
@@ -110,7 +106,8 @@ const DEFAULT_SETTINGS: FileSettings = {
   movieDirectory: null,
   seriesDirectory: null,
   movieFileFormat: "{Movie Title} ({Release Year})",
-  seriesFileFormat: "{Series Title}/Season {season:00}/{Series Title} - S{season:00}E{episode:00} - {Episode Title}",
+  seriesFileFormat:
+    "{Series Title}/Season {season:00}/{Series Title} - S{season:00}E{episode:00} - {Episode Title}",
   autoRename: false,
   autoRenameInterval: 60,
   autoRenameWarningShown: false,
@@ -126,69 +123,104 @@ const DEFAULT_SETTINGS: FileSettings = {
 
 const FileManagement = () => {
   const { user } = useAuth();
-  
+
   const [settings, setSettings] = useState<FileSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-  
+  const [message, setMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+
   // Directory testing state
   const [testingMovieDir, setTestingMovieDir] = useState(false);
   const [testingSeriesDir, setTestingSeriesDir] = useState(false);
-  const [movieDirStatus, setMovieDirStatus] = useState<'untested' | 'success' | 'error'>('untested');
-  const [seriesDirStatus, setSeriesDirStatus] = useState<'untested' | 'success' | 'error'>('untested');
-  
+  const [movieDirStatus, setMovieDirStatus] = useState<
+    "untested" | "success" | "error"
+  >("untested");
+  const [seriesDirStatus, setSeriesDirStatus] = useState<
+    "untested" | "success" | "error"
+  >("untested");
+
   // Import state
   const [importingMovies, setImportingMovies] = useState(false);
   const [importingSeries, setImportingSeries] = useState(false);
-  
+
   // Rename preview state
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [renamePreview, setRenamePreview] = useState<RenameItem[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [renaming, setRenaming] = useState(false);
-  const [renameType, setRenameType] = useState<'movies' | 'series' | 'bulk'>('bulk');
-  
+  const [renameType, setRenameType] = useState<"movies" | "series" | "bulk">(
+    "bulk",
+  );
+
   // Section expansion state
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    new Set(['directories', 'downloadWatcher', 'movieNaming', 'seriesNaming', 'autoRename'])
+    new Set([
+      "directories",
+      "downloadWatcher",
+      "movieNaming",
+      "seriesNaming",
+      "autoRename",
+    ]),
   );
-  
+
   // Beta warning modal state
   const [showBetaWarning, setShowBetaWarning] = useState(false);
   const [pendingAutoRenameEnable, setPendingAutoRenameEnable] = useState(false);
-  
+
   // Download Watcher state
-  const [watcherStatus, setWatcherStatus] = useState<{ isRunning: boolean; stats: WatcherStats }>({
+  const [watcherStatus, setWatcherStatus] = useState<{
+    isRunning: boolean;
+    stats: WatcherStats;
+  }>({
     isRunning: false,
-    stats: { lastRun: null, filesProcessed: 0, moviesProcessed: 0, seriesProcessed: 0, errors: 0, recentFiles: [] }
+    stats: {
+      lastRun: null,
+      filesProcessed: 0,
+      moviesProcessed: 0,
+      seriesProcessed: 0,
+      errors: 0,
+      recentFiles: [],
+    },
   });
   const [triggeringWatcher, setTriggeringWatcher] = useState(false);
   const [testingMovieDownloadDir, setTestingMovieDownloadDir] = useState(false);
-  const [testingSeriesDownloadDir, setTestingSeriesDownloadDir] = useState(false);
+  const [testingSeriesDownloadDir, setTestingSeriesDownloadDir] =
+    useState(false);
   const [testingMovieWatcherDest, setTestingMovieWatcherDest] = useState(false);
-  const [testingSeriesWatcherDest, setTestingSeriesWatcherDest] = useState(false);
-  const [movieDownloadDirStatus, setMovieDownloadDirStatus] = useState<'untested' | 'success' | 'error'>('untested');
-  const [seriesDownloadDirStatus, setSeriesDownloadDirStatus] = useState<'untested' | 'success' | 'error'>('untested');
-  const [movieWatcherDestStatus, setMovieWatcherDestStatus] = useState<'untested' | 'success' | 'error'>('untested');
-  const [seriesWatcherDestStatus, setSeriesWatcherDestStatus] = useState<'untested' | 'success' | 'error'>('untested');
+  const [testingSeriesWatcherDest, setTestingSeriesWatcherDest] =
+    useState(false);
+  const [movieDownloadDirStatus, setMovieDownloadDirStatus] = useState<
+    "untested" | "success" | "error"
+  >("untested");
+  const [seriesDownloadDirStatus, setSeriesDownloadDirStatus] = useState<
+    "untested" | "success" | "error"
+  >("untested");
+  const [movieWatcherDestStatus, setMovieWatcherDestStatus] = useState<
+    "untested" | "success" | "error"
+  >("untested");
+  const [seriesWatcherDestStatus, setSeriesWatcherDestStatus] = useState<
+    "untested" | "success" | "error"
+  >("untested");
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [approvingFile, setApprovingFile] = useState<string | null>(null);
   const [rejectingFile, setRejectingFile] = useState<string | null>(null);
-  
+
   // Modal state
   const [infoModal, setInfoModal] = useState<{
     isOpen: boolean;
     title: string;
     message: string;
-    type: 'success' | 'error' | 'info' | 'warning';
+    type: "success" | "error" | "info" | "warning";
   }>({
     isOpen: false,
-    title: '',
-    message: '',
-    type: 'info',
+    title: "",
+    message: "",
+    type: "info",
   });
-  
+
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -196,8 +228,8 @@ const FileManagement = () => {
     onConfirm: () => void;
   }>({
     isOpen: false,
-    title: '',
-    message: '',
+    title: "",
+    message: "",
     onConfirm: () => {},
   });
 
@@ -231,18 +263,28 @@ const FileManagement = () => {
       const response = await axios.get(`${API_BASE_URL}/api/Settings`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       // Merge with defaults, but preserve null values for optional fields
       const loadedSettings = {
         ...DEFAULT_SETTINGS,
         ...response.data,
         // Preserve null values for directories (don't overwrite with defaults)
-        movieDirectory: response.data.movieDirectory ?? DEFAULT_SETTINGS.movieDirectory,
-        seriesDirectory: response.data.seriesDirectory ?? DEFAULT_SETTINGS.seriesDirectory,
-        movieDownloadDirectory: response.data.movieDownloadDirectory ?? DEFAULT_SETTINGS.movieDownloadDirectory,
-        seriesDownloadDirectory: response.data.seriesDownloadDirectory ?? DEFAULT_SETTINGS.seriesDownloadDirectory,
-        movieWatcherDestination: response.data.movieWatcherDestination ?? DEFAULT_SETTINGS.movieWatcherDestination,
-        seriesWatcherDestination: response.data.seriesWatcherDestination ?? DEFAULT_SETTINGS.seriesWatcherDestination,
+        movieDirectory:
+          response.data.movieDirectory ?? DEFAULT_SETTINGS.movieDirectory,
+        seriesDirectory:
+          response.data.seriesDirectory ?? DEFAULT_SETTINGS.seriesDirectory,
+        movieDownloadDirectory:
+          response.data.movieDownloadDirectory ??
+          DEFAULT_SETTINGS.movieDownloadDirectory,
+        seriesDownloadDirectory:
+          response.data.seriesDownloadDirectory ??
+          DEFAULT_SETTINGS.seriesDownloadDirectory,
+        movieWatcherDestination:
+          response.data.movieWatcherDestination ??
+          DEFAULT_SETTINGS.movieWatcherDestination,
+        seriesWatcherDestination:
+          response.data.seriesWatcherDestination ??
+          DEFAULT_SETTINGS.seriesWatcherDestination,
         // Ensure boolean fields are properly set
         downloadWatcherEnabled: response.data.downloadWatcherEnabled ?? false,
         watcherAutoApprove: response.data.watcherAutoApprove ?? false,
@@ -251,14 +293,17 @@ const FileManagement = () => {
         watcherInterval: response.data.watcherInterval ?? 30,
         autoRenameInterval: response.data.autoRenameInterval ?? 60,
       };
-      
+
       setSettings(loadedSettings);
       setLoading(false);
     } catch (error) {
       console.error("Error fetching settings:", error);
       // Use defaults if fetch fails
       setSettings(DEFAULT_SETTINGS);
-      setMessage({ type: 'error', text: 'Failed to load settings. Using defaults.' });
+      setMessage({
+        type: "error",
+        text: "Failed to load settings. Using defaults.",
+      });
       setLoading(false);
     }
   };
@@ -266,9 +311,12 @@ const FileManagement = () => {
   const fetchWatcherStatus = async () => {
     try {
       const token = localStorage.getItem("accessToken");
-      const response = await axios.get(`${API_BASE_URL}/api/Settings/download-watcher/status`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axios.get(
+        `${API_BASE_URL}/api/Settings/download-watcher/status`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       setWatcherStatus(response.data);
     } catch (error) {
       console.error("Error fetching watcher status:", error);
@@ -278,9 +326,12 @@ const FileManagement = () => {
   const fetchPendingFiles = async () => {
     try {
       const token = localStorage.getItem("accessToken");
-      const response = await axios.get(`${API_BASE_URL}/api/Settings/download-watcher/pending`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axios.get(
+        `${API_BASE_URL}/api/Settings/download-watcher/pending`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       setPendingFiles(response.data.files || []);
     } catch (error) {
       console.error("Error fetching pending files:", error);
@@ -294,14 +345,17 @@ const FileManagement = () => {
       await axios.post(
         `${API_BASE_URL}/api/Settings/download-watcher/approve`,
         { fileId },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
-      setMessage({ type: 'success', text: 'File moved successfully!' });
+      setMessage({ type: "success", text: "File moved successfully!" });
       fetchPendingFiles();
       fetchWatcherStatus();
     } catch (error: any) {
       console.error("Error approving file:", error);
-      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to move file' });
+      setMessage({
+        type: "error",
+        text: error.response?.data?.error || "Failed to move file",
+      });
     } finally {
       setApprovingFile(null);
       setTimeout(() => setMessage(null), 3000);
@@ -315,13 +369,16 @@ const FileManagement = () => {
       await axios.post(
         `${API_BASE_URL}/api/Settings/download-watcher/reject`,
         { fileId },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
-      setMessage({ type: 'success', text: 'File ignored' });
+      setMessage({ type: "success", text: "File ignored" });
       fetchPendingFiles();
     } catch (error: any) {
       console.error("Error rejecting file:", error);
-      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to reject file' });
+      setMessage({
+        type: "error",
+        text: error.response?.data?.error || "Failed to reject file",
+      });
     } finally {
       setRejectingFile(null);
       setTimeout(() => setMessage(null), 3000);
@@ -341,44 +398,56 @@ const FileManagement = () => {
       const response = await axios.post(
         `${API_BASE_URL}/api/Settings/download-watcher/trigger`,
         {},
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
-      
+
       if (response.data.success) {
-        setMessage({ type: 'success', text: 'Download watcher scan triggered successfully!' });
+        setMessage({
+          type: "success",
+          text: "Download watcher scan triggered successfully!",
+        });
         // Refresh status after scan
         await fetchWatcherStatus();
       } else {
-        setMessage({ type: 'error', text: response.data.message || 'Scan failed' });
+        setMessage({
+          type: "error",
+          text: response.data.message || "Scan failed",
+        });
       }
     } catch (error: any) {
       console.error("Error triggering watcher scan:", error);
-      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to trigger scan' });
+      setMessage({
+        type: "error",
+        text: error.response?.data?.error || "Failed to trigger scan",
+      });
     } finally {
       setTriggeringWatcher(false);
       setTimeout(() => setMessage(null), 3000);
     }
   };
 
-  const testDownloadDirectory = async (type: 'movie' | 'series') => {
-    const directory = type === 'movie' ? settings.movieDownloadDirectory : settings.seriesDownloadDirectory;
-    
+  const testDownloadDirectory = async (type: "movie" | "series") => {
+    const directory =
+      type === "movie"
+        ? settings.movieDownloadDirectory
+        : settings.seriesDownloadDirectory;
+
     if (!directory) {
       setInfoModal({
         isOpen: true,
-        title: 'No Directory',
+        title: "No Directory",
         message: `Please enter a ${type} download directory first.`,
-        type: 'warning',
+        type: "warning",
       });
       return;
     }
 
-    if (type === 'movie') {
+    if (type === "movie") {
       setTestingMovieDownloadDir(true);
-      setMovieDownloadDirStatus('untested');
+      setMovieDownloadDirStatus("untested");
     } else {
       setTestingSeriesDownloadDir(true);
-      setSeriesDownloadDirStatus('untested');
+      setSeriesDownloadDirStatus("untested");
     }
 
     try {
@@ -386,28 +455,33 @@ const FileManagement = () => {
       const response = await axios.post(
         `${API_BASE_URL}/api/Settings/test-directory`,
         { directory },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
 
       if (response.data.accessible) {
-        if (type === 'movie') {
-          setMovieDownloadDirStatus('success');
+        if (type === "movie") {
+          setMovieDownloadDirStatus("success");
         } else {
-          setSeriesDownloadDirStatus('success');
+          setSeriesDownloadDirStatus("success");
         }
-        setMessage({ type: 'success', text: `✓ ${type === 'movie' ? 'Movie' : 'Series'} download directory is accessible` });
+        setMessage({
+          type: "success",
+          text: `✓ ${type === "movie" ? "Movie" : "Series"} download directory is accessible`,
+        });
       }
     } catch (error: any) {
       console.error("Error testing directory:", error);
-      if (type === 'movie') {
-        setMovieDownloadDirStatus('error');
+      if (type === "movie") {
+        setMovieDownloadDirStatus("error");
       } else {
-        setSeriesDownloadDirStatus('error');
+        setSeriesDownloadDirStatus("error");
       }
-      const errorMsg = error.response?.data?.error || `Failed to access ${type} download directory`;
-      setMessage({ type: 'error', text: errorMsg });
+      const errorMsg =
+        error.response?.data?.error ||
+        `Failed to access ${type} download directory`;
+      setMessage({ type: "error", text: errorMsg });
     } finally {
-      if (type === 'movie') {
+      if (type === "movie") {
         setTestingMovieDownloadDir(false);
       } else {
         setTestingSeriesDownloadDir(false);
@@ -416,25 +490,28 @@ const FileManagement = () => {
     }
   };
 
-  const testWatcherDestination = async (type: 'movie' | 'series') => {
-    const directory = type === 'movie' ? settings.movieWatcherDestination : settings.seriesWatcherDestination;
-    
+  const testWatcherDestination = async (type: "movie" | "series") => {
+    const directory =
+      type === "movie"
+        ? settings.movieWatcherDestination
+        : settings.seriesWatcherDestination;
+
     if (!directory) {
       setInfoModal({
         isOpen: true,
-        title: 'No Directory',
+        title: "No Directory",
         message: `Please enter a ${type} media folder first.`,
-        type: 'warning',
+        type: "warning",
       });
       return;
     }
 
-    if (type === 'movie') {
+    if (type === "movie") {
       setTestingMovieWatcherDest(true);
-      setMovieWatcherDestStatus('untested');
+      setMovieWatcherDestStatus("untested");
     } else {
       setTestingSeriesWatcherDest(true);
-      setSeriesWatcherDestStatus('untested');
+      setSeriesWatcherDestStatus("untested");
     }
 
     try {
@@ -442,28 +519,32 @@ const FileManagement = () => {
       const response = await axios.post(
         `${API_BASE_URL}/api/Settings/test-directory`,
         { directory },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
 
       if (response.data.accessible) {
-        if (type === 'movie') {
-          setMovieWatcherDestStatus('success');
+        if (type === "movie") {
+          setMovieWatcherDestStatus("success");
         } else {
-          setSeriesWatcherDestStatus('success');
+          setSeriesWatcherDestStatus("success");
         }
-        setMessage({ type: 'success', text: `✓ ${type === 'movie' ? 'Movie' : 'Series'} media folder is accessible` });
+        setMessage({
+          type: "success",
+          text: `✓ ${type === "movie" ? "Movie" : "Series"} media folder is accessible`,
+        });
       }
     } catch (error: any) {
       console.error("Error testing directory:", error);
-      if (type === 'movie') {
-        setMovieWatcherDestStatus('error');
+      if (type === "movie") {
+        setMovieWatcherDestStatus("error");
       } else {
-        setSeriesWatcherDestStatus('error');
+        setSeriesWatcherDestStatus("error");
       }
-      const errorMsg = error.response?.data?.error || `Failed to access ${type} media folder`;
-      setMessage({ type: 'error', text: errorMsg });
+      const errorMsg =
+        error.response?.data?.error || `Failed to access ${type} media folder`;
+      setMessage({ type: "error", text: errorMsg });
     } finally {
-      if (type === 'movie') {
+      if (type === "movie") {
         setTestingMovieWatcherDest(false);
       } else {
         setTestingSeriesWatcherDest(false);
@@ -478,7 +559,7 @@ const FileManagement = () => {
 
     try {
       const token = localStorage.getItem("accessToken");
-      
+
       // Ensure all download watcher fields are included, even if null
       const settingsToSave = {
         ...settings,
@@ -493,36 +574,44 @@ const FileManagement = () => {
         // Include other settings
         movieDirectory: settings.movieDirectory || null,
         seriesDirectory: settings.seriesDirectory || null,
-        movieFileFormat: settings.movieFileFormat || DEFAULT_SETTINGS.movieFileFormat,
-        seriesFileFormat: settings.seriesFileFormat || DEFAULT_SETTINGS.seriesFileFormat,
+        movieFileFormat:
+          settings.movieFileFormat || DEFAULT_SETTINGS.movieFileFormat,
+        seriesFileFormat:
+          settings.seriesFileFormat || DEFAULT_SETTINGS.seriesFileFormat,
         autoRename: settings.autoRename ?? false,
         autoRenameInterval: settings.autoRenameInterval || 60,
         autoRenameWarningShown: settings.autoRenameWarningShown ?? false,
       };
-      
+
       const response = await axios.put(
         `${API_BASE_URL}/api/Settings`,
         settingsToSave,
         {
           headers: { Authorization: `Bearer ${token}` },
-        }
+        },
       );
-      
+
       // Update local state with the saved settings from server
       setSettings({ ...DEFAULT_SETTINGS, ...response.data });
-      setMessage({ type: 'success', text: 'Settings saved successfully! Your preferences have been saved.' });
-      
+      setMessage({
+        type: "success",
+        text: "Settings saved successfully! Your preferences have been saved.",
+      });
+
       // Refresh watcher status after saving
       if (settings.downloadWatcherEnabled) {
         await fetchWatcherStatus();
       }
-      
+
       // Auto-clear success message after 5 seconds
       setTimeout(() => setMessage(null), 5000);
     } catch (error: any) {
       console.error("Error saving settings:", error);
-      const errorMsg = error.response?.data?.error || error.response?.data?.message || 'Failed to save settings';
-      setMessage({ type: 'error', text: errorMsg });
+      const errorMsg =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        "Failed to save settings";
+      setMessage({ type: "error", text: errorMsg });
       // Keep error message visible longer
       setTimeout(() => setMessage(null), 5000);
     } finally {
@@ -531,7 +620,7 @@ const FileManagement = () => {
   };
 
   const toggleSection = (section: string) => {
-    setExpandedSections(prev => {
+    setExpandedSections((prev) => {
       const next = new Set(prev);
       if (next.has(section)) {
         next.delete(section);
@@ -542,25 +631,26 @@ const FileManagement = () => {
     });
   };
 
-  const testDirectory = async (type: 'movie' | 'series') => {
-    const directory = type === 'movie' ? settings.movieDirectory : settings.seriesDirectory;
-    
+  const testDirectory = async (type: "movie" | "series") => {
+    const directory =
+      type === "movie" ? settings.movieDirectory : settings.seriesDirectory;
+
     if (!directory) {
       setInfoModal({
         isOpen: true,
-        title: 'No Directory',
+        title: "No Directory",
         message: `Please enter a ${type} directory first.`,
-        type: 'warning',
+        type: "warning",
       });
       return;
     }
 
-    if (type === 'movie') {
+    if (type === "movie") {
       setTestingMovieDir(true);
-      setMovieDirStatus('untested');
+      setMovieDirStatus("untested");
     } else {
       setTestingSeriesDir(true);
-      setSeriesDirStatus('untested');
+      setSeriesDirStatus("untested");
     }
 
     try {
@@ -570,28 +660,32 @@ const FileManagement = () => {
         { directory },
         {
           headers: { Authorization: `Bearer ${token}` },
-        }
+        },
       );
 
       if (response.data.accessible) {
-        if (type === 'movie') {
-          setMovieDirStatus('success');
+        if (type === "movie") {
+          setMovieDirStatus("success");
         } else {
-          setSeriesDirStatus('success');
+          setSeriesDirStatus("success");
         }
-        setMessage({ type: 'success', text: `✓ ${type === 'movie' ? 'Movie' : 'Series'} directory is accessible` });
+        setMessage({
+          type: "success",
+          text: `✓ ${type === "movie" ? "Movie" : "Series"} directory is accessible`,
+        });
       }
     } catch (error: any) {
       console.error("Error testing directory:", error);
-      if (type === 'movie') {
-        setMovieDirStatus('error');
+      if (type === "movie") {
+        setMovieDirStatus("error");
       } else {
-        setSeriesDirStatus('error');
+        setSeriesDirStatus("error");
       }
-      const errorMsg = error.response?.data?.error || `Failed to access ${type} directory`;
-      setMessage({ type: 'error', text: errorMsg });
+      const errorMsg =
+        error.response?.data?.error || `Failed to access ${type} directory`;
+      setMessage({ type: "error", text: errorMsg });
     } finally {
-      if (type === 'movie') {
+      if (type === "movie") {
         setTestingMovieDir(false);
       } else {
         setTestingSeriesDir(false);
@@ -599,27 +693,28 @@ const FileManagement = () => {
     }
   };
 
-  const importMedia = async (type: 'movie' | 'series') => {
-    const directory = type === 'movie' ? settings.movieDirectory : settings.seriesDirectory;
-    
+  const importMedia = async (type: "movie" | "series") => {
+    const directory =
+      type === "movie" ? settings.movieDirectory : settings.seriesDirectory;
+
     if (!directory) {
       setInfoModal({
         isOpen: true,
-        title: 'Configuration Required',
+        title: "Configuration Required",
         message: `Please configure your ${type} directory first!`,
-        type: 'error',
+        type: "error",
       });
       return;
     }
 
     setConfirmModal({
       isOpen: true,
-      title: `Import ${type === 'movie' ? 'Movies' : 'Series'}`,
-      message: `This will scan your ${type} directory and add all found ${type === 'movie' ? 'movies' : 'TV shows'} to your monitored list.\n\nDirectory: ${directory}\n\nContinue?`,
+      title: `Import ${type === "movie" ? "Movies" : "Series"}`,
+      message: `This will scan your ${type} directory and add all found ${type === "movie" ? "movies" : "TV shows"} to your monitored list.\n\nDirectory: ${directory}\n\nContinue?`,
       onConfirm: async () => {
         setConfirmModal({ ...confirmModal, isOpen: false });
-        
-        if (type === 'movie') {
+
+        if (type === "movie") {
           setImportingMovies(true);
         } else {
           setImportingSeries(true);
@@ -629,18 +724,18 @@ const FileManagement = () => {
         try {
           const token = localStorage.getItem("accessToken");
           const response = await axios.post(
-            `${API_BASE_URL}/api/Settings/import-${type === 'movie' ? 'movies' : 'series'}`,
+            `${API_BASE_URL}/api/Settings/import-${type === "movie" ? "movies" : "series"}`,
             { dryRun: false },
             {
               headers: { Authorization: `Bearer ${token}` },
               timeout: 300000,
-            }
+            },
           );
 
           const { results } = response.data;
-          
+
           let message = `Import Complete!\n\n`;
-          message += `✅ Imported: ${results.imported} ${type === 'movie' ? 'movies' : 'series'}\n`;
+          message += `✅ Imported: ${results.imported} ${type === "movie" ? "movies" : "series"}\n`;
           if (results.alreadyMonitored > 0) {
             message += `⏭️ Already monitored: ${results.alreadyMonitored}\n`;
           }
@@ -651,26 +746,29 @@ const FileManagement = () => {
 
           setInfoModal({
             isOpen: true,
-            title: 'Import Complete',
+            title: "Import Complete",
             message,
-            type: 'success',
+            type: "success",
           });
-          setMessage({ 
-            type: 'success', 
-            text: `Successfully imported ${results.imported} ${type === 'movie' ? 'movies' : 'series'}!` 
+          setMessage({
+            type: "success",
+            text: `Successfully imported ${results.imported} ${type === "movie" ? "movies" : "series"}!`,
           });
         } catch (error: any) {
           console.error(`Error importing ${type}:`, error);
-          const errorMsg = error.response?.data?.error || error.message || `Failed to import ${type}`;
+          const errorMsg =
+            error.response?.data?.error ||
+            error.message ||
+            `Failed to import ${type}`;
           setInfoModal({
             isOpen: true,
-            title: 'Import Failed',
+            title: "Import Failed",
             message: errorMsg,
-            type: 'error',
+            type: "error",
           });
-          setMessage({ type: 'error', text: errorMsg });
+          setMessage({ type: "error", text: errorMsg });
         } finally {
-          if (type === 'movie') {
+          if (type === "movie") {
             setImportingMovies(false);
           } else {
             setImportingSeries(false);
@@ -680,32 +778,36 @@ const FileManagement = () => {
     });
   };
 
-  const previewRenames = async (type: 'movies' | 'series' | 'bulk') => {
+  const previewRenames = async (type: "movies" | "series" | "bulk") => {
     // Validate directories based on type
-    if (type === 'movies' && !settings.movieDirectory) {
+    if (type === "movies" && !settings.movieDirectory) {
       setInfoModal({
         isOpen: true,
-        title: 'Configuration Required',
-        message: 'Please configure your movie directory first!',
-        type: 'error',
+        title: "Configuration Required",
+        message: "Please configure your movie directory first!",
+        type: "error",
       });
       return;
     }
-    if (type === 'series' && !settings.seriesDirectory) {
+    if (type === "series" && !settings.seriesDirectory) {
       setInfoModal({
         isOpen: true,
-        title: 'Configuration Required',
-        message: 'Please configure your series directory first!',
-        type: 'error',
+        title: "Configuration Required",
+        message: "Please configure your series directory first!",
+        type: "error",
       });
       return;
     }
-    if (type === 'bulk' && !settings.movieDirectory && !settings.seriesDirectory) {
+    if (
+      type === "bulk" &&
+      !settings.movieDirectory &&
+      !settings.seriesDirectory
+    ) {
       setInfoModal({
         isOpen: true,
-        title: 'Configuration Required',
-        message: 'Please configure at least one media directory first!',
-        type: 'error',
+        title: "Configuration Required",
+        message: "Please configure at least one media directory first!",
+        type: "error",
       });
       return;
     }
@@ -718,7 +820,7 @@ const FileManagement = () => {
       const token = localStorage.getItem("accessToken");
       const response = await axios.post(
         `${API_BASE_URL}/api/Settings/preview-renames`,
-        { 
+        {
           movieFileFormat: settings.movieFileFormat,
           seriesFileFormat: settings.seriesFileFormat,
           type: type, // Pass the type to backend
@@ -726,36 +828,45 @@ const FileManagement = () => {
         {
           headers: { Authorization: `Bearer ${token}` },
           timeout: 60000,
-        }
+        },
       );
 
       let allRenames: RenameItem[] = [];
-      
-      if (type === 'movies' || type === 'bulk') {
+
+      if (type === "movies" || type === "bulk") {
         allRenames = [
           ...allRenames,
-          ...(response.data.movies || []).map((r: any) => ({ ...r, type: 'movie' as const }))
+          ...(response.data.movies || []).map((r: any) => ({
+            ...r,
+            type: "movie" as const,
+          })),
         ];
       }
-      if (type === 'series' || type === 'bulk') {
+      if (type === "series" || type === "bulk") {
         allRenames = [
           ...allRenames,
-          ...(response.data.series || []).map((r: any) => ({ ...r, type: 'series' as const }))
+          ...(response.data.series || []).map((r: any) => ({
+            ...r,
+            type: "series" as const,
+          })),
         ];
       }
-      
+
       setRenamePreview(allRenames);
       setShowRenameModal(true);
     } catch (error: any) {
       console.error("Error previewing renames:", error);
-      const errorMsg = error.response?.data?.error || error.message || 'Failed to preview renames';
+      const errorMsg =
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to preview renames";
       setInfoModal({
         isOpen: true,
-        title: 'Preview Failed',
+        title: "Preview Failed",
         message: errorMsg,
-        type: 'error',
+        type: "error",
       });
-      setMessage({ type: 'error', text: errorMsg });
+      setMessage({ type: "error", text: errorMsg });
     } finally {
       setLoadingPreview(false);
     }
@@ -764,7 +875,7 @@ const FileManagement = () => {
   const executeRenames = async () => {
     setConfirmModal({
       isOpen: true,
-      title: 'Confirm Rename',
+      title: "Confirm Rename",
       message: `Are you sure you want to rename ${renamePreview.length} file(s)?\n\nThis action cannot be undone!`,
       onConfirm: async () => {
         setConfirmModal({ ...confirmModal, isOpen: false });
@@ -773,21 +884,21 @@ const FileManagement = () => {
 
         try {
           const token = localStorage.getItem("accessToken");
-          
-          const movies = renamePreview.filter(r => r.type === 'movie');
-          const series = renamePreview.filter(r => r.type === 'series');
-          
+
+          const movies = renamePreview.filter((r) => r.type === "movie");
+          const series = renamePreview.filter((r) => r.type === "series");
+
           let totalSuccess = 0;
           let totalFailed = 0;
 
           if (movies.length > 0) {
             const movieResponse = await axios.post(
               `${API_BASE_URL}/api/Settings/execute-renames`,
-              { renames: movies, type: 'movies' },
+              { renames: movies, type: "movies" },
               {
                 headers: { Authorization: `Bearer ${token}` },
                 timeout: 120000,
-              }
+              },
             );
             totalSuccess += movieResponse.data.results.success;
             totalFailed += movieResponse.data.results.failed;
@@ -796,39 +907,42 @@ const FileManagement = () => {
           if (series.length > 0) {
             const seriesResponse = await axios.post(
               `${API_BASE_URL}/api/Settings/execute-renames`,
-              { renames: series, type: 'series' },
+              { renames: series, type: "series" },
               {
                 headers: { Authorization: `Bearer ${token}` },
                 timeout: 120000,
-              }
+              },
             );
             totalSuccess += seriesResponse.data.results.success;
             totalFailed += seriesResponse.data.results.failed;
           }
-          
+
           setInfoModal({
             isOpen: true,
-            title: 'Rename Complete',
+            title: "Rename Complete",
             message: `✅ Renamed: ${totalSuccess} files\n❌ Failed: ${totalFailed} files`,
-            type: 'success',
+            type: "success",
           });
 
-          setMessage({ 
-            type: 'success', 
-            text: `Successfully renamed ${totalSuccess} files!` 
+          setMessage({
+            type: "success",
+            text: `Successfully renamed ${totalSuccess} files!`,
           });
-          
+
           setShowRenameModal(false);
         } catch (error: any) {
           console.error("Error renaming files:", error);
-          const errorMsg = error.response?.data?.error || error.message || 'Failed to rename files';
+          const errorMsg =
+            error.response?.data?.error ||
+            error.message ||
+            "Failed to rename files";
           setInfoModal({
             isOpen: true,
-            title: 'Rename Failed',
+            title: "Rename Failed",
             message: errorMsg,
-            type: 'error',
+            type: "error",
           });
-          setMessage({ type: 'error', text: errorMsg });
+          setMessage({ type: "error", text: errorMsg });
         } finally {
           setRenaming(false);
         }
@@ -850,38 +964,37 @@ const FileManagement = () => {
   const confirmAutoRenameEnable = async () => {
     setShowBetaWarning(false);
     setPendingAutoRenameEnable(false);
-    
+
     // Mark warning as shown and enable auto-rename
-    const updatedSettings = { 
-      ...settings, 
-      autoRename: true, 
-      autoRenameWarningShown: true 
+    const updatedSettings = {
+      ...settings,
+      autoRename: true,
+      autoRenameWarningShown: true,
     };
     setSettings(updatedSettings);
-    
+
     // Save immediately so the warning flag is persisted
     try {
       const token = localStorage.getItem("accessToken");
-      await axios.put(
-        `${API_BASE_URL}/api/Settings`,
-        updatedSettings,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      setMessage({ type: 'success', text: 'Auto-rename enabled! The service will start scanning your files.' });
+      await axios.put(`${API_BASE_URL}/api/Settings`, updatedSettings, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMessage({
+        type: "success",
+        text: "Auto-rename enabled! The service will start scanning your files.",
+      });
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
       console.error("Error saving auto-rename setting:", error);
     }
   };
 
-  const getDirStatusIcon = (status: 'untested' | 'success' | 'error') => {
+  const getDirStatusIcon = (status: "untested" | "success" | "error") => {
     switch (status) {
-      case 'success':
-        return <Check size={16} className="text-success" />;
-      case 'error':
-        return <X size={16} className="text-danger" />;
+      case "success":
+        return <Check className="text-success" size={16} />;
+      case "error":
+        return <X className="text-danger" size={16} />;
       default:
         return null;
     }
@@ -892,9 +1005,11 @@ const FileManagement = () => {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Card className="max-w-md mx-4">
           <CardBody className="text-center py-8">
-            <AlertTriangle size={48} className="mx-auto mb-4 text-warning" />
+            <AlertTriangle className="mx-auto mb-4 text-warning" size={48} />
             <h2 className="text-xl font-bold mb-2">Authentication Required</h2>
-            <p className="text-default-500">Please sign in to access file management settings.</p>
+            <p className="text-default-500">
+              Please sign in to access file management settings.
+            </p>
           </CardBody>
         </Card>
       </div>
@@ -904,79 +1019,64 @@ const FileManagement = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <div className="border-b border-secondary/20 sticky top-16 z-10 bg-background/95 backdrop-blur-sm">
-          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-primary/10">
-                <HardDrive className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                  File Management
-                </h1>
-                <p className="text-xs sm:text-sm text-foreground/60 mt-1">
-                  Configure media directories and file naming conventions
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <PageHeader
+          description="Configure media directories and file naming conventions"
+          icon={<HardDrive className="h-6 w-6" />}
+          title="File Management"
+          tone="primary"
+        />
 
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <PageContent>
           <div className="flex flex-col items-center justify-center py-16 rounded-xl border border-primary/20 bg-content1">
-            <Spinner size="lg" color="primary" />
-            <p className="mt-4 text-foreground/60">Loading file management settings...</p>
+            <Spinner color="primary" size="lg" />
+            <p className="mt-4 text-foreground/60">
+              Loading file management settings...
+            </p>
           </div>
-        </div>
+        </PageContent>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-primary/20 sticky top-16 z-10 bg-background/95 backdrop-blur-sm">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-primary/10">
-                <HardDrive className="w-6 h-6 text-primary" />
-              </div>
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                  File Management
-                </h1>
-                <p className="text-xs sm:text-sm text-foreground/60 mt-1">
-                  Configure media directories and file naming conventions
-                </p>
-              </div>
-            </div>
-            <Button
-              color="primary"
-              variant="shadow"
-              size="lg"
-              isLoading={saving}
-              onPress={handleSave}
-              startContent={!saving && <Check size={20} />}
-              className="font-semibold"
-            >
-              {saving ? 'Saving Settings...' : 'Save All Settings'}
-            </Button>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        actions={
+          <Button
+            className="font-semibold"
+            color="primary"
+            isLoading={saving}
+            onPress={handleSave}
+            size="lg"
+            startContent={!saving && <Check size={20} />}
+            variant="shadow"
+          >
+            {saving ? "Saving Settings..." : "Save All Settings"}
+          </Button>
+        }
+        description="Configure media directories and file naming conventions"
+        icon={<HardDrive className="h-6 w-6" />}
+        title="File Management"
+        tone="primary"
+      />
 
       {/* Content */}
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <PageContent>
         {/* Message */}
         {message && (
-          <div className={`mb-6 p-4 rounded-lg border ${
-            message.type === 'success' 
-              ? 'bg-success/10 border-success/30 text-success' 
-              : 'bg-danger/10 border-danger/30 text-danger'
-          }`}>
+          <div
+            className={`mb-6 p-4 rounded-lg border ${
+              message.type === "success"
+                ? "bg-success/10 border-success/30 text-success"
+                : "bg-danger/10 border-danger/30 text-danger"
+            }`}
+          >
             <div className="flex items-center gap-2">
-              {message.type === 'success' ? <Check size={18} /> : <X size={18} />}
+              {message.type === "success" ? (
+                <Check size={18} />
+              ) : (
+                <X size={18} />
+              )}
               <span>{message.text}</span>
             </div>
           </div>
@@ -985,59 +1085,65 @@ const FileManagement = () => {
         <div className="space-y-6">
           {/* Media Directories Section */}
           <Card className="border border-content2">
-            <CardHeader 
+            <CardHeader
               className="cursor-pointer hover:bg-content2/50 transition-colors"
-              onClick={() => toggleSection('directories')}
+              onClick={() => toggleSection("directories")}
             >
               <div className="flex items-center justify-between w-full">
                 <div className="flex items-center gap-3">
-                  <FolderOpen size={24} className="text-primary" />
+                  <FolderOpen className="text-primary" size={24} />
                   <div>
                     <h2 className="text-lg font-semibold">Media Directories</h2>
-                    <p className="text-sm text-default-500">Configure where your movies and TV series are stored</p>
+                    <p className="text-sm text-default-500">
+                      Configure where your movies and TV series are stored
+                    </p>
                   </div>
                 </div>
-                {expandedSections.has('directories') ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                {expandedSections.has("directories") ? (
+                  <ChevronDown size={20} />
+                ) : (
+                  <ChevronRight size={20} />
+                )}
               </div>
             </CardHeader>
-            {expandedSections.has('directories') && (
+            {expandedSections.has("directories") && (
               <CardBody className="pt-0 space-y-6">
                 {/* Movie Directory */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <Film size={18} className="text-primary" />
+                    <Film className="text-primary" size={18} />
                     <span className="font-medium">Movie Directory</span>
                     {getDirStatusIcon(movieDirStatus)}
                   </div>
                   <DirectoryPicker
                     label=""
-                    value={settings.movieDirectory}
                     onChange={(path) => {
                       setSettings({ ...settings, movieDirectory: path });
-                      setMovieDirStatus('untested');
+                      setMovieDirStatus("untested");
                     }}
                     placeholder="/path/to/movies (e.g., /Users/you/Movies)"
+                    value={settings.movieDirectory}
                   />
                   <div className="flex gap-2">
                     <Button
-                      size="sm"
-                      variant="flat"
                       color="secondary"
-                      isLoading={testingMovieDir}
                       isDisabled={!settings.movieDirectory}
-                      onPress={() => testDirectory('movie')}
+                      isLoading={testingMovieDir}
+                      onPress={() => testDirectory("movie")}
+                      size="sm"
                       startContent={!testingMovieDir && <RefreshCw size={14} />}
+                      variant="flat"
                     >
                       Test Directory
                     </Button>
                     <Button
-                      size="sm"
-                      variant="flat"
                       color="primary"
-                      isLoading={importingMovies}
                       isDisabled={!settings.movieDirectory}
-                      onPress={() => importMedia('movie')}
+                      isLoading={importingMovies}
+                      onPress={() => importMedia("movie")}
+                      size="sm"
                       startContent={!importingMovies && <Download size={14} />}
+                      variant="flat"
                     >
                       Import Movies
                     </Button>
@@ -1047,39 +1153,41 @@ const FileManagement = () => {
                 {/* Series Directory */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <Tv size={18} className="text-secondary" />
+                    <Tv className="text-secondary" size={18} />
                     <span className="font-medium">Series Directory</span>
                     {getDirStatusIcon(seriesDirStatus)}
                   </div>
                   <DirectoryPicker
                     label=""
-                    value={settings.seriesDirectory}
                     onChange={(path) => {
                       setSettings({ ...settings, seriesDirectory: path });
-                      setSeriesDirStatus('untested');
+                      setSeriesDirStatus("untested");
                     }}
                     placeholder="/path/to/series (e.g., /Users/you/TV Shows)"
+                    value={settings.seriesDirectory}
                   />
                   <div className="flex gap-2">
                     <Button
-                      size="sm"
-                      variant="flat"
                       color="secondary"
-                      isLoading={testingSeriesDir}
                       isDisabled={!settings.seriesDirectory}
-                      onPress={() => testDirectory('series')}
-                      startContent={!testingSeriesDir && <RefreshCw size={14} />}
+                      isLoading={testingSeriesDir}
+                      onPress={() => testDirectory("series")}
+                      size="sm"
+                      startContent={
+                        !testingSeriesDir && <RefreshCw size={14} />
+                      }
+                      variant="flat"
                     >
                       Test Directory
                     </Button>
                     <Button
-                      size="sm"
-                      variant="flat"
                       color="primary"
-                      isLoading={importingSeries}
                       isDisabled={!settings.seriesDirectory}
-                      onPress={() => importMedia('series')}
+                      isLoading={importingSeries}
+                      onPress={() => importMedia("series")}
+                      size="sm"
                       startContent={!importingSeries && <Download size={14} />}
+                      variant="flat"
                     >
                       Import Series
                     </Button>
@@ -1091,34 +1199,50 @@ const FileManagement = () => {
 
           {/* Download Watcher Section */}
           <Card className="border border-cyan-500/30 bg-gradient-to-r from-cyan-500/5 to-blue-500/5">
-            <CardHeader 
+            <CardHeader
               className="cursor-pointer hover:bg-cyan-500/10 transition-colors"
-              onClick={() => toggleSection('downloadWatcher')}
+              onClick={() => toggleSection("downloadWatcher")}
             >
               <div className="flex items-center justify-between w-full">
                 <div className="flex items-center gap-3">
-                  <FolderInput size={24} className="text-cyan-500" />
+                  <FolderInput className="text-cyan-500" size={24} />
                   <div>
                     <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-semibold">Download Watcher</h2>
-                      <Chip size="sm" color="primary" variant="flat">AUTO-MOVE</Chip>
+                      <h2 className="text-lg font-semibold">
+                        Download Watcher
+                      </h2>
+                      <Chip color="primary" size="sm" variant="flat">
+                        AUTO-MOVE
+                      </Chip>
                     </div>
-                    <p className="text-sm text-default-500">Move downloads from category folders to your media library</p>
+                    <p className="text-sm text-default-500">
+                      Move downloads from category folders to your media library
+                    </p>
                   </div>
                 </div>
-                {expandedSections.has('downloadWatcher') ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                {expandedSections.has("downloadWatcher") ? (
+                  <ChevronDown size={20} />
+                ) : (
+                  <ChevronRight size={20} />
+                )}
               </div>
             </CardHeader>
-            {expandedSections.has('downloadWatcher') && (
+            {expandedSections.has("downloadWatcher") && (
               <CardBody className="pt-0 space-y-6">
                 {/* Simple explanation */}
                 <div className="flex items-start gap-3 p-4 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
-                  <Info size={20} className="text-cyan-500 flex-shrink-0 mt-0.5" />
+                  <Info
+                    className="text-cyan-500 flex-shrink-0 mt-0.5"
+                    size={20}
+                  />
                   <div>
-                    <p className="text-sm font-medium text-cyan-500">How it works</p>
+                    <p className="text-sm font-medium text-cyan-500">
+                      How it works
+                    </p>
                     <p className="text-xs text-default-500 mt-1">
-                      Set your download client to save movies and TV shows to separate folders. 
-                      The watcher will automatically move completed files to your media library.
+                      Set your download client to save movies and TV shows to
+                      separate folders. The watcher will automatically move
+                      completed files to your media library.
                     </p>
                   </div>
                 </div>
@@ -1126,67 +1250,84 @@ const FileManagement = () => {
                 {/* Movies Row */}
                 <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-4">
                   <div className="flex items-center gap-2">
-                    <Film size={20} className="text-primary" />
+                    <Film className="text-primary" size={20} />
                     <h3 className="font-semibold text-primary">Movies</h3>
                   </div>
-                  
+
                   <div className="flex items-center gap-3">
                     {/* Source */}
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center gap-2">
-                        <Download size={14} className="text-default-400" />
-                        <span className="text-xs font-medium text-default-500">Download Folder</span>
+                        <Download className="text-default-400" size={14} />
+                        <span className="text-xs font-medium text-default-500">
+                          Download Folder
+                        </span>
                         {getDirStatusIcon(movieDownloadDirStatus)}
                       </div>
                       <DirectoryPicker
                         label=""
-                        value={settings.movieDownloadDirectory}
                         onChange={(path) => {
-                          setSettings({ ...settings, movieDownloadDirectory: path });
-                          setMovieDownloadDirStatus('untested');
+                          setSettings({
+                            ...settings,
+                            movieDownloadDirectory: path,
+                          });
+                          setMovieDownloadDirStatus("untested");
                         }}
                         placeholder="/downloads/movies"
+                        value={settings.movieDownloadDirectory}
                       />
                       <Button
-                        size="sm"
-                        variant="flat"
                         color="default"
-                        isLoading={testingMovieDownloadDir}
                         isDisabled={!settings.movieDownloadDirectory}
-                        onPress={() => testDownloadDirectory('movie')}
-                        startContent={!testingMovieDownloadDir && <RefreshCw size={12} />}
+                        isLoading={testingMovieDownloadDir}
+                        onPress={() => testDownloadDirectory("movie")}
+                        size="sm"
+                        startContent={
+                          !testingMovieDownloadDir && <RefreshCw size={12} />
+                        }
+                        variant="flat"
                       >
                         Test
                       </Button>
                     </div>
 
                     {/* Arrow */}
-                    <ArrowRight size={24} className="text-primary flex-shrink-0" />
+                    <ArrowRight
+                      className="text-primary flex-shrink-0"
+                      size={24}
+                    />
 
                     {/* Destination */}
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center gap-2">
-                        <FolderOutput size={14} className="text-default-400" />
-                        <span className="text-xs font-medium text-default-500">Media Folder</span>
+                        <FolderOutput className="text-default-400" size={14} />
+                        <span className="text-xs font-medium text-default-500">
+                          Media Folder
+                        </span>
                         {getDirStatusIcon(movieWatcherDestStatus)}
                       </div>
                       <DirectoryPicker
                         label=""
-                        value={settings.movieWatcherDestination}
                         onChange={(path) => {
-                          setSettings({ ...settings, movieWatcherDestination: path });
-                          setMovieWatcherDestStatus('untested');
+                          setSettings({
+                            ...settings,
+                            movieWatcherDestination: path,
+                          });
+                          setMovieWatcherDestStatus("untested");
                         }}
                         placeholder="/media/movies"
+                        value={settings.movieWatcherDestination}
                       />
                       <Button
-                        size="sm"
-                        variant="flat"
                         color="default"
-                        isLoading={testingMovieWatcherDest}
                         isDisabled={!settings.movieWatcherDestination}
-                        onPress={() => testWatcherDestination('movie')}
-                        startContent={!testingMovieWatcherDest && <RefreshCw size={12} />}
+                        isLoading={testingMovieWatcherDest}
+                        onPress={() => testWatcherDestination("movie")}
+                        size="sm"
+                        startContent={
+                          !testingMovieWatcherDest && <RefreshCw size={12} />
+                        }
+                        variant="flat"
                       >
                         Test
                       </Button>
@@ -1197,67 +1338,84 @@ const FileManagement = () => {
                 {/* TV Shows Row */}
                 <div className="p-4 rounded-xl border border-secondary/30 bg-secondary/5 space-y-4">
                   <div className="flex items-center gap-2">
-                    <Tv size={20} className="text-secondary" />
+                    <Tv className="text-secondary" size={20} />
                     <h3 className="font-semibold text-secondary">TV Shows</h3>
                   </div>
-                  
+
                   <div className="flex items-center gap-3">
                     {/* Source */}
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center gap-2">
-                        <Download size={14} className="text-default-400" />
-                        <span className="text-xs font-medium text-default-500">Download Folder</span>
+                        <Download className="text-default-400" size={14} />
+                        <span className="text-xs font-medium text-default-500">
+                          Download Folder
+                        </span>
                         {getDirStatusIcon(seriesDownloadDirStatus)}
                       </div>
                       <DirectoryPicker
                         label=""
-                        value={settings.seriesDownloadDirectory}
                         onChange={(path) => {
-                          setSettings({ ...settings, seriesDownloadDirectory: path });
-                          setSeriesDownloadDirStatus('untested');
+                          setSettings({
+                            ...settings,
+                            seriesDownloadDirectory: path,
+                          });
+                          setSeriesDownloadDirStatus("untested");
                         }}
                         placeholder="/downloads/tv"
+                        value={settings.seriesDownloadDirectory}
                       />
                       <Button
-                        size="sm"
-                        variant="flat"
                         color="default"
-                        isLoading={testingSeriesDownloadDir}
                         isDisabled={!settings.seriesDownloadDirectory}
-                        onPress={() => testDownloadDirectory('series')}
-                        startContent={!testingSeriesDownloadDir && <RefreshCw size={12} />}
+                        isLoading={testingSeriesDownloadDir}
+                        onPress={() => testDownloadDirectory("series")}
+                        size="sm"
+                        startContent={
+                          !testingSeriesDownloadDir && <RefreshCw size={12} />
+                        }
+                        variant="flat"
                       >
                         Test
                       </Button>
                     </div>
 
                     {/* Arrow */}
-                    <ArrowRight size={24} className="text-secondary flex-shrink-0" />
+                    <ArrowRight
+                      className="text-secondary flex-shrink-0"
+                      size={24}
+                    />
 
                     {/* Destination */}
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center gap-2">
-                        <FolderOutput size={14} className="text-default-400" />
-                        <span className="text-xs font-medium text-default-500">Media Folder</span>
+                        <FolderOutput className="text-default-400" size={14} />
+                        <span className="text-xs font-medium text-default-500">
+                          Media Folder
+                        </span>
                         {getDirStatusIcon(seriesWatcherDestStatus)}
                       </div>
                       <DirectoryPicker
                         label=""
-                        value={settings.seriesWatcherDestination}
                         onChange={(path) => {
-                          setSettings({ ...settings, seriesWatcherDestination: path });
-                          setSeriesWatcherDestStatus('untested');
+                          setSettings({
+                            ...settings,
+                            seriesWatcherDestination: path,
+                          });
+                          setSeriesWatcherDestStatus("untested");
                         }}
                         placeholder="/media/tv"
+                        value={settings.seriesWatcherDestination}
                       />
                       <Button
-                        size="sm"
-                        variant="flat"
                         color="default"
-                        isLoading={testingSeriesWatcherDest}
                         isDisabled={!settings.seriesWatcherDestination}
-                        onPress={() => testWatcherDestination('series')}
-                        startContent={!testingSeriesWatcherDest && <RefreshCw size={12} />}
+                        isLoading={testingSeriesWatcherDest}
+                        onPress={() => testWatcherDestination("series")}
+                        size="sm"
+                        startContent={
+                          !testingSeriesWatcherDest && <RefreshCw size={12} />
+                        }
+                        variant="flat"
                       >
                         Test
                       </Button>
@@ -1268,22 +1426,33 @@ const FileManagement = () => {
                 {/* Enable/Disable Toggle */}
                 <div className="flex items-center justify-between p-4 rounded-lg border border-cyan-500/30 bg-cyan-500/5">
                   <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${settings.downloadWatcherEnabled ? 'bg-success/20' : 'bg-content3'}`}>
-                      {settings.downloadWatcherEnabled ? <Play size={18} className="text-success" /> : <Pause size={18} className="text-default-500" />}
+                    <div
+                      className={`p-2 rounded-lg ${settings.downloadWatcherEnabled ? "bg-success/20" : "bg-content3"}`}
+                    >
+                      {settings.downloadWatcherEnabled ? (
+                        <Play className="text-success" size={18} />
+                      ) : (
+                        <Pause className="text-default-500" size={18} />
+                      )}
                     </div>
                     <div>
                       <p className="font-medium">Enable Download Watcher</p>
                       <p className="text-xs text-default-500">
-                        {settings.downloadWatcherEnabled 
-                          ? `Scanning every ${settings.watcherInterval} seconds` 
-                          : 'Enable to start watching downloads'}
+                        {settings.downloadWatcherEnabled
+                          ? `Scanning every ${settings.watcherInterval} seconds`
+                          : "Enable to start watching downloads"}
                       </p>
                     </div>
                   </div>
                   <Switch
-                    isSelected={settings.downloadWatcherEnabled}
-                    onValueChange={(checked) => setSettings({ ...settings, downloadWatcherEnabled: checked })}
                     color="success"
+                    isSelected={settings.downloadWatcherEnabled}
+                    onValueChange={(checked) =>
+                      setSettings({
+                        ...settings,
+                        downloadWatcherEnabled: checked,
+                      })
+                    }
                   />
                 </div>
 
@@ -1291,219 +1460,291 @@ const FileManagement = () => {
                 {settings.downloadWatcherEnabled && (
                   <div className="flex items-center justify-between p-4 rounded-lg border border-content3">
                     <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${settings.watcherAutoApprove ? 'bg-primary/20' : 'bg-warning/20'}`}>
-                        {settings.watcherAutoApprove ? <Zap size={18} className="text-primary" /> : <FileCheck size={18} className="text-warning" />}
+                      <div
+                        className={`p-2 rounded-lg ${settings.watcherAutoApprove ? "bg-primary/20" : "bg-warning/20"}`}
+                      >
+                        {settings.watcherAutoApprove ? (
+                          <Zap className="text-primary" size={18} />
+                        ) : (
+                          <FileCheck className="text-warning" size={18} />
+                        )}
                       </div>
                       <div>
                         <p className="font-medium">
-                          {settings.watcherAutoApprove ? 'Auto-Move Enabled' : 'Manual Approval Required'}
+                          {settings.watcherAutoApprove
+                            ? "Auto-Move Enabled"
+                            : "Manual Approval Required"}
                         </p>
                         <p className="text-xs text-default-500">
-                          {settings.watcherAutoApprove 
-                            ? 'Files are moved automatically when detected' 
-                            : 'You must approve each file before it is moved'}
+                          {settings.watcherAutoApprove
+                            ? "Files are moved automatically when detected"
+                            : "You must approve each file before it is moved"}
                         </p>
                       </div>
                     </div>
                     <Switch
-                      isSelected={settings.watcherAutoApprove}
-                      onValueChange={(checked) => setSettings({ ...settings, watcherAutoApprove: checked })}
                       color="primary"
+                      isSelected={settings.watcherAutoApprove}
+                      onValueChange={(checked) =>
+                        setSettings({
+                          ...settings,
+                          watcherAutoApprove: checked,
+                        })
+                      }
                     />
                   </div>
                 )}
 
                 {/* Scan Interval (only shown when auto-move is enabled) */}
-                {settings.downloadWatcherEnabled && settings.watcherAutoApprove && (
-                  <div className="p-4 rounded-lg border border-primary/30 bg-primary/5 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Clock size={18} className="text-primary" />
-                      <div className="flex-1">
-                        <label htmlFor="watcherInterval" className="text-sm font-medium text-primary">
-                          Scan Interval (seconds)
-                        </label>
-                        <p className="text-xs text-default-500">
-                          How often to check for new downloads (minimum: 10 seconds)
-                        </p>
+                {settings.downloadWatcherEnabled &&
+                  settings.watcherAutoApprove && (
+                    <div className="p-4 rounded-lg border border-primary/30 bg-primary/5 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Clock className="text-primary" size={18} />
+                        <div className="flex-1">
+                          <label
+                            className="text-sm font-medium text-primary"
+                            htmlFor="watcherInterval"
+                          >
+                            Scan Interval (seconds)
+                          </label>
+                          <p className="text-xs text-default-500">
+                            How often to check for new downloads (minimum: 10
+                            seconds)
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Input
+                          className="max-w-32"
+                          endContent={
+                            <span className="text-xs text-default-400">
+                              sec
+                            </span>
+                          }
+                          id="watcherInterval"
+                          max="3600"
+                          min="10"
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 30;
+                            const clampedValue = Math.max(
+                              10,
+                              Math.min(3600, value),
+                            );
+                            setSettings({
+                              ...settings,
+                              watcherInterval: clampedValue,
+                            });
+                          }}
+                          startContent={
+                            <Clock className="text-default-400" size={16} />
+                          }
+                          type="number"
+                          value={String(settings.watcherInterval || 30)}
+                        />
+                        <div className="text-xs text-default-500">
+                          Currently scanning every{" "}
+                          <strong>{settings.watcherInterval || 30}s</strong>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Input
-                        id="watcherInterval"
-                        type="number"
-                        min="10"
-                        max="3600"
-                        value={String(settings.watcherInterval || 30)}
-                        onChange={(e) => {
-                          const value = parseInt(e.target.value) || 30;
-                          const clampedValue = Math.max(10, Math.min(3600, value));
-                          setSettings({ ...settings, watcherInterval: clampedValue });
-                        }}
-                        className="max-w-32"
-                        startContent={
-                          <Clock size={16} className="text-default-400" />
-                        }
-                        endContent={
-                          <span className="text-xs text-default-400">sec</span>
-                        }
-                      />
-                      <div className="text-xs text-default-500">
-                        Currently scanning every <strong>{settings.watcherInterval || 30}s</strong>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                  )}
 
                 {/* Status when enabled */}
                 {settings.downloadWatcherEnabled && (
                   <div className="space-y-3">
-                    <div className={`flex items-center justify-between p-3 rounded-lg ${
-                      watcherStatus.isRunning 
-                        ? 'bg-success/10 border border-success/30' 
-                        : 'bg-cyan-500/10 border border-cyan-500/30'
-                    }`}>
+                    <div
+                      className={`flex items-center justify-between p-3 rounded-lg ${
+                        watcherStatus.isRunning
+                          ? "bg-success/10 border border-success/30"
+                          : "bg-cyan-500/10 border border-cyan-500/30"
+                      }`}
+                    >
                       <div className="flex items-center gap-2">
                         {watcherStatus.isRunning ? (
                           <>
-                            <Activity size={16} className="text-success animate-pulse" />
-                            <span className="text-sm text-success">Watching for new downloads every {settings.watcherInterval || 30}s</span>
+                            <Activity
+                              className="text-success animate-pulse"
+                              size={16}
+                            />
+                            <span className="text-sm text-success">
+                              Watching for new downloads every{" "}
+                              {settings.watcherInterval || 30}s
+                            </span>
                           </>
                         ) : (
                           <>
-                            <RefreshCw size={16} className="text-cyan-500" />
-                            <span className="text-sm text-cyan-500">Click Scan Now to process downloads</span>
+                            <RefreshCw className="text-cyan-500" size={16} />
+                            <span className="text-sm text-cyan-500">
+                              Click Scan Now to process downloads
+                            </span>
                           </>
                         )}
                       </div>
                       <Button
-                        size="sm"
-                        variant="flat"
                         color={watcherStatus.isRunning ? "success" : "primary"}
                         isLoading={triggeringWatcher}
                         onPress={triggerWatcherScan}
-                        startContent={!triggeringWatcher && <RefreshCw size={14} />}
+                        size="sm"
+                        startContent={
+                          !triggeringWatcher && <RefreshCw size={14} />
+                        }
+                        variant="flat"
                       >
                         Scan Now
                       </Button>
                     </div>
 
                     {/* Pending Files Queue (when manual approval is enabled) */}
-                    {!settings.watcherAutoApprove && pendingFiles.length > 0 && (
-                      <div className="space-y-3 p-4 rounded-lg border border-warning/30 bg-warning/5">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <List size={18} className="text-warning" />
-                            <span className="font-medium text-warning">Pending Approval ({pendingFiles.length})</span>
-                          </div>
-                          <Button
-                            size="sm"
-                            color="success"
-                            variant="flat"
-                            onPress={approveAllFiles}
-                            startContent={<CheckCircle2 size={14} />}
-                          >
-                            Approve All
-                          </Button>
-                        </div>
-                        
-                        <div className="space-y-2 max-h-60 overflow-y-auto">
-                          {pendingFiles.map((file) => (
-                            <div 
-                              key={file.id} 
-                              className="flex items-center justify-between p-3 rounded-lg bg-content2 border border-content3"
+                    {!settings.watcherAutoApprove &&
+                      pendingFiles.length > 0 && (
+                        <div className="space-y-3 p-4 rounded-lg border border-warning/30 bg-warning/5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <List className="text-warning" size={18} />
+                              <span className="font-medium text-warning">
+                                Pending Approval ({pendingFiles.length})
+                              </span>
+                            </div>
+                            <Button
+                              color="success"
+                              onPress={approveAllFiles}
+                              size="sm"
+                              startContent={<CheckCircle2 size={14} />}
+                              variant="flat"
                             >
-                              <div className="flex items-center gap-3 flex-1 min-w-0">
-                                {file.type === 'movie' ? (
-                                  <Film size={18} className="text-primary flex-shrink-0" />
-                                ) : (
-                                  <Tv size={18} className="text-secondary flex-shrink-0" />
-                                )}
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-medium truncate">{file.filename}</p>
-                                  <p className="text-xs text-default-400 truncate">
-                                    → {file.destinationPath}
-                                  </p>
+                              Approve All
+                            </Button>
+                          </div>
+
+                          <div className="space-y-2 max-h-60 overflow-y-auto">
+                            {pendingFiles.map((file) => (
+                              <div
+                                className="flex items-center justify-between p-3 rounded-lg bg-content2 border border-content3"
+                                key={file.id}
+                              >
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                  {file.type === "movie" ? (
+                                    <Film
+                                      className="text-primary flex-shrink-0"
+                                      size={18}
+                                    />
+                                  ) : (
+                                    <Tv
+                                      className="text-secondary flex-shrink-0"
+                                      size={18}
+                                    />
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium truncate">
+                                      {file.filename}
+                                    </p>
+                                    <p className="text-xs text-default-400 truncate">
+                                      → {file.destinationPath}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex gap-2 flex-shrink-0 ml-2">
+                                  <Button
+                                    color="success"
+                                    isIconOnly
+                                    isLoading={approvingFile === file.id}
+                                    onPress={() => approveFile(file.id)}
+                                    size="sm"
+                                    variant="flat"
+                                  >
+                                    <Check size={16} />
+                                  </Button>
+                                  <Button
+                                    color="danger"
+                                    isIconOnly
+                                    isLoading={rejectingFile === file.id}
+                                    onPress={() => rejectFile(file.id)}
+                                    size="sm"
+                                    variant="flat"
+                                  >
+                                    <Ban size={16} />
+                                  </Button>
                                 </div>
                               </div>
-                              <div className="flex gap-2 flex-shrink-0 ml-2">
-                                <Button
-                                  size="sm"
-                                  color="success"
-                                  variant="flat"
-                                  isIconOnly
-                                  isLoading={approvingFile === file.id}
-                                  onPress={() => approveFile(file.id)}
-                                >
-                                  <Check size={16} />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  color="danger"
-                                  variant="flat"
-                                  isIconOnly
-                                  isLoading={rejectingFile === file.id}
-                                  onPress={() => rejectFile(file.id)}
-                                >
-                                  <Ban size={16} />
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
                     {/* No pending files message */}
-                    {!settings.watcherAutoApprove && pendingFiles.length === 0 && (
-                      <div className="flex items-center gap-2 p-3 rounded-lg bg-content2 border border-content3">
-                        <FileCheck size={16} className="text-default-400" />
-                        <span className="text-sm text-default-500">No files pending approval</span>
-                      </div>
-                    )}
+                    {!settings.watcherAutoApprove &&
+                      pendingFiles.length === 0 && (
+                        <div className="flex items-center gap-2 p-3 rounded-lg bg-content2 border border-content3">
+                          <FileCheck className="text-default-400" size={16} />
+                          <span className="text-sm text-default-500">
+                            No files pending approval
+                          </span>
+                        </div>
+                      )}
 
                     {/* Quick Stats */}
                     <div className="grid grid-cols-3 gap-3">
                       <div className="p-3 rounded-lg bg-content2 text-center">
-                        <p className="text-xl font-bold text-cyan-500">{watcherStatus.stats.filesProcessed}</p>
+                        <p className="text-xl font-bold text-cyan-500">
+                          {watcherStatus.stats.filesProcessed}
+                        </p>
                         <p className="text-xs text-default-500">Total</p>
                       </div>
                       <div className="p-3 rounded-lg bg-content2 text-center">
-                        <p className="text-xl font-bold text-primary">{watcherStatus.stats.moviesProcessed}</p>
+                        <p className="text-xl font-bold text-primary">
+                          {watcherStatus.stats.moviesProcessed}
+                        </p>
                         <p className="text-xs text-default-500">Movies</p>
                       </div>
                       <div className="p-3 rounded-lg bg-content2 text-center">
-                        <p className="text-xl font-bold text-secondary">{watcherStatus.stats.seriesProcessed}</p>
+                        <p className="text-xl font-bold text-secondary">
+                          {watcherStatus.stats.seriesProcessed}
+                        </p>
                         <p className="text-xs text-default-500">TV Shows</p>
                       </div>
                     </div>
 
                     {/* Recent Files */}
-                    {watcherStatus.stats.recentFiles && watcherStatus.stats.recentFiles.length > 0 && (
-                      <div className="space-y-2">
-                        <h4 className="text-sm font-semibold flex items-center gap-2 text-default-600">
-                          <Clock size={14} />
-                          Recently Processed
-                        </h4>
-                        <div className="space-y-1 max-h-40 overflow-y-auto">
-                          {watcherStatus.stats.recentFiles.slice(0, 5).map((file: any, idx: number) => (
-                            <div 
-                              key={idx}
-                              className="flex items-center gap-2 p-2 rounded-lg bg-content2/50 text-xs"
-                            >
-                              {file.type === 'movie' ? (
-                                <Film size={14} className="text-primary flex-shrink-0" />
-                              ) : (
-                                <Tv size={14} className="text-secondary flex-shrink-0" />
-                              )}
-                              <span className="truncate flex-1">{file.name}</span>
-                              <span className="text-default-400 flex-shrink-0">
-                                {new Date(file.timestamp).toLocaleTimeString()}
-                              </span>
-                            </div>
-                          ))}
+                    {watcherStatus.stats.recentFiles &&
+                      watcherStatus.stats.recentFiles.length > 0 && (
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-semibold flex items-center gap-2 text-default-600">
+                            <Clock size={14} />
+                            Recently Processed
+                          </h4>
+                          <div className="space-y-1 max-h-40 overflow-y-auto">
+                            {watcherStatus.stats.recentFiles
+                              .slice(0, 5)
+                              .map((file: any, idx: number) => (
+                                <div
+                                  className="flex items-center gap-2 p-2 rounded-lg bg-content2/50 text-xs"
+                                  key={idx}
+                                >
+                                  {file.type === "movie" ? (
+                                    <Film
+                                      className="text-primary flex-shrink-0"
+                                      size={14}
+                                    />
+                                  ) : (
+                                    <Tv
+                                      className="text-secondary flex-shrink-0"
+                                      size={14}
+                                    />
+                                  )}
+                                  <span className="truncate flex-1">
+                                    {file.name}
+                                  </span>
+                                  <span className="text-default-400 flex-shrink-0">
+                                    {new Date(
+                                      file.timestamp,
+                                    ).toLocaleTimeString()}
+                                  </span>
+                                </div>
+                              ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
                   </div>
                 )}
               </CardBody>
@@ -1512,32 +1753,43 @@ const FileManagement = () => {
 
           {/* Movie Naming Section */}
           <Card className="border border-content2">
-            <CardHeader 
+            <CardHeader
               className="cursor-pointer hover:bg-content2/50 transition-colors"
-              onClick={() => toggleSection('movieNaming')}
+              onClick={() => toggleSection("movieNaming")}
             >
               <div className="flex items-center justify-between w-full">
                 <div className="flex items-center gap-3">
-                  <Film size={24} className="text-primary" />
+                  <Film className="text-primary" size={24} />
                   <div>
                     <h2 className="text-lg font-semibold">Movie File Naming</h2>
-                    <p className="text-sm text-default-500">Configure how movie files should be named</p>
+                    <p className="text-sm text-default-500">
+                      Configure how movie files should be named
+                    </p>
                   </div>
                 </div>
-                {expandedSections.has('movieNaming') ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                {expandedSections.has("movieNaming") ? (
+                  <ChevronDown size={20} />
+                ) : (
+                  <ChevronRight size={20} />
+                )}
               </div>
             </CardHeader>
-            {expandedSections.has('movieNaming') && (
+            {expandedSections.has("movieNaming") && (
               <CardBody className="pt-0 space-y-4">
                 <Input
-                  label="Movie File Format"
-                  value={settings.movieFileFormat}
-                  onChange={(e) => setSettings({ ...settings, movieFileFormat: e.target.value })}
-                  placeholder="{Movie Title} ({Release Year})"
-                  variant="bordered"
                   classNames={{
                     input: "font-mono text-sm",
                   }}
+                  label="Movie File Format"
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      movieFileFormat: e.target.value,
+                    })
+                  }
+                  placeholder="{Movie Title} ({Release Year})"
+                  value={settings.movieFileFormat}
+                  variant="bordered"
                 />
 
                 {/* Available Tokens */}
@@ -1548,27 +1800,31 @@ const FileManagement = () => {
                   </h4>
                   <div className="flex flex-wrap gap-2">
                     {[
-                      { token: '{Movie Title}', desc: 'Movie name' },
-                      { token: '{Release Year}', desc: 'Year released' },
-                      { token: '{Quality}', desc: '720p, 1080p, 2160p' },
-                      { token: '{Source}', desc: 'BluRay, WEB-DL, etc.' },
-                      { token: '{Codec}', desc: 'x264, x265, HEVC' },
-                      { token: '{Audio}', desc: 'AAC, DTS, AC3' },
-                      { token: '{Edition}', desc: 'Extended, Unrated' },
-                      { token: '{Release Group}', desc: 'YIFY, RARBG' },
+                      { token: "{Movie Title}", desc: "Movie name" },
+                      { token: "{Release Year}", desc: "Year released" },
+                      { token: "{Quality}", desc: "720p, 1080p, 2160p" },
+                      { token: "{Source}", desc: "BluRay, WEB-DL, etc." },
+                      { token: "{Codec}", desc: "x264, x265, HEVC" },
+                      { token: "{Audio}", desc: "AAC, DTS, AC3" },
+                      { token: "{Edition}", desc: "Extended, Unrated" },
+                      { token: "{Release Group}", desc: "YIFY, RARBG" },
                     ].map(({ token, desc }) => (
                       <Chip
+                        className="cursor-pointer hover:bg-primary/20"
                         key={token}
+                        onClick={() =>
+                          setSettings({
+                            ...settings,
+                            movieFileFormat: settings.movieFileFormat + token,
+                          })
+                        }
                         size="sm"
                         variant="flat"
-                        className="cursor-pointer hover:bg-primary/20"
-                        onClick={() => setSettings({ 
-                          ...settings, 
-                          movieFileFormat: settings.movieFileFormat + token 
-                        })}
                       >
                         <code className="text-xs">{token}</code>
-                        <span className="ml-1 text-xs text-default-500">{desc}</span>
+                        <span className="ml-1 text-xs text-default-500">
+                          {desc}
+                        </span>
                       </Chip>
                     ))}
                   </div>
@@ -1579,19 +1835,37 @@ const FileManagement = () => {
                   <h4 className="text-sm font-semibold">Quick Templates</h4>
                   <div className="grid gap-2">
                     {[
-                      { format: '{Movie Title} ({Release Year})', example: 'Shrek (2001).mp4' },
-                      { format: '{Movie Title} ({Release Year}) [{Quality}]', example: 'Shrek (2001) [1080p].mp4' },
-                      { format: '{Movie Title} ({Release Year}) {Quality} {Source} {Codec}', example: 'Shrek (2001) 1080p BluRay x264.mp4' },
-                      { format: '{Movie Title}.{Release Year}.{Quality}.{Codec}-{Release Group}', example: 'Shrek.2001.1080p.x264-YIFY.mp4' },
+                      {
+                        format: "{Movie Title} ({Release Year})",
+                        example: "Shrek (2001).mp4",
+                      },
+                      {
+                        format: "{Movie Title} ({Release Year}) [{Quality}]",
+                        example: "Shrek (2001) [1080p].mp4",
+                      },
+                      {
+                        format:
+                          "{Movie Title} ({Release Year}) {Quality} {Source} {Codec}",
+                        example: "Shrek (2001) 1080p BluRay x264.mp4",
+                      },
+                      {
+                        format:
+                          "{Movie Title}.{Release Year}.{Quality}.{Codec}-{Release Group}",
+                        example: "Shrek.2001.1080p.x264-YIFY.mp4",
+                      },
                     ].map(({ format, example }) => (
                       <button
-                        key={format}
-                        type="button"
                         className="flex justify-between items-center p-3 rounded-lg border border-content3 hover:border-primary hover:bg-primary/5 transition-all text-left"
-                        onClick={() => setSettings({ ...settings, movieFileFormat: format })}
+                        key={format}
+                        onClick={() =>
+                          setSettings({ ...settings, movieFileFormat: format })
+                        }
+                        type="button"
                       >
                         <code className="text-xs text-primary">{format}</code>
-                        <span className="text-xs text-default-500 ml-2">→ {example}</span>
+                        <span className="text-xs text-default-500 ml-2">
+                          → {example}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -1600,13 +1874,17 @@ const FileManagement = () => {
                 {/* Rename Movies Button */}
                 <div className="pt-4 border-t border-content3">
                   <Button
-                    color="primary"
-                    variant="flat"
-                    isLoading={loadingPreview && renameType === 'movies'}
-                    isDisabled={!settings.movieDirectory}
-                    onPress={() => previewRenames('movies')}
-                    startContent={!(loadingPreview && renameType === 'movies') && <Pencil size={16} />}
                     className="w-full sm:w-auto"
+                    color="primary"
+                    isDisabled={!settings.movieDirectory}
+                    isLoading={loadingPreview && renameType === "movies"}
+                    onPress={() => previewRenames("movies")}
+                    startContent={
+                      !(loadingPreview && renameType === "movies") && (
+                        <Pencil size={16} />
+                      )
+                    }
+                    variant="flat"
                   >
                     Rename Movies Only
                   </Button>
@@ -1617,32 +1895,45 @@ const FileManagement = () => {
 
           {/* Series Naming Section */}
           <Card className="border border-content2">
-            <CardHeader 
+            <CardHeader
               className="cursor-pointer hover:bg-content2/50 transition-colors"
-              onClick={() => toggleSection('seriesNaming')}
+              onClick={() => toggleSection("seriesNaming")}
             >
               <div className="flex items-center justify-between w-full">
                 <div className="flex items-center gap-3">
-                  <Tv size={24} className="text-secondary" />
+                  <Tv className="text-secondary" size={24} />
                   <div>
-                    <h2 className="text-lg font-semibold">Series File Naming</h2>
-                    <p className="text-sm text-default-500">Configure how TV series files should be named</p>
+                    <h2 className="text-lg font-semibold">
+                      Series File Naming
+                    </h2>
+                    <p className="text-sm text-default-500">
+                      Configure how TV series files should be named
+                    </p>
                   </div>
                 </div>
-                {expandedSections.has('seriesNaming') ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                {expandedSections.has("seriesNaming") ? (
+                  <ChevronDown size={20} />
+                ) : (
+                  <ChevronRight size={20} />
+                )}
               </div>
             </CardHeader>
-            {expandedSections.has('seriesNaming') && (
+            {expandedSections.has("seriesNaming") && (
               <CardBody className="pt-0 space-y-4">
                 <Input
-                  label="Series File Format"
-                  value={settings.seriesFileFormat}
-                  onChange={(e) => setSettings({ ...settings, seriesFileFormat: e.target.value })}
-                  placeholder="{Series Title}/Season {season:00}/{Series Title} - S{season:00}E{episode:00} - {Episode Title}"
-                  variant="bordered"
                   classNames={{
                     input: "font-mono text-sm",
                   }}
+                  label="Series File Format"
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      seriesFileFormat: e.target.value,
+                    })
+                  }
+                  placeholder="{Series Title}/Season {season:00}/{Series Title} - S{season:00}E{episode:00} - {Episode Title}"
+                  value={settings.seriesFileFormat}
+                  variant="bordered"
                 />
 
                 {/* Available Tokens */}
@@ -1653,27 +1944,31 @@ const FileManagement = () => {
                   </h4>
                   <div className="flex flex-wrap gap-2">
                     {[
-                      { token: '{Series Title}', desc: 'Show name' },
-                      { token: '{season:00}', desc: 'Season (01, 02)' },
-                      { token: '{episode:00}', desc: 'Episode (01, 02)' },
-                      { token: '{Episode Title}', desc: 'Episode name' },
-                      { token: '{Quality}', desc: '720p, 1080p, 2160p' },
-                      { token: '{Source}', desc: 'BluRay, WEB-DL' },
-                      { token: '{Codec}', desc: 'x264, x265, HEVC' },
-                      { token: '{Audio}', desc: 'AAC, DTS, AC3' },
+                      { token: "{Series Title}", desc: "Show name" },
+                      { token: "{season:00}", desc: "Season (01, 02)" },
+                      { token: "{episode:00}", desc: "Episode (01, 02)" },
+                      { token: "{Episode Title}", desc: "Episode name" },
+                      { token: "{Quality}", desc: "720p, 1080p, 2160p" },
+                      { token: "{Source}", desc: "BluRay, WEB-DL" },
+                      { token: "{Codec}", desc: "x264, x265, HEVC" },
+                      { token: "{Audio}", desc: "AAC, DTS, AC3" },
                     ].map(({ token, desc }) => (
                       <Chip
+                        className="cursor-pointer hover:bg-secondary/20"
                         key={token}
+                        onClick={() =>
+                          setSettings({
+                            ...settings,
+                            seriesFileFormat: settings.seriesFileFormat + token,
+                          })
+                        }
                         size="sm"
                         variant="flat"
-                        className="cursor-pointer hover:bg-secondary/20"
-                        onClick={() => setSettings({ 
-                          ...settings, 
-                          seriesFileFormat: settings.seriesFileFormat + token 
-                        })}
                       >
                         <code className="text-xs">{token}</code>
-                        <span className="ml-1 text-xs text-default-500">{desc}</span>
+                        <span className="ml-1 text-xs text-default-500">
+                          {desc}
+                        </span>
                       </Chip>
                     ))}
                   </div>
@@ -1684,18 +1979,35 @@ const FileManagement = () => {
                   <h4 className="text-sm font-semibold">Quick Templates</h4>
                   <div className="grid gap-2">
                     {[
-                      { format: '{Series Title} - S{season:00}E{episode:00} - {Episode Title}', example: 'Breaking Bad - S01E01 - Pilot.mp4' },
-                      { format: '{Series Title}/Season {season:00}/{Series Title} - S{season:00}E{episode:00}', example: 'Breaking Bad/Season 01/Breaking Bad - S01E01.mp4' },
-                      { format: '{Series Title}.S{season:00}E{episode:00}.{Quality}.{Codec}', example: 'Breaking.Bad.S01E01.1080p.x264.mp4' },
+                      {
+                        format:
+                          "{Series Title} - S{season:00}E{episode:00} - {Episode Title}",
+                        example: "Breaking Bad - S01E01 - Pilot.mp4",
+                      },
+                      {
+                        format:
+                          "{Series Title}/Season {season:00}/{Series Title} - S{season:00}E{episode:00}",
+                        example:
+                          "Breaking Bad/Season 01/Breaking Bad - S01E01.mp4",
+                      },
+                      {
+                        format:
+                          "{Series Title}.S{season:00}E{episode:00}.{Quality}.{Codec}",
+                        example: "Breaking.Bad.S01E01.1080p.x264.mp4",
+                      },
                     ].map(({ format, example }) => (
                       <button
-                        key={format}
-                        type="button"
                         className="flex justify-between items-center p-3 rounded-lg border border-content3 hover:border-secondary hover:bg-secondary/5 transition-all text-left"
-                        onClick={() => setSettings({ ...settings, seriesFileFormat: format })}
+                        key={format}
+                        onClick={() =>
+                          setSettings({ ...settings, seriesFileFormat: format })
+                        }
+                        type="button"
                       >
                         <code className="text-xs text-secondary">{format}</code>
-                        <span className="text-xs text-default-500 ml-2">→ {example}</span>
+                        <span className="text-xs text-default-500 ml-2">
+                          → {example}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -1704,13 +2016,17 @@ const FileManagement = () => {
                 {/* Rename Series Button */}
                 <div className="pt-4 border-t border-content3">
                   <Button
-                    color="secondary"
-                    variant="flat"
-                    isLoading={loadingPreview && renameType === 'series'}
-                    isDisabled={!settings.seriesDirectory}
-                    onPress={() => previewRenames('series')}
-                    startContent={!(loadingPreview && renameType === 'series') && <Pencil size={16} />}
                     className="w-full sm:w-auto"
+                    color="secondary"
+                    isDisabled={!settings.seriesDirectory}
+                    isLoading={loadingPreview && renameType === "series"}
+                    onPress={() => previewRenames("series")}
+                    startContent={
+                      !(loadingPreview && renameType === "series") && (
+                        <Pencil size={16} />
+                      )
+                    }
+                    variant="flat"
                   >
                     Rename Series Only
                   </Button>
@@ -1725,20 +2041,28 @@ const FileManagement = () => {
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-primary/10">
-                    <Pencil size={24} className="text-primary" />
+                    <Pencil className="text-primary" size={24} />
                   </div>
                   <div>
                     <h3 className="font-semibold">Bulk File Rename</h3>
-                    <p className="text-sm text-default-500">Rename all movies and series at once</p>
+                    <p className="text-sm text-default-500">
+                      Rename all movies and series at once
+                    </p>
                   </div>
                 </div>
                 <Button
                   color="primary"
+                  isDisabled={
+                    !settings.movieDirectory && !settings.seriesDirectory
+                  }
+                  isLoading={loadingPreview && renameType === "bulk"}
+                  onPress={() => previewRenames("bulk")}
+                  startContent={
+                    !(loadingPreview && renameType === "bulk") && (
+                      <Eye size={18} />
+                    )
+                  }
                   variant="shadow"
-                  isLoading={loadingPreview && renameType === 'bulk'}
-                  isDisabled={!settings.movieDirectory && !settings.seriesDirectory}
-                  onPress={() => previewRenames('bulk')}
-                  startContent={!(loadingPreview && renameType === 'bulk') && <Eye size={18} />}
                 >
                   Preview All Renames
                 </Button>
@@ -1748,35 +2072,48 @@ const FileManagement = () => {
 
           {/* Auto-Rename Section */}
           <Card className="border border-warning/30 bg-warning/5">
-            <CardHeader 
+            <CardHeader
               className="cursor-pointer hover:bg-warning/10 transition-colors"
-              onClick={() => toggleSection('autoRename')}
+              onClick={() => toggleSection("autoRename")}
             >
               <div className="flex items-center justify-between w-full">
                 <div className="flex items-center gap-3">
-                  <Zap size={24} className="text-warning" />
+                  <Zap className="text-warning" size={24} />
                   <div>
                     <div className="flex items-center gap-2">
                       <h2 className="text-lg font-semibold">Auto-Rename</h2>
-                      <Chip size="sm" color="warning" variant="flat">BETA</Chip>
+                      <Chip color="warning" size="sm" variant="flat">
+                        BETA
+                      </Chip>
                     </div>
-                    <p className="text-sm text-default-500">Automatically rename files on a schedule</p>
+                    <p className="text-sm text-default-500">
+                      Automatically rename files on a schedule
+                    </p>
                   </div>
                 </div>
-                {expandedSections.has('autoRename') ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                {expandedSections.has("autoRename") ? (
+                  <ChevronDown size={20} />
+                ) : (
+                  <ChevronRight size={20} />
+                )}
               </div>
             </CardHeader>
-            {expandedSections.has('autoRename') && (
+            {expandedSections.has("autoRename") && (
               <CardBody className="pt-0 space-y-4">
                 {/* Beta Warning Banner */}
                 <div className="flex items-start gap-3 p-4 rounded-lg bg-warning/10 border border-warning/30">
-                  <AlertTriangle size={20} className="text-warning flex-shrink-0 mt-0.5" />
+                  <AlertTriangle
+                    className="text-warning flex-shrink-0 mt-0.5"
+                    size={20}
+                  />
                   <div>
-                    <p className="text-sm font-medium text-warning">Beta Feature Warning</p>
+                    <p className="text-sm font-medium text-warning">
+                      Beta Feature Warning
+                    </p>
                     <p className="text-xs text-default-500 mt-1">
-                      Auto-rename is in beta and may cause unexpected changes to your media library. 
-                      We recommend backing up your files before enabling this feature. 
-                      Use at your own risk.
+                      Auto-rename is in beta and may cause unexpected changes to
+                      your media library. We recommend backing up your files
+                      before enabling this feature. Use at your own risk.
                     </p>
                   </div>
                 </div>
@@ -1784,20 +2121,30 @@ const FileManagement = () => {
                 {/* Auto-Rename Toggle */}
                 <div className="flex items-center justify-between p-4 rounded-lg border border-content3">
                   <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${settings.autoRename ? 'bg-success/20' : 'bg-content3'}`}>
-                      <Zap size={18} className={settings.autoRename ? 'text-success' : 'text-default-500'} />
+                    <div
+                      className={`p-2 rounded-lg ${settings.autoRename ? "bg-success/20" : "bg-content3"}`}
+                    >
+                      <Zap
+                        className={
+                          settings.autoRename
+                            ? "text-success"
+                            : "text-default-500"
+                        }
+                        size={18}
+                      />
                     </div>
                     <div>
                       <p className="font-medium">Enable Auto-Rename</p>
                       <p className="text-xs text-default-500">
-                        Automatically scan and rename files based on your naming formats
+                        Automatically scan and rename files based on your naming
+                        formats
                       </p>
                     </div>
                   </div>
                   <Switch
+                    color="warning"
                     isSelected={settings.autoRename}
                     onValueChange={handleAutoRenameToggle}
-                    color="warning"
                   />
                 </div>
 
@@ -1809,16 +2156,21 @@ const FileManagement = () => {
                       Scan Interval (minutes)
                     </label>
                     <Input
-                      type="number"
-                      min={15}
-                      max={1440}
-                      value={settings.autoRenameInterval.toString()}
-                      onChange={(e) => setSettings({ 
-                        ...settings, 
-                        autoRenameInterval: Math.max(15, Math.min(1440, parseInt(e.target.value) || 60))
-                      })}
-                      variant="bordered"
                       description="How often to scan your directories for files to rename (minimum 15 minutes)"
+                      max={1440}
+                      min={15}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          autoRenameInterval: Math.max(
+                            15,
+                            Math.min(1440, parseInt(e.target.value) || 60),
+                          ),
+                        })
+                      }
+                      type="number"
+                      value={settings.autoRenameInterval.toString()}
+                      variant="bordered"
                     />
                   </div>
                 )}
@@ -1826,9 +2178,10 @@ const FileManagement = () => {
                 {/* Status indicator */}
                 {settings.autoRename && (
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-success/10 border border-success/30">
-                    <Check size={16} className="text-success" />
+                    <Check className="text-success" size={16} />
                     <span className="text-sm text-success">
-                      Auto-rename is active. Files will be scanned every {settings.autoRenameInterval} minutes.
+                      Auto-rename is active. Files will be scanned every{" "}
+                      {settings.autoRenameInterval} minutes.
                     </span>
                   </div>
                 )}
@@ -1836,114 +2189,143 @@ const FileManagement = () => {
             )}
           </Card>
         </div>
-      </div>
+      </PageContent>
 
       {/* Rename Preview Modal */}
-      <Modal 
-        isOpen={showRenameModal} 
+      <Modal
+        isOpen={showRenameModal}
         onClose={() => setShowRenameModal(false)}
-        size="4xl"
         scrollBehavior="inside"
+        size="4xl"
       >
         <ModalContent>
           <ModalHeader className="flex items-center gap-2">
             <Pencil size={20} />
             Preview File Renames
-            {renameType !== 'bulk' && (
-              <Chip size="sm" color={renameType === 'movies' ? 'primary' : 'secondary'}>
-                {renameType === 'movies' ? 'Movies Only' : 'Series Only'}
+            {renameType !== "bulk" && (
+              <Chip
+                color={renameType === "movies" ? "primary" : "secondary"}
+                size="sm"
+              >
+                {renameType === "movies" ? "Movies Only" : "Series Only"}
               </Chip>
             )}
           </ModalHeader>
           <ModalBody>
             {renamePreview.length === 0 ? (
               <div className="text-center py-8">
-                <Check size={48} className="mx-auto mb-4 text-success" />
-                <p className="text-lg font-medium">All files already match your naming format!</p>
+                <Check className="mx-auto mb-4 text-success" size={48} />
+                <p className="text-lg font-medium">
+                  All files already match your naming format!
+                </p>
                 <p className="text-default-500">No files need to be renamed.</p>
               </div>
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center gap-4 p-3 rounded-lg bg-primary/10">
-                  <Info size={20} className="text-primary" />
+                  <Info className="text-primary" size={20} />
                   <div>
-                    <p className="font-medium">{renamePreview.length} file(s) will be renamed</p>
+                    <p className="font-medium">
+                      {renamePreview.length} file(s) will be renamed
+                    </p>
                     <p className="text-sm text-default-500">
-                      {renamePreview.filter(r => r.type === 'movie').length} movies, {renamePreview.filter(r => r.type === 'series').length} series episodes
+                      {renamePreview.filter((r) => r.type === "movie").length}{" "}
+                      movies,{" "}
+                      {renamePreview.filter((r) => r.type === "series").length}{" "}
+                      series episodes
                     </p>
                   </div>
                 </div>
 
                 {/* Movies */}
-                {renamePreview.filter(r => r.type === 'movie').length > 0 && (
+                {renamePreview.filter((r) => r.type === "movie").length > 0 && (
                   <div className="space-y-2">
                     <h4 className="font-semibold flex items-center gap-2">
-                      <Film size={16} className="text-primary" />
+                      <Film className="text-primary" size={16} />
                       Movies
                     </h4>
-                    {renamePreview.filter(r => r.type === 'movie').map((item, index) => (
-                      <div key={`movie-${index}`} className="p-3 rounded-lg border border-content3 space-y-2">
-                        <div className="text-sm">
-                          <span className="text-default-500">Current:</span>
-                          <p className="font-mono text-xs bg-content2 p-1 rounded mt-1">{item.currentName}</p>
+                    {renamePreview
+                      .filter((r) => r.type === "movie")
+                      .map((item, index) => (
+                        <div
+                          className="p-3 rounded-lg border border-content3 space-y-2"
+                          key={`movie-${index}`}
+                        >
+                          <div className="text-sm">
+                            <span className="text-default-500">Current:</span>
+                            <p className="font-mono text-xs bg-content2 p-1 rounded mt-1">
+                              {item.currentName}
+                            </p>
+                          </div>
+                          <div className="text-sm">
+                            <span className="text-default-500">New:</span>
+                            <Input
+                              classNames={{ input: "font-mono text-xs" }}
+                              onChange={(e) => {
+                                const updated = [...renamePreview];
+                                const actualIndex = renamePreview.findIndex(
+                                  (r) => r === item,
+                                );
+                                updated[actualIndex].newName = e.target.value;
+                                setRenamePreview(updated);
+                              }}
+                              size="sm"
+                              value={item.newName}
+                              variant="bordered"
+                            />
+                          </div>
                         </div>
-                        <div className="text-sm">
-                          <span className="text-default-500">New:</span>
-                          <Input
-                            size="sm"
-                            variant="bordered"
-                            value={item.newName}
-                            classNames={{ input: "font-mono text-xs" }}
-                            onChange={(e) => {
-                              const updated = [...renamePreview];
-                              const actualIndex = renamePreview.findIndex(r => r === item);
-                              updated[actualIndex].newName = e.target.value;
-                              setRenamePreview(updated);
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 )}
 
                 {/* Series */}
-                {renamePreview.filter(r => r.type === 'series').length > 0 && (
+                {renamePreview.filter((r) => r.type === "series").length >
+                  0 && (
                   <div className="space-y-2">
                     <h4 className="font-semibold flex items-center gap-2">
-                      <Tv size={16} className="text-secondary" />
+                      <Tv className="text-secondary" size={16} />
                       Series Episodes
                     </h4>
-                    {renamePreview.filter(r => r.type === 'series').map((item, index) => (
-                      <div key={`series-${index}`} className="p-3 rounded-lg border border-content3 space-y-2">
-                        <div className="text-sm">
-                          <span className="text-default-500">Current:</span>
-                          <p className="font-mono text-xs bg-content2 p-1 rounded mt-1">{item.currentName}</p>
+                    {renamePreview
+                      .filter((r) => r.type === "series")
+                      .map((item, index) => (
+                        <div
+                          className="p-3 rounded-lg border border-content3 space-y-2"
+                          key={`series-${index}`}
+                        >
+                          <div className="text-sm">
+                            <span className="text-default-500">Current:</span>
+                            <p className="font-mono text-xs bg-content2 p-1 rounded mt-1">
+                              {item.currentName}
+                            </p>
+                          </div>
+                          <div className="text-sm">
+                            <span className="text-default-500">New:</span>
+                            <Input
+                              classNames={{ input: "font-mono text-xs" }}
+                              onChange={(e) => {
+                                const updated = [...renamePreview];
+                                const actualIndex = renamePreview.findIndex(
+                                  (r) => r === item,
+                                );
+                                updated[actualIndex].newName = e.target.value;
+                                setRenamePreview(updated);
+                              }}
+                              size="sm"
+                              value={item.newName}
+                              variant="bordered"
+                            />
+                          </div>
                         </div>
-                        <div className="text-sm">
-                          <span className="text-default-500">New:</span>
-                          <Input
-                            size="sm"
-                            variant="bordered"
-                            value={item.newName}
-                            classNames={{ input: "font-mono text-xs" }}
-                            onChange={(e) => {
-                              const updated = [...renamePreview];
-                              const actualIndex = renamePreview.findIndex(r => r === item);
-                              updated[actualIndex].newName = e.target.value;
-                              setRenamePreview(updated);
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 )}
               </div>
             )}
           </ModalBody>
           <ModalFooter>
-            <Button variant="light" onPress={() => setShowRenameModal(false)}>
+            <Button onPress={() => setShowRenameModal(false)} variant="light">
               Cancel
             </Button>
             {renamePreview.length > 0 && (
@@ -1961,8 +2343,8 @@ const FileManagement = () => {
       </Modal>
 
       {/* Beta Warning Modal */}
-      <Modal 
-        isOpen={showBetaWarning} 
+      <Modal
+        isOpen={showBetaWarning}
         onClose={() => {
           setShowBetaWarning(false);
           setPendingAutoRenameEnable(false);
@@ -1976,40 +2358,46 @@ const FileManagement = () => {
           <ModalBody>
             <div className="space-y-4">
               <div className="flex items-center gap-3 p-4 rounded-lg bg-warning/10 border border-warning/30">
-                <Shield size={32} className="text-warning flex-shrink-0" />
+                <Shield className="text-warning flex-shrink-0" size={32} />
                 <p className="text-sm">
-                  <strong>Important:</strong> Auto-rename is an experimental feature that may 
-                  cause unexpected changes to your media library file names and structure.
+                  <strong>Important:</strong> Auto-rename is an experimental
+                  feature that may cause unexpected changes to your media
+                  library file names and structure.
                 </p>
               </div>
-              
+
               <div className="space-y-2">
-                <p className="text-sm font-medium">Before enabling, please note:</p>
+                <p className="text-sm font-medium">
+                  Before enabling, please note:
+                </p>
                 <ul className="text-sm text-default-500 space-y-1 list-disc list-inside">
-                  <li>Files will be renamed automatically based on your naming format</li>
+                  <li>
+                    Files will be renamed automatically based on your naming
+                    format
+                  </li>
                   <li>This action cannot be easily undone</li>
                   <li>We recommend backing up your media library first</li>
                   <li>Some media players may lose track of renamed files</li>
                   <li>Metadata files (NFO, subtitles) may become orphaned</li>
                 </ul>
               </div>
-              
+
               <p className="text-sm text-warning font-medium">
                 Do you understand the risks and want to enable auto-rename?
               </p>
             </div>
           </ModalBody>
           <ModalFooter>
-            <Button 
-              variant="light" 
+            <Button
               onPress={() => {
                 setShowBetaWarning(false);
                 setPendingAutoRenameEnable(false);
               }}
+              variant="light"
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               color="warning"
               onPress={confirmAutoRenameEnable}
               startContent={<Zap size={16} />}
@@ -2021,20 +2409,34 @@ const FileManagement = () => {
       </Modal>
 
       {/* Info Modal */}
-      <Modal isOpen={infoModal.isOpen} onClose={() => setInfoModal({ ...infoModal, isOpen: false })}>
+      <Modal
+        isOpen={infoModal.isOpen}
+        onClose={() => setInfoModal({ ...infoModal, isOpen: false })}
+      >
         <ModalContent>
           <ModalHeader className="flex items-center gap-2">
-            {infoModal.type === 'success' && <Check size={20} className="text-success" />}
-            {infoModal.type === 'error' && <X size={20} className="text-danger" />}
-            {infoModal.type === 'warning' && <AlertTriangle size={20} className="text-warning" />}
-            {infoModal.type === 'info' && <Info size={20} className="text-primary" />}
+            {infoModal.type === "success" && (
+              <Check className="text-success" size={20} />
+            )}
+            {infoModal.type === "error" && (
+              <X className="text-danger" size={20} />
+            )}
+            {infoModal.type === "warning" && (
+              <AlertTriangle className="text-warning" size={20} />
+            )}
+            {infoModal.type === "info" && (
+              <Info className="text-primary" size={20} />
+            )}
             {infoModal.title}
           </ModalHeader>
           <ModalBody>
             <p className="whitespace-pre-wrap">{infoModal.message}</p>
           </ModalBody>
           <ModalFooter>
-            <Button color="primary" onPress={() => setInfoModal({ ...infoModal, isOpen: false })}>
+            <Button
+              color="primary"
+              onPress={() => setInfoModal({ ...infoModal, isOpen: false })}
+            >
               OK
             </Button>
           </ModalFooter>
@@ -2042,17 +2444,25 @@ const FileManagement = () => {
       </Modal>
 
       {/* Confirm Modal */}
-      <Modal isOpen={confirmModal.isOpen} onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}>
+      <Modal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+      >
         <ModalContent>
           <ModalHeader className="flex items-center gap-2">
-            <AlertTriangle size={20} className="text-warning" />
+            <AlertTriangle className="text-warning" size={20} />
             {confirmModal.title}
           </ModalHeader>
           <ModalBody>
             <p className="whitespace-pre-wrap">{confirmModal.message}</p>
           </ModalBody>
           <ModalFooter>
-            <Button variant="light" onPress={() => setConfirmModal({ ...confirmModal, isOpen: false })}>
+            <Button
+              onPress={() =>
+                setConfirmModal({ ...confirmModal, isOpen: false })
+              }
+              variant="light"
+            >
               Cancel
             </Button>
             <Button color="primary" onPress={confirmModal.onConfirm}>

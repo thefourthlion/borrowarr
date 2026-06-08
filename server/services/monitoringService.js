@@ -3,6 +3,7 @@ const MonitoredSeries = require('../models/MonitoredSeries');
 const Settings = require('../models/Settings');
 const { findMovieFile, getUserMovieDirectory, getUserSeriesDirectory, findSeriesEpisodeFiles } = require('./fileScanner');
 const { applyMovieFormat, executeMovieRenames } = require('./fileRenamer');
+const { grabReleaseInternal } = require('../controllers/DownloadClients');
 const axios = require('axios');
 const path = require('path');
 const fs = require('fs').promises;
@@ -241,11 +242,10 @@ async function autoDownloadMovie(movie, userId) {
     quality = '720p';
   }
   
-  // Download the torrent with history information
-  const downloadResponse = await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, {
+  // Download the torrent directly (no HTTP round-trip needed)
+  await grabReleaseInternal({
     downloadUrl: bestTorrent.downloadUrl,
     protocol: bestTorrent.protocol,
-    // History information
     releaseName: bestTorrent.title,
     indexer: bestTorrent.indexer,
     indexerId: bestTorrent.indexerId,
@@ -253,16 +253,12 @@ async function autoDownloadMovie(movie, userId) {
     sizeFormatted: bestTorrent.sizeFormatted,
     seeders: bestTorrent.seeders,
     leechers: bestTorrent.leechers,
-    quality: quality,
+    quality,
     source: 'MonitoringService',
     mediaType: 'movies',
     mediaTitle: movie.title,
     tmdbId: movie.tmdbId,
-  });
-  
-  if (!downloadResponse.data.success) {
-    throw new Error(downloadResponse.data.error || 'Download failed');
-  }
+  }, userId);
   
   // Update movie record
   await movie.update({
@@ -337,8 +333,8 @@ async function autoDownloadEpisode(series, seasonNumber, episodeNumber, userId) 
   else if (titleLower.includes('1080p')) quality = '1080p';
   else if (titleLower.includes('720p')) quality = '720p';
   
-  // Download
-  const downloadResponse = await axios.post(`${API_BASE_URL}/api/DownloadClients/grab`, {
+  // Download directly (no HTTP round-trip needed)
+  await grabReleaseInternal({
     downloadUrl: bestTorrent.downloadUrl,
     protocol: bestTorrent.protocol,
     releaseName: bestTorrent.title,
@@ -348,18 +344,14 @@ async function autoDownloadEpisode(series, seasonNumber, episodeNumber, userId) 
     sizeFormatted: bestTorrent.sizeFormatted,
     seeders: bestTorrent.seeders,
     leechers: bestTorrent.leechers,
-    quality: quality,
+    quality,
     source: 'MonitoringService',
     mediaType: 'tv',
     mediaTitle: series.title,
     tmdbId: series.tmdbId,
     seasonNumber,
     episodeNumber,
-  });
-  
-  if (!downloadResponse.data.success) {
-    throw new Error(downloadResponse.data.error || 'Download failed');
-  }
+  }, userId);
   
   console.log(`✅ [Monitoring] Episode download started: ${series.title} S${seasonStr}E${episodeStr} - ${bestTorrent.title}`);
   

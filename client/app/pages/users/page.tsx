@@ -22,12 +22,13 @@ import {
   Trash2,
   Edit2,
   Shield,
-  Mail,
   User as UserIcon,
   CheckCircle2,
   XCircle,
+  AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { PageContent, PageHeader } from "@/components/page-header";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 
@@ -42,27 +43,29 @@ interface UserPermissions {
 interface User {
   id: string;
   username: string;
-  email: string;
-  avatarUrl?: string;
   permissions: UserPermissions;
   createdAt: string;
 }
 
 const Users = () => {
   const { user: currentUser } = useAuth();
+  const canManageUsers = Boolean(
+    currentUser?.permissions?.admin || currentUser?.permissions?.manage_users,
+  );
+  const isAdmin = Boolean(currentUser?.permissions?.admin);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [saving, setSaving] = useState(false);
-  const [publicRegistrationEnabled, setPublicRegistrationEnabled] = useState(true);
+  const [publicRegistrationEnabled, setPublicRegistrationEnabled] =
+    useState(true);
   const [loadingSettings, setLoadingSettings] = useState(true);
-  
+
   // Modal state
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
     username: "",
-    email: "",
     password: "",
     permissions: {
       admin: false,
@@ -88,8 +91,10 @@ const Users = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       setUsers(response.data.data || []);
-    } catch (error) {
-      console.error("Error fetching users:", error);
+    } catch (error: any) {
+      if (error.response?.status !== 403) {
+        console.error("Error fetching users:", error);
+      }
       showNotification("error", "Failed to fetch users");
     } finally {
       setLoading(false);
@@ -103,18 +108,28 @@ const Users = () => {
       const response = await axios.get(`${API_BASE_URL}/api/Settings`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setPublicRegistrationEnabled(response.data.publicRegistrationEnabled ?? true);
-    } catch (error) {
-      console.error("Error fetching settings:", error);
+      setPublicRegistrationEnabled(
+        response.data.publicRegistrationEnabled ?? true,
+      );
+    } catch (error: any) {
+      if (error.response?.status !== 403) {
+        console.error("Error fetching settings:", error);
+      }
     } finally {
       setLoadingSettings(false);
     }
   }, []);
 
   useEffect(() => {
+    if (!canManageUsers) {
+      setLoading(false);
+      setLoadingSettings(false);
+      return;
+    }
+
     fetchUsers();
     fetchSettings();
-  }, [fetchUsers, fetchSettings]);
+  }, [canManageUsers, fetchUsers, fetchSettings]);
 
   const showNotification = (type: "success" | "error", message: string) => {
     setNotification({ show: true, type, message });
@@ -126,15 +141,13 @@ const Users = () => {
       setEditingUser(user);
       setFormData({
         username: user.username,
-        email: user.email,
-        password: "", // Don't show existing password
-        permissions: { ...user.permissions },
+        password: "",
+        permissions: { ...user.permissions, request: true },
       });
     } else {
       setEditingUser(null);
       setFormData({
         username: "",
-        email: "",
         password: "",
         permissions: {
           admin: false,
@@ -152,13 +165,12 @@ const Users = () => {
     try {
       setSaving(true);
       const token = localStorage.getItem("accessToken");
-      
+
       if (editingUser) {
         // Update existing user
         const updateData: any = {
           username: formData.username,
-          email: formData.email,
-          permissions: formData.permissions,
+          permissions: { ...formData.permissions, request: true },
         };
         if (formData.password) {
           updateData.password = formData.password;
@@ -167,15 +179,20 @@ const Users = () => {
         await axios.put(
           `${API_BASE_URL}/api/Users/update/${editingUser.id}`,
           updateData,
-          { headers: { Authorization: `Bearer ${token}` } }
+          { headers: { Authorization: `Bearer ${token}` } },
         );
         showNotification("success", "User updated successfully");
       } else {
         // Create new user
         await axios.post(
           `${API_BASE_URL}/api/Users/create`,
-          formData,
-          { headers: { Authorization: `Bearer ${token}` } }
+          {
+            ...formData,
+            permissions: { ...formData.permissions, request: true },
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
         );
         showNotification("success", "User created successfully");
       }
@@ -184,7 +201,10 @@ const Users = () => {
       fetchUsers();
     } catch (error: any) {
       console.error("Error saving user:", error);
-      showNotification("error", error.response?.data?.error || "Failed to save user");
+      showNotification(
+        "error",
+        error.response?.data?.error || "Failed to save user",
+      );
     } finally {
       setSaving(false);
     }
@@ -202,7 +222,7 @@ const Users = () => {
       fetchUsers();
     } catch (error: any) {
       console.error("Error deleting user:", error);
-      showNotification("error", "Failed to delete user");
+      showNotification("error", error.response?.data?.error || "Failed to delete user");
     }
   };
 
@@ -212,20 +232,21 @@ const Users = () => {
       await axios.put(
         `${API_BASE_URL}/api/Settings`,
         { publicRegistrationEnabled: enabled },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
       setPublicRegistrationEnabled(enabled);
-      showNotification("success", `Public registration ${enabled ? "enabled" : "disabled"}`);
+      showNotification(
+        "success",
+        `Public registration ${enabled ? "enabled" : "disabled"}`,
+      );
     } catch (error: any) {
       console.error("Error updating registration setting:", error);
       showNotification("error", "Failed to update registration setting");
     }
   };
 
-  const filteredUsers = users.filter(
-    (u) =>
-      u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredUsers = users.filter((u) =>
+    u.username.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const PermissionSwitch = ({
@@ -240,10 +261,11 @@ const Users = () => {
     <div className="flex items-center justify-between p-3 bg-content2 rounded-lg border border-secondary/20">
       <div className="flex flex-col gap-1">
         <span className="text-sm font-medium">{label}</span>
-        {description && <span className="text-xs text-foreground/60">{description}</span>}
+        {description && (
+          <span className="text-xs text-foreground/60">{description}</span>
+        )}
       </div>
       <Switch
-        size="sm"
         color="secondary"
         isSelected={formData.permissions[permissionKey]}
         onValueChange={(checked) =>
@@ -252,60 +274,72 @@ const Users = () => {
             permissions: { ...prev.permissions, [permissionKey]: checked },
           }))
         }
+        size="sm"
       />
     </div>
   );
 
+  if (!canManageUsers) {
     return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-secondary/20 sticky top-16 z-10 bg-background/95 backdrop-blur-sm">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-secondary/10">
-                <UsersIcon className="w-6 h-6 text-secondary" />
-              </div>
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent">
-                  Users
-                </h1>
-                <p className="text-xs sm:text-sm text-foreground/60 mt-1">
-                  Manage users and their permissions
-                </p>
-                </div>
-            </div>
-            <Button
-              color="secondary"
-              className="btn-glow"
-              startContent={<Plus size={18} />}
-              onPress={() => handleOpenModal()}
-            >
-              Create User
-            </Button>
-          </div>
-        </div>
+      <div className="min-h-screen bg-background">
+        <PageHeader
+          description="Manage users and their permissions"
+          icon={<UsersIcon className="h-6 w-6" />}
+          title="Users"
+        />
+        <PageContent>
+          <Card className="border border-secondary/20 bg-content1 max-w-2xl mx-auto">
+            <CardBody className="text-center py-12">
+              <AlertTriangle className="w-12 h-12 text-warning mx-auto mb-4" />
+              <h3 className="text-xl font-semibold mb-2">Access Restricted</h3>
+              <p className="text-foreground/60">
+                Only administrators or users with manage-users permission can
+                access this page.
+              </p>
+            </CardBody>
+          </Card>
+        </PageContent>
       </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <PageHeader
+        actions={
+          <Button
+            className="btn-glow"
+            color="secondary"
+            onPress={() => handleOpenModal()}
+            startContent={<Plus size={18} />}
+          >
+            Create User
+          </Button>
+        }
+        description="Manage users and their permissions"
+        icon={<UsersIcon className="h-6 w-6" />}
+        title="Users"
+      />
 
       {/* Content */}
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
+      <PageContent>
         {/* Registration Toggle Card */}
         <Card className="mb-6 border border-secondary/20 bg-content1">
           <CardBody className="flex flex-row items-center justify-between">
             <div className="flex flex-col gap-1">
               <h3 className="text-lg font-semibold">Public Registration</h3>
               <p className="text-sm text-foreground/60">
-                {publicRegistrationEnabled 
-                  ? "Anyone can create an account on the register page" 
+                {publicRegistrationEnabled
+                  ? "Anyone can create an account on the register page"
                   : "Only admins can create new user accounts"}
               </p>
             </div>
             <Switch
+              color="secondary"
+              isDisabled={loadingSettings || !isAdmin}
               isSelected={publicRegistrationEnabled}
               onValueChange={handleTogglePublicRegistration}
-              color="secondary"
               size="lg"
-              isDisabled={loadingSettings}
             />
           </CardBody>
         </Card>
@@ -313,13 +347,14 @@ const Users = () => {
         {/* Search */}
         <div className="mb-6">
           <Input
-            placeholder="Search users..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            startContent={<Search size={18} className="text-default-400" />}
             classNames={{
-              inputWrapper: "bg-content2 border border-secondary/20 hover:border-secondary/40",
+              inputWrapper:
+                "bg-content2 border border-secondary/20 hover:border-secondary/40",
             }}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search users..."
+            startContent={<Search className="text-default-400" size={18} />}
+            value={searchQuery}
           />
         </div>
 
@@ -343,14 +378,14 @@ const Users = () => {
 
         {loading ? (
           <div className="flex justify-center py-20">
-            <Spinner size="lg" color="secondary" />
+            <Spinner color="secondary" size="lg" />
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filteredUsers.map((user) => (
               <Card
-                key={user.id}
                 className="card-interactive border border-secondary/20 bg-content1"
+                key={user.id}
               >
                 <CardHeader className="flex justify-between items-start pb-2">
                   <div className="flex gap-3 items-center">
@@ -358,28 +393,30 @@ const Users = () => {
                       {user.username[0].toUpperCase()}
                     </div>
                     <div>
-                      <h3 className="font-semibold text-lg leading-none">{user.username}</h3>
-                      <div className="flex items-center gap-1 mt-1 text-foreground/60 text-xs">
-                        <Mail size={12} />
-                        {user.email}
+                      <h3 className="font-semibold text-lg leading-none">
+                        {user.username}
+                      </h3>
+                      <div className="flex items-center gap-1 mt-1 text-foreground/50 text-xs">
+                        <UserIcon size={12} />
+                        Local account
                       </div>
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    <Button 
-                      isIconOnly 
-                      variant="light" 
-                      size="sm"
+                    <Button
+                      isIconOnly
                       onPress={() => handleOpenModal(user)}
+                      size="sm"
+                      variant="light"
                     >
                       <Edit2 size={18} />
                     </Button>
-                    <Button 
-                      isIconOnly 
-                      variant="light" 
-                      size="sm"
+                    <Button
                       color="danger"
+                      isIconOnly
                       onPress={() => handleDeleteUser(user.id)}
+                      size="sm"
+                      variant="light"
                     >
                       <Trash2 size={18} />
                     </Button>
@@ -388,25 +425,46 @@ const Users = () => {
                 <CardBody className="pt-2">
                   <div className="flex flex-wrap gap-2 mt-2">
                     {user.permissions.admin && (
-                      <Chip size="sm" color="secondary" variant="flat" startContent={<Shield size={12} />}>
+                      <Chip
+                        color="secondary"
+                        size="sm"
+                        startContent={<Shield size={12} />}
+                        variant="flat"
+                      >
                         Admin
                       </Chip>
                     )}
                     {user.permissions.manage_users && (
-                      <Chip size="sm" color="primary" variant="flat" startContent={<UsersIcon size={12} />}>
+                      <Chip
+                        color="primary"
+                        size="sm"
+                        startContent={<UsersIcon size={12} />}
+                        variant="flat"
+                      >
                         Manage Users
                       </Chip>
                     )}
                     {user.permissions.auto_approve && (
-                      <Chip size="sm" color="success" variant="flat" startContent={<CheckCircle2 size={12} />}>
+                      <Chip
+                        color="success"
+                        size="sm"
+                        startContent={<CheckCircle2 size={12} />}
+                        variant="flat"
+                      >
                         Auto Approve
                       </Chip>
                     )}
-                    {!user.permissions.admin && !user.permissions.manage_users && !user.permissions.auto_approve && (
-                      <Chip size="sm" variant="flat" startContent={<UserIcon size={12} />}>
-                        Standard User
-                      </Chip>
-                    )}
+                    {!user.permissions.admin &&
+                      !user.permissions.manage_users &&
+                      !user.permissions.auto_approve && (
+                        <Chip
+                          size="sm"
+                          startContent={<UserIcon size={12} />}
+                          variant="flat"
+                        >
+                          Standard User
+                        </Chip>
+                      )}
                   </div>
                   <div className="mt-4 text-xs text-foreground/40">
                     Joined {new Date(user.createdAt).toLocaleDateString()}
@@ -416,18 +474,18 @@ const Users = () => {
             ))}
           </div>
         )}
-      </div>
+      </PageContent>
 
       {/* User Modal */}
-      <Modal 
-        isOpen={isOpen} 
-        onClose={onClose}
-        size="2xl"
-        scrollBehavior="inside"
+      <Modal
         classNames={{
           backdrop: "bg-overlay/50 backdrop-blur-sm",
           base: "bg-content1 border border-secondary/20",
         }}
+        isOpen={isOpen}
+        onClose={onClose}
+        scrollBehavior="inside"
+        size="2xl"
       >
         <ModalContent>
           <ModalHeader className="border-b border-secondary/20">
@@ -444,83 +502,87 @@ const Users = () => {
             <div className="space-y-6">
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <UserIcon size={18} className="text-secondary" />
+                  <UserIcon className="text-secondary" size={18} />
                   Account Details
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-4">
                   <Input
+                    classNames={{
+                      inputWrapper: "bg-content2 border border-secondary/20",
+                    }}
                     label="Username"
+                    onChange={(e) =>
+                      setFormData({ ...formData, username: e.target.value })
+                    }
                     placeholder="Enter username"
                     value={formData.username}
-                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                    classNames={{ inputWrapper: "bg-content2 border border-secondary/20" }}
                   />
                   <Input
-                    label="Email"
-                    placeholder="Enter email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    classNames={{ inputWrapper: "bg-content2 border border-secondary/20" }}
-                  />
-                  <Input
+                    classNames={{
+                      inputWrapper: "bg-content2 border border-secondary/20",
+                    }}
                     label={editingUser ? "New Password (Optional)" : "Password"}
-                    placeholder={editingUser ? "Leave blank to keep current" : "Enter password"}
+                    onChange={(e) =>
+                      setFormData({ ...formData, password: e.target.value })
+                    }
+                    placeholder={
+                      editingUser
+                        ? "Leave blank to keep current"
+                        : "Enter password"
+                    }
                     type="password"
                     value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    classNames={{ inputWrapper: "bg-content2 border border-secondary/20" }}
-                    className="sm:col-span-2"
                   />
                 </div>
               </div>
 
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <Shield size={18} className="text-secondary" />
+                  <Shield className="text-secondary" size={18} />
                   Permissions
                 </h3>
                 <div className="grid grid-cols-1 gap-3">
                   <PermissionSwitch
+                    description="Full access to all settings and features"
                     label="Administrator"
                     permissionKey="admin"
-                    description="Full access to all settings and features"
                   />
                   <PermissionSwitch
+                    description="Can create, edit, and delete other users"
                     label="Manage Users"
                     permissionKey="manage_users"
-                    description="Can create, edit, and delete other users"
                   />
                   <PermissionSwitch
+                    description="Can approve or deny media requests"
                     label="Manage Requests"
                     permissionKey="manage_requests"
-                    description="Can approve or deny media requests"
                   />
                   <PermissionSwitch
-                    label="Request Media"
-                    permissionKey="request"
-                    description="Can request movies and series"
-                  />
-                  <PermissionSwitch
+                    description="Requests are automatically approved without review"
                     label="Auto Approve"
                     permissionKey="auto_approve"
-                    description="Requests are automatically approved without review"
                   />
                 </div>
               </div>
             </div>
           </ModalBody>
           <ModalFooter className="border-t border-secondary/20">
-            <Button variant="flat" onPress={onClose}>
+            <Button onPress={onClose} variant="flat">
               Cancel
             </Button>
-            <Button color="secondary" className="btn-glow" onPress={handleSaveUser} isLoading={saving}>
+            <Button
+              className="btn-glow"
+              color="secondary"
+              isLoading={saving}
+              onPress={handleSaveUser}
+            >
               {editingUser ? "Save Changes" : "Create User"}
             </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
-        </div>
-    );
+    </div>
+  );
 };
 
 export default Users;

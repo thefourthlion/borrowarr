@@ -37,11 +37,12 @@ class QBittorrentProxy {
         }
       );
 
-      // qBittorrent returns "Ok." on successful login
-      if (response.data === 'Ok.' || response.status === 200) {
-        // Extract cookie from Set-Cookie header
-        const cookies = response.headers['set-cookie'];
-        if (cookies && cookies.length > 0) {
+      // qBittorrent returns a session cookie on successful login. Older
+      // versions may also return "Ok.", while newer versions can return 204.
+      const cookies = response.headers['set-cookie'];
+      const hasSessionCookie = cookies && cookies.length > 0;
+      if (response.data === 'Ok.' || response.status === 200 || (response.status === 204 && hasSessionCookie)) {
+        if (hasSessionCookie) {
           this.cookie = cookies[0].split(';')[0];
         }
         return true;
@@ -249,4 +250,3 @@ class QBittorrentProxy {
 }
 
 module.exports = QBittorrentProxy;
-

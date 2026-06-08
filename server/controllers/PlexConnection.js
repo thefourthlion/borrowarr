@@ -1,5 +1,6 @@
 const PlexConnection = require('../models/PlexConnection');
 const axios = require('axios');
+const { buildRecommendationRows } = require('../services/plexRecommendationService');
 
 /**
  * Test connection to Plex server
@@ -45,6 +46,11 @@ const testPlexConnection = async (serverUrl, authToken) => {
   }
 };
 
+const normalizePlexDirectories = (directory) => {
+  if (!directory) return [];
+  return Array.isArray(directory) ? directory : [directory];
+};
+
 /**
  * Get Plex libraries
  */
@@ -63,9 +69,9 @@ const getPlexLibraries = async (serverUrl, authToken) => {
       timeout: 10000,
     });
 
-    if (response.data?.MediaContainer?.Directory) {
-      const libraries = response.data.MediaContainer.Directory;
-      
+    const libraries = normalizePlexDirectories(response.data?.MediaContainer?.Directory);
+
+    if (libraries.length > 0) {
       // Fetch size for each library
       const librariesWithCounts = await Promise.all(
         libraries.map(async (lib) => {
@@ -109,9 +115,18 @@ const getPlexLibraries = async (serverUrl, authToken) => {
       };
     }
 
-    return { success: false, error: 'No libraries found' };
+    return { success: true, libraries: [] };
   } catch (error) {
     console.error('Failed to fetch Plex libraries:', error.message);
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      return { success: false, error: 'Invalid or expired Plex token' };
+    }
+    if (error.code === 'ECONNREFUSED') {
+      return { success: false, error: 'Connection refused. Check if Plex is running and the URL is correct.' };
+    }
+    if (error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
+      return { success: false, error: 'Cannot reach Plex server. Check your URL and network connection.' };
+    }
     return { success: false, error: error.message || 'Failed to fetch libraries' };
   }
 };
@@ -280,9 +295,13 @@ exports.getLibraries = async (req, res) => {
     const result = await getPlexLibraries(connection.serverUrl, connection.authToken);
 
     if (!result.success) {
-      // Update connection status
-      await connection.update({ isConnected: false, lastChecked: new Date() });
-      return res.status(400).json({ error: result.error });
+      const connectionLost = /invalid|expired|refused|cannot reach|enotfound|etimedout|401|403/i.test(
+        result.error || ''
+      );
+      if (connectionLost) {
+        await connection.update({ isConnected: false, lastChecked: new Date() });
+      }
+      return res.json({ success: false, error: result.error, libraries: [] });
     }
 
     // Update last checked
@@ -292,6 +311,40 @@ exports.getLibraries = async (req, res) => {
   } catch (error) {
     console.error('Error fetching Plex libraries:', error);
     res.status(500).json({ error: 'Failed to fetch Plex libraries' });
+  }
+};
+
+/**
+ * Get personalized recommendations from the user's Plex library/watch history
+ */
+exports.getRecommendations = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const connection = await PlexConnection.findOne({ where: { userId } });
+
+    if (!connection || !connection.isConnected) {
+      return res.json({
+        success: true,
+        connected: false,
+        rows: [],
+      });
+    }
+
+    const result = await buildRecommendationRows({ userId, connection });
+    await connection.update({ lastChecked: new Date() });
+
+    res.json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    console.error('Error generating Plex recommendations:', error);
+    res.status(500).json({
+      success: false,
+      connected: false,
+      rows: [],
+      error: error.message || 'Failed to generate Plex recommendations',
+    });
   }
 };
 
@@ -471,7 +524,7 @@ exports.getAllMedia = async (req, res) => {
       timeout: 10000,
     });
 
-    const libraries = librariesResponse.data?.MediaContainer?.Directory || [];
+    const libraries = normalizePlexDirectories(librariesResponse.data?.MediaContainer?.Directory);
     
     // Filter libraries based on type
     let filteredLibraries = libraries;
@@ -661,7 +714,7 @@ exports.getLibraryKeys = async (req, res) => {
       timeout: 10000,
     });
 
-    const libraries = (librariesResponse.data?.MediaContainer?.Directory || [])
+    const libraries = normalizePlexDirectories(librariesResponse.data?.MediaContainer?.Directory)
       .filter(lib => lib.type === 'movie' || lib.type === 'show');
 
     const keysSet = new Set();
@@ -710,4 +763,3 @@ exports.getLibraryKeys = async (req, res) => {
     res.status(500).json({ success: false, keys: [], error: error.message });
   }
 };
-

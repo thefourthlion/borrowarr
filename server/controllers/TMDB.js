@@ -203,6 +203,56 @@ exports.getTVShowDetails = async (req, res) => {
 };
 
 /**
+ * Get company details by TMDB company ID
+ */
+exports.getCompanyDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Company ID is required',
+      });
+    }
+
+    const result = await tmdbService.getCompanyDetails(parseInt(id));
+    res.json(result);
+  } catch (error) {
+    console.error('Error in getCompanyDetails controller:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error',
+    });
+  }
+};
+
+/**
+ * Get network details by TMDB network ID
+ */
+exports.getNetworkDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Network ID is required',
+      });
+    }
+
+    const result = await tmdbService.getNetworkDetails(parseInt(id));
+    res.json(result);
+  } catch (error) {
+    console.error('Error in getNetworkDetails controller:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error',
+    });
+  }
+};
+
+/**
  * Get popular movies
  */
 exports.getPopularMovies = async (req, res) => {
@@ -659,11 +709,8 @@ exports.searchTorrentsForMovie = async (req, res) => {
       searchQuery += ` ${year}`;
     }
 
-    // Get enabled indexers - filter by userId if authenticated
+    // Get enabled indexers configured by admins for the server
     const whereClause = { enabled: true };
-    if (req.userId) {
-      whereClause.userId = req.userId;
-    }
 
     let indexers = await Indexers.findAll({
       where: whereClause,
@@ -807,6 +854,7 @@ exports.discoverMovies = async (req, res) => {
       releaseDateFrom,
       releaseDateTo,
       genres,
+      studio,
       originalLanguage,
       runtimeMin,
       runtimeMax,
@@ -824,6 +872,7 @@ exports.discoverMovies = async (req, res) => {
       releaseDateFrom: releaseDateFrom || null,
       releaseDateTo: releaseDateTo || null,
       genres: genres ? genres.split(',').map(id => parseInt(id)).filter(id => !isNaN(id)) : [],
+      studio: studio ? parseInt(studio) : null,
       originalLanguage: originalLanguage || 'all',
       runtimeMin: runtimeMin || null,
       runtimeMax: runtimeMax || null,
@@ -870,6 +919,7 @@ exports.discoverTVShows = async (req, res) => {
       firstAirDateFrom,
       firstAirDateTo,
       genres,
+      network,
       originalLanguage,
       runtimeMin,
       runtimeMax,
@@ -887,6 +937,7 @@ exports.discoverTVShows = async (req, res) => {
       firstAirDateFrom: firstAirDateFrom || null,
       firstAirDateTo: firstAirDateTo || null,
       genres: genres ? genres.split(',').map(id => parseInt(id)).filter(id => !isNaN(id)) : [],
+      network: network ? parseInt(network) : null,
       originalLanguage: originalLanguage || 'all',
       runtimeMin: runtimeMin || null,
       runtimeMax: runtimeMax || null,
@@ -968,11 +1019,8 @@ exports.searchTorrentsForTVEpisode = async (req, res) => {
       searchQuery += ` ${year}`;
     }
 
-    // Get enabled indexers - filter by userId if authenticated
+    // Get enabled indexers configured by admins for the server
     const whereClause = { enabled: true };
-    if (req.userId) {
-      whereClause.userId = req.userId;
-    }
 
     let indexers = await Indexers.findAll({
       where: whereClause,
@@ -1286,4 +1334,3 @@ exports.getTVShowsByPerson = async (req, res) => {
 };
 
 module.exports = exports;
-

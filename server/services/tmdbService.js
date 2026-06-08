@@ -206,6 +206,52 @@ class TMDBService {
   }
 
   /**
+   * Get company details by TMDB company ID
+   * @param {number} companyId - TMDB company ID
+   * @returns {Promise<Object>} Company details
+   */
+  async getCompanyDetails(companyId) {
+    try {
+      const api = this.getAxiosInstance();
+      const response = await api.get(`/company/${companyId}`);
+
+      return {
+        success: true,
+        company: response.data,
+      };
+    } catch (error) {
+      console.error('Error getting company details:', error.message);
+      return {
+        success: false,
+        error: error.message || 'Failed to get company details',
+      };
+    }
+  }
+
+  /**
+   * Get network details by TMDB network ID
+   * @param {number} networkId - TMDB network ID
+   * @returns {Promise<Object>} Network details
+   */
+  async getNetworkDetails(networkId) {
+    try {
+      const api = this.getAxiosInstance();
+      const response = await api.get(`/network/${networkId}`);
+
+      return {
+        success: true,
+        network: response.data,
+      };
+    } catch (error) {
+      console.error('Error getting network details:', error.message);
+      return {
+        success: false,
+        error: error.message || 'Failed to get network details',
+      };
+    }
+  }
+
+  /**
    * Get TV show season details with episodes
    * @param {number} tvId - TMDB TV show ID
    * @param {number} seasonNumber - Season number
@@ -733,6 +779,7 @@ class TMDBService {
    * @param {string} filters.releaseDateFrom - Primary release date from (YYYY-MM-DD)
    * @param {string} filters.releaseDateTo - Primary release date to (YYYY-MM-DD)
    * @param {Array<number>} filters.genres - Genre IDs
+   * @param {number} filters.studio - Production company ID
    * @param {string} filters.originalLanguage - Original language code
    * @param {number} filters.runtimeMin - Minimum runtime in minutes
    * @param {number} filters.runtimeMax - Maximum runtime in minutes
@@ -764,6 +811,11 @@ class TMDBService {
       // Genre filter
       if (filters.genres && filters.genres.length > 0) {
         params.with_genres = filters.genres.join(',');
+      }
+
+      // Production company / studio filter
+      if (filters.studio) {
+        params.with_companies = filters.studio;
       }
 
       // Original language filter
@@ -830,6 +882,7 @@ class TMDBService {
    * @param {string} filters.firstAirDateFrom - First air date from (YYYY-MM-DD)
    * @param {string} filters.firstAirDateTo - First air date to (YYYY-MM-DD)
    * @param {Array<number>} filters.genres - Genre IDs
+   * @param {number} filters.network - Network ID
    * @param {string} filters.originalLanguage - Original language code
    * @param {number} filters.runtimeMin - Minimum runtime in minutes
    * @param {number} filters.runtimeMax - Maximum runtime in minutes
@@ -861,6 +914,11 @@ class TMDBService {
       // Genre filter
       if (filters.genres && filters.genres.length > 0) {
         params.with_genres = filters.genres.join(',');
+      }
+
+      // Network filter
+      if (filters.network) {
+        params.with_networks = filters.network;
       }
 
       // Original language filter
@@ -915,6 +973,108 @@ class TMDBService {
         success: false,
         error: error.message || 'Failed to discover TV shows',
         results: [],
+      };
+    }
+  }
+
+  /**
+   * Get TMDB recommendations for a movie or TV show.
+   * @param {'movie'|'tv'} mediaType - Media type
+   * @param {number} id - TMDB media ID
+   * @param {number} page - Page number
+   * @returns {Promise<Object>} Recommendation results
+   */
+  async getRecommendations(mediaType, id, page = 1) {
+    try {
+      const api = this.getAxiosInstance();
+      const endpoint = mediaType === 'tv' ? `/tv/${id}/recommendations` : `/movie/${id}/recommendations`;
+      const response = await api.get(endpoint, {
+        params: {
+          page,
+          language: 'en-US',
+        },
+      });
+
+      return {
+        success: true,
+        results: response.data.results || [],
+        page: response.data.page || 1,
+        totalPages: response.data.total_pages || 1,
+        totalResults: response.data.total_results || 0,
+      };
+    } catch (error) {
+      console.error(`Error getting ${mediaType} recommendations:`, error.message);
+      return {
+        success: false,
+        error: error.message || 'Failed to get recommendations',
+        results: [],
+      };
+    }
+  }
+
+  /**
+   * Get similar TMDB items for a movie or TV show.
+   * @param {'movie'|'tv'} mediaType - Media type
+   * @param {number} id - TMDB media ID
+   * @param {number} page - Page number
+   * @returns {Promise<Object>} Similar results
+   */
+  async getSimilar(mediaType, id, page = 1) {
+    try {
+      const api = this.getAxiosInstance();
+      const endpoint = mediaType === 'tv' ? `/tv/${id}/similar` : `/movie/${id}/similar`;
+      const response = await api.get(endpoint, {
+        params: {
+          page,
+          language: 'en-US',
+        },
+      });
+
+      return {
+        success: true,
+        results: response.data.results || [],
+        page: response.data.page || 1,
+        totalPages: response.data.total_pages || 1,
+        totalResults: response.data.total_results || 0,
+      };
+    } catch (error) {
+      console.error(`Error getting similar ${mediaType} items:`, error.message);
+      return {
+        success: false,
+        error: error.message || 'Failed to get similar items',
+        results: [],
+      };
+    }
+  }
+
+  /**
+   * Find TMDB media by an external ID such as IMDb.
+   * @param {string} externalId - External ID
+   * @param {'imdb_id'|'tvdb_id'} externalSource - External source
+   * @returns {Promise<Object>} Find results
+   */
+  async findByExternalId(externalId, externalSource = 'imdb_id') {
+    try {
+      const api = this.getAxiosInstance();
+      const response = await api.get(`/find/${externalId}`, {
+        params: {
+          external_source: externalSource,
+          language: 'en-US',
+        },
+      });
+
+      return {
+        success: true,
+        movieResults: response.data.movie_results || [],
+        tvResults: response.data.tv_results || [],
+      };
+    } catch (error) {
+      console.error('Error finding TMDB media by external ID:', error.message);
+      return {
+        success: false,
+        error: error.message || 'Failed to find media by external ID',
+        movieResults: [],
+        tvResults: [],
       };
     }
   }
@@ -981,4 +1141,3 @@ class TMDBService {
 }
 
 module.exports = new TMDBService();
-

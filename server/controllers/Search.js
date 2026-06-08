@@ -99,11 +99,8 @@ exports.search = async (req, res) => {
       });
     }
 
-    // Get enabled indexers - filter by userId if authenticated
+    // Get enabled indexers shared across the whole server
     const whereClause = { enabled: true };
-    if (req.userId) {
-      whereClause.userId = req.userId;
-    }
 
     let indexers = await Indexers.findAll({
       where: whereClause,

@@ -7,7 +7,11 @@ interface PlexBadgeProps {
 }
 
 /** Small orange P badge for bottom-left of media card when item exists in Plex */
-export function PlexBadge({ show, title = "On Plex", className = "" }: PlexBadgeProps) {
+export function PlexBadge({
+  show,
+  title = "On Plex",
+  className = "",
+}: PlexBadgeProps) {
   if (!show) return null;
 
   return (

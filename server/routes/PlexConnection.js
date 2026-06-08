@@ -30,8 +30,10 @@ router.get('/media', plexController.getAllMedia);
 // Get library keys for "in Plex" badge matching
 router.get('/library-keys', plexController.getLibraryKeys);
 
+// Get personalized recommendations from Plex library/watch history
+router.get('/recommendations', plexController.getRecommendations);
+
 // Get items from a specific library
 router.get('/library/:libraryKey/items', plexController.getLibraryItems);
 
 module.exports = router;
-

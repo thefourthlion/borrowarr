@@ -4,11 +4,7 @@ import { Button } from "@nextui-org/button";
 import { Chip } from "@nextui-org/chip";
 import { Spinner } from "@nextui-org/spinner";
 import { useSearchParams, useRouter } from "next/navigation";
-import {
-  Film,
-  ChevronLeft,
-  Calendar,
-} from "lucide-react";
+import { Film, ChevronLeft, Calendar } from "lucide-react";
 import axios from "axios";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
@@ -28,81 +24,91 @@ interface TMDBMedia {
   language?: string;
   network?: string;
   number_of_seasons?: number;
-  media_type?: 'movie' | 'tv';
+  media_type?: "movie" | "tv";
 }
 
 const UpcomingPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const type = searchParams.get('type') || 'movies';
+  const type = searchParams.get("type") || "movies";
   const [media, setMedia] = useState<TMDBMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  const fetchUpcoming = useCallback(async (page = 1) => {
-    setLoading(true);
-    try {
-      const endpoint = type === "movies"
-        ? `${API_BASE_URL}/api/TMDB/upcoming/movies`
-        : `${API_BASE_URL}/api/TMDB/upcoming/tv`;
-      const response = await axios.get(endpoint, { params: { page } });
-      if (response.data.success) {
-        setMedia(response.data.results || []);
-        setTotalPages(response.data.totalPages || 1);
-        setCurrentPage(page);
+  const fetchUpcoming = useCallback(
+    async (page = 1) => {
+      setLoading(true);
+      try {
+        const endpoint =
+          type === "movies"
+            ? `${API_BASE_URL}/api/TMDB/upcoming/movies`
+            : `${API_BASE_URL}/api/TMDB/upcoming/tv`;
+        const response = await axios.get(endpoint, { params: { page } });
+        if (response.data.success) {
+          setMedia(response.data.results || []);
+          setTotalPages(response.data.totalPages || 1);
+          setCurrentPage(page);
+        }
+      } catch (error) {
+        console.error("Error fetching upcoming:", error);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Error fetching upcoming:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [type]);
+    },
+    [type],
+  );
 
   useEffect(() => {
     fetchUpcoming(1);
   }, [fetchUpcoming]);
 
   const getMediaTitle = (item: TMDBMedia) => {
-    return item.title || item.name || 'Unknown';
+    return item.title || item.name || "Unknown";
   };
 
   const handleMediaClick = (item: TMDBMedia) => {
-    router.push(`/pages/discover/movies?q=${encodeURIComponent(getMediaTitle(item))}`);
+    router.push(
+      `/pages/discover/movies?q=${encodeURIComponent(getMediaTitle(item))}`,
+    );
   };
 
   const renderMediaCard = (item: TMDBMedia) => {
     const isTV = type === "series" || !!item.first_air_date;
     const title = getMediaTitle(item);
-    const year = item.release_date ? new Date(item.release_date).getFullYear() : (item.first_air_date ? new Date(item.first_air_date).getFullYear() : null);
+    const year = item.release_date
+      ? new Date(item.release_date).getFullYear()
+      : item.first_air_date
+        ? new Date(item.first_air_date).getFullYear()
+        : null;
 
     return (
       <div
+        className="cursor-pointer group transition-all duration-300 hover:scale-105 hover:-translate-y-1"
         key={item.id}
         onClick={() => handleMediaClick(item)}
-        className="cursor-pointer group transition-all duration-300 hover:scale-105 hover:-translate-y-1"
-        style={{ height: '100%' }}
+        style={{ height: "100%" }}
       >
         <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg border border-default-200 hover:border-purple-500 hover:shadow-2xl">
           {item.posterUrl ? (
             <img
-              src={item.posterUrl}
               alt={title}
               className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-80"
+              src={item.posterUrl}
             />
           ) : (
             <div className="w-full h-full bg-default-200 flex items-center justify-center">
-              <Film size={48} className="text-default-400" />
+              <Film className="text-default-400" size={48} />
             </div>
           )}
-          
+
           {/* Media Type Badge - Top Left */}
           <div className="absolute top-1 left-1 z-10">
             <Chip
-              size="sm"
-              color={isTV ? "secondary" : "primary"}
-              variant="flat"
               className="text-[10px] sm:text-xs font-bold uppercase backdrop-blur-md px-1 py-0.5"
+              color={isTV ? "secondary" : "primary"}
+              size="sm"
+              variant="flat"
             >
               {isTV ? "TV" : "Movie"}
             </Chip>
@@ -137,16 +143,20 @@ const UpcomingPage = () => {
         {/* Header */}
         <div className="flex items-center gap-4">
           <Button
-            isIconOnly
-            variant="light"
-            onPress={() => router.back()}
             aria-label="Go back"
+            isIconOnly
+            onPress={() => router.back()}
+            variant="light"
           >
             <ChevronLeft size={24} />
           </Button>
           <div className="flex items-center gap-2">
-            <Calendar size={28} className="text-success" />
-            <h1 className="text-3xl sm:text-4xl font-bold">Upcoming {type === "movies" ? "Movies" : "Series"}</h1>
+            <Calendar className="text-success" size={28} />
+            <h1 className="text-3xl sm:text-4xl font-bold">
+              {type === "movies"
+                ? "Upcoming Movies"
+                : "Currently Airing Series"}
+            </h1>
           </div>
         </div>
 
@@ -161,7 +171,11 @@ const UpcomingPage = () => {
           </div>
         ) : (
           <div className="text-center py-20">
-            <p className="text-default-500">No upcoming content available</p>
+            <p className="text-default-500">
+              No{" "}
+              {type === "movies" ? "upcoming movies" : "currently airing series"}{" "}
+              available
+            </p>
           </div>
         )}
 
@@ -169,10 +183,10 @@ const UpcomingPage = () => {
         {totalPages > 1 && (
           <div className="flex justify-center gap-2">
             <Button
+              isDisabled={currentPage === 1 || loading}
+              onPress={() => fetchUpcoming(Math.max(1, currentPage - 1))}
               size="sm"
               variant="flat"
-              onPress={() => fetchUpcoming(Math.max(1, currentPage - 1))}
-              isDisabled={currentPage === 1 || loading}
             >
               Previous
             </Button>
@@ -180,10 +194,12 @@ const UpcomingPage = () => {
               Page {currentPage} of {totalPages}
             </span>
             <Button
+              isDisabled={currentPage === totalPages || loading}
+              onPress={() =>
+                fetchUpcoming(Math.min(totalPages, currentPage + 1))
+              }
               size="sm"
               variant="flat"
-              onPress={() => fetchUpcoming(Math.min(totalPages, currentPage + 1))}
-              isDisabled={currentPage === totalPages || loading}
             >
               Next
             </Button>
@@ -195,4 +211,3 @@ const UpcomingPage = () => {
 };
 
 export default UpcomingPage;
-

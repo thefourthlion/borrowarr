@@ -14,14 +14,30 @@ import { Input } from "@nextui-org/input";
 import { link as linkStyles } from "@nextui-org/theme";
 import NextLink from "next/link";
 import clsx from "clsx";
-import { ThemeSwitch } from "@/components/theme-switch";
-import { Logo } from "@/components/icons";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/context/AuthContext";
-import { Search, User, Film, ChevronDown, Tv, Sparkles, Settings, BarChart3, Database, Server, Heart, Clock, Users, EyeOff, HardDrive, Inbox } from "lucide-react";
+import {
+  Search,
+  User,
+  Film,
+  ChevronDown,
+  Tv,
+  Sparkles,
+  Settings,
+  Database,
+  Server,
+  Heart,
+  Clock,
+  Users,
+  EyeOff,
+  HardDrive,
+  Inbox,
+} from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { Select, SelectItem } from "@nextui-org/select";
 import axios from "axios";
+import { useAuth } from "@/context/AuthContext";
+import { Logo } from "@/components/icons";
+import { ThemeSwitch } from "@/components/theme-switch";
 
 export const Navbar = () => {
   const { user, logout } = useAuth();
@@ -33,16 +49,18 @@ export const Navbar = () => {
   const discoverDropdownRef = useRef<HTMLDivElement>(null);
   const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
   const settingsDropdownRef = useRef<HTMLDivElement>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [indexers, setIndexers] = useState<any[]>([]);
   const [selectedIndexer, setSelectedIndexer] = useState<string>("all");
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
+  const API_BASE_URL =
+    process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
 
   const handleAuthAction = () => {
     if (user) {
       logout();
-      router.push('/');
+      router.push("/");
     } else {
-      router.push('/pages/login');
+      router.push("/pages/login");
     }
   };
 
@@ -65,14 +83,17 @@ export const Navbar = () => {
     const token = localStorage.getItem("accessToken");
     if (!token) return;
 
-    axios.get(`${API_BASE_URL}/api/Indexers/read`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
+    axios
+      .get(`${API_BASE_URL}/api/Indexers/read`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       .then((response) => {
         if (response.data.data) {
-          setIndexers(response.data.data.filter((idx: any) => idx.enabled) || []);
+          setIndexers(
+            response.data.data.filter((idx: any) => idx.enabled) || [],
+          );
         }
       })
       .catch((error) => {
@@ -120,32 +141,52 @@ export const Navbar = () => {
 
   return (
     <NextUINavbar
-      maxWidth="full"
-      position="sticky"
-      classNames={{ wrapper: "z-[9999] overflow-visible" }}
       className="z-[9999] bg-content1/80 backdrop-blur-xl border-b border-secondary/20 px-4 sm:px-6 w-full"
+      classNames={{
+        wrapper: "z-[9999] overflow-visible",
+        menu: [
+          "fixed left-0 right-0 top-16 z-[9998]",
+          "h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)]",
+          "overflow-y-auto overscroll-contain",
+          "px-0 pt-0 pb-[calc(env(safe-area-inset-bottom)+1rem)]",
+          "bg-content1/95 backdrop-blur-xl border-t border-secondary/20",
+          "scrollbar-thin scrollbar-thumb-secondary/40 scrollbar-track-transparent",
+        ].join(" "),
+      }}
+      isMenuOpen={isMenuOpen}
+      maxWidth="full"
+      onMenuOpenChange={setIsMenuOpen}
+      position="sticky"
     >
-      <NavbarContent className="basis-1/5 sm:basis-full min-w-0 flex-shrink-0" justify="start">
+      <NavbarContent
+        className="basis-1/5 sm:basis-full min-w-0 flex-shrink-0"
+        justify="start"
+      >
         <NavbarBrand as="li" className="gap-3 max-w-fit">
-          <NextLink className="flex justify-start items-center gap-2 group" href="/">
+          <NextLink
+            className="flex justify-start items-center gap-2 group"
+            href="/"
+          >
             <div className="text-secondary group-hover:scale-110 transition-transform">
-            <Logo />
+              <Logo />
             </div>
-            <p className="font-bold text-xl bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent">BorrowArr</p>
+            <p className="font-bold text-xl bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent">
+              BorrowArr
+            </p>
           </NextLink>
         </NavbarBrand>
         <ul className="hidden lg:flex gap-4 justify-start ml-2">
           <NavbarItem>
             <div className="relative" ref={discoverDropdownRef}>
               <Button
-                variant="light"
                 className={clsx(
                   linkStyles({ color: "foreground" }),
-                  "data-[active=true]:text-secondary data-[active=true]:font-medium hover:text-secondary transition-colors"
+                  "data-[active=true]:text-secondary data-[active=true]:font-medium hover:text-secondary transition-colors",
                 )}
-                onPress={() => setDiscoverDropdownOpen(!discoverDropdownOpen)}
-                startContent={<Sparkles size={16} className="text-secondary" />}
                 endContent={<ChevronDown size={16} />}
+                onPress={() => setDiscoverDropdownOpen(!discoverDropdownOpen)}
+                startContent={<Sparkles className="text-secondary" size={16} />}
+                variant="light"
               >
                 Discover
               </Button>
@@ -153,41 +194,41 @@ export const Navbar = () => {
                 <div className="absolute top-full left-0 mt-1 min-w-[160px] bg-content1 border border-secondary/30 rounded-lg shadow-xl shadow-secondary/10 backdrop-blur-xl z-[99999]">
                   <div className="py-1">
                     <NextLink
-                      href="/pages/discover"
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      href="/pages/discover"
                       onClick={() => setDiscoverDropdownOpen(false)}
                     >
                       <Sparkles size={18} />
                       Browse All
                     </NextLink>
                     <NextLink
-                      href="/pages/discover/movies"
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      href="/pages/discover/movies"
                       onClick={() => setDiscoverDropdownOpen(false)}
                     >
                       <Film size={18} />
                       Movies
                     </NextLink>
                     <NextLink
-                      href="/pages/discover/series"
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      href="/pages/discover/series"
                       onClick={() => setDiscoverDropdownOpen(false)}
                     >
                       <Tv size={18} />
                       Series
                     </NextLink>
                     <NextLink
-                      href="/pages/search"
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      href="/pages/search"
                       onClick={() => setDiscoverDropdownOpen(false)}
                     >
                       <Search size={18} />
                       Search Indexers
                     </NextLink>
-                    <div className="border-t border-secondary/20 my-1 mx-1"></div>
+                    <div className="border-t border-secondary/20 my-1 mx-1" />
                     <NextLink
-                      href="/pages/featuredlists"
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      href="/pages/featuredlists"
                       onClick={() => setDiscoverDropdownOpen(false)}
                     >
                       <Sparkles size={18} />
@@ -201,14 +242,14 @@ export const Navbar = () => {
           <NavbarItem>
             <div className="relative" ref={settingsDropdownRef}>
               <Button
-                variant="light"
                 className={clsx(
                   linkStyles({ color: "foreground" }),
-                  "data-[active=true]:text-secondary data-[active=true]:font-medium hover:text-secondary transition-colors"
+                  "data-[active=true]:text-secondary data-[active=true]:font-medium hover:text-secondary transition-colors",
                 )}
-                onPress={() => setSettingsDropdownOpen(!settingsDropdownOpen)}
-                startContent={<Settings size={16} className="text-secondary" />}
                 endContent={<ChevronDown size={16} />}
+                onPress={() => setSettingsDropdownOpen(!settingsDropdownOpen)}
+                startContent={<Settings className="text-secondary" size={16} />}
+                variant="light"
               >
                 Settings
               </Button>
@@ -216,12 +257,12 @@ export const Navbar = () => {
                 <div className="absolute top-full left-0 mt-1 min-w-[180px] bg-content1 border border-secondary/30 rounded-lg shadow-xl shadow-secondary/10 backdrop-blur-xl z-[99999]">
                   <div className="py-1">
                     <NextLink
-                      href={user ? "/pages/indexers" : "/pages/login"}
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      href={user ? "/pages/indexers" : "/pages/login"}
                       onClick={() => {
                         setSettingsDropdownOpen(false);
                         if (!user) {
-                          router.push('/pages/login');
+                          router.push("/pages/login");
                         }
                       }}
                     >
@@ -229,12 +270,16 @@ export const Navbar = () => {
                       Indexers
                     </NextLink>
                     <NextLink
-                      href={user ? "/pages/settings/downloadclients" : "/pages/login"}
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      href={
+                        user
+                          ? "/pages/settings/downloadclients"
+                          : "/pages/login"
+                      }
                       onClick={() => {
                         setSettingsDropdownOpen(false);
                         if (!user) {
-                          router.push('/pages/login');
+                          router.push("/pages/login");
                         }
                       }}
                     >
@@ -242,25 +287,25 @@ export const Navbar = () => {
                       Download Clients
                     </NextLink>
                     <NextLink
-                      href={user ? "/pages/system" : "/pages/login"}
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      href={user ? "/pages/system" : "/pages/login"}
                       onClick={() => {
                         setSettingsDropdownOpen(false);
                         if (!user) {
-                          router.push('/pages/login');
+                          router.push("/pages/login");
                         }
                       }}
                     >
                       <Server size={18} />
-                      System
+                      Monitor Settings
                     </NextLink>
                     <NextLink
-                      href={user ? "/pages/filemanagement" : "/pages/login"}
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      href={user ? "/pages/filemanagement" : "/pages/login"}
                       onClick={() => {
                         setSettingsDropdownOpen(false);
                         if (!user) {
-                          router.push('/pages/login');
+                          router.push("/pages/login");
                         }
                       }}
                     >
@@ -268,12 +313,12 @@ export const Navbar = () => {
                       File Management
                     </NextLink>
                     <NextLink
-                      href={user ? "/pages/users" : "/pages/login"}
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      href={user ? "/pages/users" : "/pages/login"}
                       onClick={() => {
                         setSettingsDropdownOpen(false);
                         if (!user) {
-                          router.push('/pages/login');
+                          router.push("/pages/login");
                         }
                       }}
                     >
@@ -281,12 +326,12 @@ export const Navbar = () => {
                       Users
                     </NextLink>
                     <NextLink
-                      href={user ? "/pages/plexconnection" : "/pages/login"}
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      href={user ? "/pages/plexconnection" : "/pages/login"}
                       onClick={() => {
                         setSettingsDropdownOpen(false);
                         if (!user) {
-                          router.push('/pages/login');
+                          router.push("/pages/login");
                         }
                       }}
                     >
@@ -297,18 +342,18 @@ export const Navbar = () => {
                 </div>
               )}
             </div>
-            </NavbarItem>
+          </NavbarItem>
           <NavbarItem>
             <div className="relative" ref={accountDropdownRef}>
               <Button
-                variant="light"
                 className={clsx(
                   linkStyles({ color: "foreground" }),
-                  "data-[active=true]:text-secondary data-[active=true]:font-medium hover:text-secondary transition-colors"
+                  "data-[active=true]:text-secondary data-[active=true]:font-medium hover:text-secondary transition-colors",
                 )}
-                onPress={() => setAccountDropdownOpen(!accountDropdownOpen)}
-                startContent={<User size={16} className="text-secondary" />}
                 endContent={<ChevronDown size={16} />}
+                onPress={() => setAccountDropdownOpen(!accountDropdownOpen)}
+                startContent={<User className="text-secondary" size={16} />}
+                variant="light"
               >
                 Account
               </Button>
@@ -316,12 +361,12 @@ export const Navbar = () => {
                 <div className="absolute top-full left-0 mt-1 min-w-[160px] bg-content1 border border-secondary/30 rounded-lg shadow-xl shadow-secondary/10 backdrop-blur-xl z-[99999]">
                   <div className="py-1">
                     <NextLink
-                      href={user ? "/pages/medialibrary" : "/pages/login"}
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      href={user ? "/pages/medialibrary" : "/pages/login"}
                       onClick={() => {
                         setAccountDropdownOpen(false);
                         if (!user) {
-                          router.push('/pages/login');
+                          router.push("/pages/login");
                         }
                       }}
                     >
@@ -329,12 +374,12 @@ export const Navbar = () => {
                       Media Library
                     </NextLink>
                     <NextLink
-                      href={user ? "/pages/monitored" : "/pages/login"}
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      href={user ? "/pages/monitored" : "/pages/login"}
                       onClick={() => {
                         setAccountDropdownOpen(false);
                         if (!user) {
-                          router.push('/pages/login');
+                          router.push("/pages/login");
                         }
                       }}
                     >
@@ -342,12 +387,12 @@ export const Navbar = () => {
                       Monitored
                     </NextLink>
                     <NextLink
-                      href={user ? "/pages/requests" : "/pages/login"}
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      href={user ? "/pages/requests" : "/pages/login"}
                       onClick={() => {
                         setAccountDropdownOpen(false);
                         if (!user) {
-                          router.push('/pages/login');
+                          router.push("/pages/login");
                         }
                       }}
                     >
@@ -355,12 +400,12 @@ export const Navbar = () => {
                       Requests
                     </NextLink>
                     <NextLink
-                      href={user ? "/pages/favorites" : "/pages/login"}
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      href={user ? "/pages/favorites" : "/pages/login"}
                       onClick={() => {
                         setAccountDropdownOpen(false);
                         if (!user) {
-                          router.push('/pages/login');
+                          router.push("/pages/login");
                         }
                       }}
                     >
@@ -368,12 +413,12 @@ export const Navbar = () => {
                       Favorites
                     </NextLink>
                     <NextLink
-                      href={user ? "/pages/hiddenmedia" : "/pages/login"}
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      href={user ? "/pages/hiddenmedia" : "/pages/login"}
                       onClick={() => {
                         setAccountDropdownOpen(false);
                         if (!user) {
-                          router.push('/pages/login');
+                          router.push("/pages/login");
                         }
                       }}
                     >
@@ -381,26 +426,26 @@ export const Navbar = () => {
                       Hidden Media
                     </NextLink>
                     <NextLink
-                      href={user ? "/pages/history" : "/pages/login"}
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      href={user ? "/pages/history" : "/pages/login"}
                       onClick={() => {
                         setAccountDropdownOpen(false);
                         if (!user) {
-                          router.push('/pages/login');
+                          router.push("/pages/login");
                         }
                       }}
                     >
                       <Clock size={18} />
                       History
                     </NextLink>
-          
+
                     <NextLink
-                      href={user ? "/pages/account" : "/pages/login"}
                       className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-secondary/10 hover:text-secondary transition-all rounded-md mx-1"
+                      href={user ? "/pages/account" : "/pages/login"}
                       onClick={() => {
                         setAccountDropdownOpen(false);
                         if (!user) {
-                          router.push('/pages/login');
+                          router.push("/pages/login");
                         }
                       }}
                     >
@@ -423,21 +468,25 @@ export const Navbar = () => {
           {indexers.length > 0 && (
             <Select
               aria-label="Select indexer"
-              selectedKeys={new Set([selectedIndexer])}
+              classNames={{
+                base: "w-32 flex-shrink-0",
+                trigger:
+                  "bg-content2 border-2 border-secondary/40 hover:border-secondary/40 focus:border-secondary transition-colors",
+              }}
+              items={[{ id: "all", name: "All Indexers" }, ...indexers]}
               onSelectionChange={(keys) => {
                 const selected = Array.from(keys)[0] as string;
                 setSelectedIndexer(selected || "all");
               }}
               placeholder="All"
+              selectedKeys={new Set([selectedIndexer])}
               size="sm"
-              classNames={{
-                base: "w-32 flex-shrink-0",
-                trigger: "bg-content2 border-2 border-secondary/40 hover:border-secondary/40 focus:border-secondary transition-colors",
-              }}
-              items={[{ id: 'all', name: 'All Indexers' }, ...indexers]}
             >
               {(indexer: any) => (
-                <SelectItem key={indexer.id.toString()} value={indexer.id.toString()}>
+                <SelectItem
+                  key={indexer.id.toString()}
+                  value={indexer.id.toString()}
+                >
                   {indexer.name}
                 </SelectItem>
               )}
@@ -448,34 +497,24 @@ export const Navbar = () => {
               base: "w-full min-w-0",
               mainWrapper: "h-full",
               input: "text-small",
-              inputWrapper: "h-full font-normal bg-content2 border border-secondary/20 hover:border-secondary/40 transition-colors",
+              inputWrapper:
+                "h-full font-normal bg-content2 border border-secondary/20 hover:border-secondary/40 transition-colors",
             }}
-            placeholder="Search all media..."
-            size="sm"
-            startContent={<Search size={16} className="text-secondary" />}
-            type="search"
-            value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyPress={handleSearchKeyPress}
+            placeholder="Search all media..."
+            size="sm"
+            startContent={<Search className="text-secondary" size={16} />}
+            type="search"
+            value={searchQuery}
           />
         </NavbarItem>
         <NavbarItem className="flex-shrink-0">
           <Button
-            as={NextLink}
-            href="/pages/products"
-            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold shadow-lg shadow-purple-500/20"
-            variant="shadow"
-            startContent={<Sparkles size={16} />}
-          >
-            Premium
-          </Button>
-        </NavbarItem>
-        <NavbarItem className="flex-shrink-0">
-          <Button 
-            color="secondary" 
-            variant="solid" 
             className="btn-glow font-semibold"
+            color="secondary"
             onClick={handleAuthAction}
+            variant="solid"
           >
             {user ? "Logout" : "Login"}
           </Button>
@@ -491,7 +530,7 @@ export const Navbar = () => {
       </NavbarContent>
 
       <NavbarMenu>
-        <div className="mx-4 mt-2 flex flex-col gap-2">
+        <div className="mx-auto flex w-full max-w-md flex-col gap-1 px-4 py-3">
           {[
             { label: "Premium", href: "/pages/products", icon: Sparkles },
             { label: "Discover", href: "/pages/discover" },
@@ -499,46 +538,101 @@ export const Navbar = () => {
             { label: "Discover Series", href: "/pages/discover/series" },
             { label: "Search Indexers", href: "/pages/search" },
             { label: "Featured Lists", href: "/pages/featuredlists" },
-            { label: "Indexers", href: user ? "/pages/indexers" : "/pages/login", requiresAuth: true },
-            { label: "Download Clients", href: user ? "/pages/settings/downloadclients" : "/pages/login", requiresAuth: true },
-            { label: "System", href: user ? "/pages/system" : "/pages/login", requiresAuth: true },
-            { label: "File Management", href: user ? "/pages/filemanagement" : "/pages/login", requiresAuth: true },
-            { label: "Users", href: user ? "/pages/users" : "/pages/login", requiresAuth: true },
-            { label: "Plex Connection", href: user ? "/pages/plexconnection" : "/pages/login", requiresAuth: true },
-            { label: "Media Library", href: user ? "/pages/medialibrary" : "/pages/login", requiresAuth: true },
-            { label: "Monitored", href: user ? "/pages/monitored" : "/pages/login", requiresAuth: true },
-            { label: "Requests", href: user ? "/pages/requests" : "/pages/login", requiresAuth: true },
-            { label: "Favorites", href: user ? "/pages/favorites" : "/pages/login", requiresAuth: true },
-            { label: "Hidden Media", href: user ? "/pages/hiddenmedia" : "/pages/login", requiresAuth: true },
-            { label: "History", href: user ? "/pages/history" : "/pages/login", requiresAuth: true },
-            { label: "Account", href: user ? "/pages/account" : "/pages/login", requiresAuth: true },
-            { 
-              label: user ? "Logout" : "Login", 
+            {
+              label: "Indexers",
+              href: user ? "/pages/indexers" : "/pages/login",
+              requiresAuth: true,
+            },
+            {
+              label: "Download Clients",
+              href: user ? "/pages/settings/downloadclients" : "/pages/login",
+              requiresAuth: true,
+            },
+            {
+              label: "Monitor Settings",
+              href: user ? "/pages/system" : "/pages/login",
+              requiresAuth: true,
+            },
+            {
+              label: "File Management",
+              href: user ? "/pages/filemanagement" : "/pages/login",
+              requiresAuth: true,
+            },
+            {
+              label: "Users",
+              href: user ? "/pages/users" : "/pages/login",
+              requiresAuth: true,
+            },
+            {
+              label: "Plex Connection",
+              href: user ? "/pages/plexconnection" : "/pages/login",
+              requiresAuth: true,
+            },
+            {
+              label: "Media Library",
+              href: user ? "/pages/medialibrary" : "/pages/login",
+              requiresAuth: true,
+            },
+            {
+              label: "Monitored",
+              href: user ? "/pages/monitored" : "/pages/login",
+              requiresAuth: true,
+            },
+            {
+              label: "Requests",
+              href: user ? "/pages/requests" : "/pages/login",
+              requiresAuth: true,
+            },
+            {
+              label: "Favorites",
+              href: user ? "/pages/favorites" : "/pages/login",
+              requiresAuth: true,
+            },
+            {
+              label: "Hidden Media",
+              href: user ? "/pages/hiddenmedia" : "/pages/login",
+              requiresAuth: true,
+            },
+            {
+              label: "History",
+              href: user ? "/pages/history" : "/pages/login",
+              requiresAuth: true,
+            },
+            {
+              label: "Account",
+              href: user ? "/pages/account" : "/pages/login",
+              requiresAuth: true,
+            },
+            {
+              label: user ? "Logout" : "Login",
               href: "#",
-              onClick: handleAuthAction 
+              onClick: handleAuthAction,
             },
           ].map((item, index) => (
             <NavbarMenuItem key={`${item.label}-${index}`}>
               {item.onClick ? (
-                <Link 
-                  color={item.label === "Logout" ? "danger" : "foreground"} 
-                  href={item.href} 
-                  size="lg"
-                  className="w-full"
+                <Link
+                  className="w-full rounded-lg px-3 py-2 text-base font-semibold hover:bg-secondary/10"
+                  color={item.label === "Logout" ? "danger" : "foreground"}
+                  href={item.href}
                   onClick={() => {
-                    // Close menu logic would go here if we had a reference to setIsMenuOpen
+                    setIsMenuOpen(false);
                     if (item.onClick) item.onClick();
                   }}
+                  size="lg"
                 >
                   {item.label}
                 </Link>
               ) : (
                 <NextLink
-                  href={item.href}
                   className={clsx(
-                    "w-full block py-2 text-lg",
-                    item.label === "Premium" ? "text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-pink-500 font-bold" : "text-foreground"
+                    "block w-full rounded-lg px-3 py-2 text-base font-semibold leading-6 transition-colors hover:bg-secondary/10 hover:text-secondary",
+                    item.label === "Premium"
+                      ? "text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-pink-500 font-bold"
+                      : "text-foreground",
                   )}
+                  href={item.href}
+                  onClick={() => setIsMenuOpen(false)}
                 >
                   {item.label}
                 </NextLink>

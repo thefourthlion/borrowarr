@@ -1,23 +1,22 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useAuth } from "@/context/AuthContext";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@nextui-org/button";
-import { Input } from "@nextui-org/input";
-import { Card, CardBody, CardHeader } from "@nextui-org/card";
-import { Mail, Calendar, LogOut, User, Upload } from "lucide-react";
+import { Card, CardBody } from "@nextui-org/card";
+import { Chip } from "@nextui-org/chip";
+import { Calendar, LogOut, User, Shield, Clock } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { PageContent, PageHeader } from "@/components/page-header";
 
 export default function AccountPage() {
   const router = useRouter();
-  const { user, loading, logout, updateUser } = useAuth();
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const { user, loading, logout } = useAuth();
   const [accountAge, setAccountAge] = useState<string>("");
 
   useEffect(() => {
     if (!loading && !user) {
-        router.push("/pages/login");
-      }
+      router.push("/pages/login");
+    }
   }, [user, loading, router]);
 
   useEffect(() => {
@@ -45,122 +44,135 @@ export default function AccountPage() {
     setAccountAge(ageString.trim());
   };
 
-  const handleImageUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    if (!event.target.files || !event.target.files[0] || !user) return;
-    setIsUploadingImage(true);
-
-    try {
-      const file = event.target.files[0];
-      // In a real app, you'd upload to a storage service
-      // For now, we'll use a placeholder or data URL
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64String = reader.result as string;
-        await updateUser({ avatarUrl: base64String });
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
-      console.error("Error uploading image:", error);
-    } finally {
-      setIsUploadingImage(false);
-    }
-  };
-
   const handleSignOut = () => {
     logout();
-      router.push("/pages/login");
+    router.push("/pages/login");
   };
 
   if (loading) {
     return (
-      <div className="p-2">
-        <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
-          <div className="w-10 h-10 border-3 border-content3 border-t-secondary rounded-full animate-spin"></div>
-          <p className="text-foreground opacity-70">Loading your account...</p>
+      <PageContent>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="w-10 h-10 border-3 border-content3 border-t-secondary rounded-full animate-spin" />
         </div>
-      </div>
+      </PageContent>
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
+
+  const initial = user.username?.charAt(0).toUpperCase() || "U";
+  const isAdmin = user.permissions?.admin;
 
   return (
-    <div className="p-1 md:p-2">
-      <div className="max-w-3xl mx-auto flex flex-col gap-2 md:gap-3">
-        {/* Header Section */}
-        <div className="relative mb-2 md:mb-3">
-          <div className="flex flex-col items-center gap-4">
-            <div
-              className="relative rounded-full overflow-hidden transition-all duration-200 hover:scale-105 cursor-pointer group"
-              onClick={() => document.getElementById("avatar-upload")?.click()}
-            >
-              <Avatar className="w-24 h-24 md:w-32 md:h-32">
-                <AvatarImage src={user.avatarUrl} />
-                <AvatarFallback className="text-2xl bg-secondary/10 text-secondary">
-                  {user.username?.charAt(0).toUpperCase() || "U"}
-                </AvatarFallback>
-              </Avatar>
-              <div className="absolute inset-0 bg-black/70 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-full">
-                <Upload className="w-5 h-5 text-white" />
-              </div>
-            </div>
-            <Input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              id="avatar-upload"
-              onChange={handleImageUpload}
-              disabled={isUploadingImage}
-            />
+    <div className="min-h-screen bg-background">
+      <PageHeader
+        actions={
+          <Button
+            color="danger"
+            onPress={handleSignOut}
+            startContent={<LogOut className="w-4 h-4" />}
+            variant="flat"
+          >
+            Sign Out
+          </Button>
+        }
+        description="Manage your profile and session"
+        icon={<User className="h-6 w-6" />}
+        title="Account"
+      />
+      <PageContent>
+        <div className="max-w-lg mx-auto flex flex-col items-center gap-6 pt-4">
+          {/* Avatar */}
+          <div className="w-24 h-24 rounded-full bg-secondary/15 border-2 border-secondary/30 flex items-center justify-center">
+            <span className="text-4xl font-bold text-secondary">{initial}</span>
           </div>
-        </div>
 
-        {/* Profile Information */}
-        <div className="text-center">
-          <Card className="bg-content1 border border-secondary/20 shadow-lg mb-3">
-            <CardBody className="p-4 md:p-6">
-              <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-secondary to-secondary-600 bg-clip-text text-transparent mb-2">
-                {user.username}
-            </h1>
-            <div className="flex flex-col gap-1 mb-0">
-                <div className="flex items-center justify-center gap-2 text-foreground/80 text-xs md:text-sm py-1">
-                  <Mail className="w-4 h-4 text-secondary" />
-                  <span>{user.email}</span>
+          {/* Info Card */}
+          <Card className="w-full bg-content1 border border-secondary/20">
+            <CardBody className="p-6 flex flex-col gap-4">
+              <div className="text-center border-b border-secondary/10 pb-4">
+                <h2 className="text-2xl font-bold text-secondary">
+                  {user.username}
+                </h2>
+                {isAdmin && (
+                  <div className="flex justify-center mt-2">
+                    <Chip
+                      color="secondary"
+                      size="sm"
+                      startContent={<Shield size={12} />}
+                      variant="flat"
+                    >
+                      Administrator
+                    </Chip>
+                  </div>
+                )}
               </div>
-                <div className="flex items-center justify-center gap-2 text-foreground/80 text-xs md:text-sm py-1">
-                  <Calendar className="w-4 h-4 text-secondary" />
-                <span>Member for {accountAge}</span>
-              </div>
-                <div className="flex items-center justify-center gap-2 text-foreground/80 text-xs md:text-sm py-1">
-                  <User className="w-4 h-4 text-secondary" />
-                  <span>ID: {user.id}</span>
+
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-3 text-sm text-foreground/70">
+                  <Calendar className="w-4 h-4 text-secondary flex-shrink-0" />
+                  <span>
+                    Member for <strong className="text-foreground">{accountAge}</strong>
+                  </span>
+                </div>
+                {user.createdAt && (
+                  <div className="flex items-center gap-3 text-sm text-foreground/70">
+                    <Clock className="w-4 h-4 text-secondary flex-shrink-0" />
+                    <span>
+                      Joined{" "}
+                      <strong className="text-foreground">
+                        {new Date(user.createdAt).toLocaleDateString("en-US", {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })}
+                      </strong>
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center gap-3 text-sm text-foreground/70">
+                  <User className="w-4 h-4 text-secondary flex-shrink-0" />
+                  <span className="font-mono text-xs text-foreground/50 break-all">
+                    {user.id}
+                  </span>
                 </div>
               </div>
             </CardBody>
           </Card>
-        </div>
 
-        {/* Account Actions */}
-        <Card className="bg-content1 border border-secondary/20 shadow-lg">
-          <CardBody>
-            <div className="flex justify-center">
-              <Button
-                color="danger"
-                variant="flat"
-                onClick={handleSignOut}
-                className="font-semibold py-2 px-6"
-                startContent={<LogOut className="w-4 h-4" />}
-              >
-                Sign Out
-              </Button>
-            </div>
-          </CardBody>
-        </Card>
-      </div>
+          {/* Permissions Card */}
+          {user.permissions && (
+            <Card className="w-full bg-content1 border border-secondary/20">
+              <CardBody className="p-6">
+                <h3 className="text-sm font-semibold text-foreground/60 uppercase tracking-wider mb-3">
+                  Permissions
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {user.permissions.admin && (
+                    <Chip color="secondary" size="sm" variant="flat">Admin</Chip>
+                  )}
+                  {user.permissions.manage_users && (
+                    <Chip color="primary" size="sm" variant="flat">Manage Users</Chip>
+                  )}
+                  {user.permissions.manage_requests && (
+                    <Chip color="primary" size="sm" variant="flat">Manage Requests</Chip>
+                  )}
+                  {user.permissions.auto_approve && (
+                    <Chip color="success" size="sm" variant="flat">Auto Approve</Chip>
+                  )}
+                  {!user.permissions.admin &&
+                    !user.permissions.manage_users &&
+                    !user.permissions.manage_requests &&
+                    !user.permissions.auto_approve && (
+                      <Chip color="default" size="sm" variant="flat">Standard User</Chip>
+                    )}
+                </div>
+              </CardBody>
+            </Card>
+          )}
+        </div>
+      </PageContent>
     </div>
   );
 }

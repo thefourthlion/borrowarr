@@ -1,16 +1,10 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@nextui-org/button";
-import { Card, CardBody } from "@nextui-org/card";
 import { Chip } from "@nextui-org/chip";
 import { Spinner } from "@nextui-org/spinner";
 import { useSearchParams, useRouter } from "next/navigation";
-import {
-  Film,
-  Tv,
-  ChevronLeft,
-  TrendingUp,
-} from "lucide-react";
+import { Film, ChevronLeft, TrendingUp } from "lucide-react";
 import axios from "axios";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3013";
@@ -30,83 +24,93 @@ interface TMDBMedia {
   language?: string;
   network?: string;
   number_of_seasons?: number;
-  media_type?: 'movie' | 'tv';
+  media_type?: "movie" | "tv";
 }
 
 const TrendingPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const type = searchParams.get('type') || 'movies';
+  const type = searchParams.get("type") || "movies";
   const [media, setMedia] = useState<TMDBMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  const fetchTrending = useCallback(async (page = 1) => {
-    setLoading(true);
-    try {
-      const endpoint = type === "movies" 
-        ? `${API_BASE_URL}/api/TMDB/trending/movies`
-        : `${API_BASE_URL}/api/TMDB/trending/tv`;
-      const response = await axios.get(endpoint, { 
-        params: { page, timeWindow: 'day' } 
-      });
-      if (response.data.success) {
-        setMedia(response.data.results || []);
-        setTotalPages(response.data.totalPages || 1);
-        setCurrentPage(page);
+  const fetchTrending = useCallback(
+    async (page = 1) => {
+      setLoading(true);
+      try {
+        const endpoint =
+          type === "movies"
+            ? `${API_BASE_URL}/api/TMDB/trending/movies`
+            : `${API_BASE_URL}/api/TMDB/trending/tv`;
+        const response = await axios.get(endpoint, {
+          params: { page, timeWindow: "day" },
+        });
+        if (response.data.success) {
+          setMedia(response.data.results || []);
+          setTotalPages(response.data.totalPages || 1);
+          setCurrentPage(page);
+        }
+      } catch (error) {
+        console.error("Error fetching trending:", error);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Error fetching trending:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [type]);
+    },
+    [type],
+  );
 
   useEffect(() => {
     fetchTrending(1);
   }, [fetchTrending]);
 
   const getMediaTitle = (item: TMDBMedia) => {
-    return item.title || item.name || 'Unknown';
+    return item.title || item.name || "Unknown";
   };
 
   const handleMediaClick = (item: TMDBMedia) => {
-    router.push(`/pages/discover/movies?q=${encodeURIComponent(getMediaTitle(item))}`);
+    router.push(
+      `/pages/discover/movies?q=${encodeURIComponent(getMediaTitle(item))}`,
+    );
   };
 
   const renderMediaCard = (item: TMDBMedia) => {
     const isTV = type === "series" || !!item.first_air_date;
     const title = getMediaTitle(item);
-    const year = item.release_date ? new Date(item.release_date).getFullYear() : (item.first_air_date ? new Date(item.first_air_date).getFullYear() : null);
+    const year = item.release_date
+      ? new Date(item.release_date).getFullYear()
+      : item.first_air_date
+        ? new Date(item.first_air_date).getFullYear()
+        : null;
 
     return (
       <div
+        className="cursor-pointer group transition-all duration-300 hover:scale-105 hover:-translate-y-1"
         key={item.id}
         onClick={() => handleMediaClick(item)}
-        className="cursor-pointer group transition-all duration-300 hover:scale-105 hover:-translate-y-1"
-        style={{ height: '100%' }}
+        style={{ height: "100%" }}
       >
         <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg border border-default-200 hover:border-purple-500 hover:shadow-2xl">
           {item.posterUrl ? (
             <img
-              src={item.posterUrl}
               alt={title}
               className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-80"
+              src={item.posterUrl}
             />
           ) : (
             <div className="w-full h-full bg-default-200 flex items-center justify-center">
-              <Film size={48} className="text-default-400" />
+              <Film className="text-default-400" size={48} />
             </div>
           )}
-          
+
           {/* Media Type Badge - Top Left */}
           <div className="absolute top-1 left-1 z-10">
             <Chip
-              size="sm"
-              color={isTV ? "secondary" : "primary"}
-              variant="flat"
               className="text-[10px] sm:text-xs font-bold uppercase backdrop-blur-md px-1 py-0.5"
+              color={isTV ? "secondary" : "primary"}
+              size="sm"
+              variant="flat"
             >
               {isTV ? "TV" : "Movie"}
             </Chip>
@@ -141,16 +145,18 @@ const TrendingPage = () => {
         {/* Header */}
         <div className="flex items-center gap-4">
           <Button
-            isIconOnly
-            variant="light"
-            onPress={() => router.back()}
             aria-label="Go back"
+            isIconOnly
+            onPress={() => router.back()}
+            variant="light"
           >
             <ChevronLeft size={24} />
           </Button>
           <div className="flex items-center gap-2">
-            <TrendingUp size={28} className="text-primary" />
-            <h1 className="text-3xl sm:text-4xl font-bold">Trending {type === "movies" ? "Movies" : "Series"}</h1>
+            <TrendingUp className="text-primary" size={28} />
+            <h1 className="text-3xl sm:text-4xl font-bold">
+              Trending {type === "movies" ? "Movies" : "Series"}
+            </h1>
           </div>
         </div>
 
@@ -173,10 +179,10 @@ const TrendingPage = () => {
         {totalPages > 1 && (
           <div className="flex justify-center gap-2">
             <Button
+              isDisabled={currentPage === 1 || loading}
+              onPress={() => fetchTrending(Math.max(1, currentPage - 1))}
               size="sm"
               variant="flat"
-              onPress={() => fetchTrending(Math.max(1, currentPage - 1))}
-              isDisabled={currentPage === 1 || loading}
             >
               Previous
             </Button>
@@ -184,10 +190,12 @@ const TrendingPage = () => {
               Page {currentPage} of {totalPages}
             </span>
             <Button
+              isDisabled={currentPage === totalPages || loading}
+              onPress={() =>
+                fetchTrending(Math.min(totalPages, currentPage + 1))
+              }
               size="sm"
               variant="flat"
-              onPress={() => fetchTrending(Math.min(totalPages, currentPage + 1))}
-              isDisabled={currentPage === totalPages || loading}
             >
               Next
             </Button>
@@ -199,4 +207,3 @@ const TrendingPage = () => {
 };
 
 export default TrendingPage;
-

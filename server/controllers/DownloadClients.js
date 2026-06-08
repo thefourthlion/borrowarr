@@ -2,6 +2,8 @@ const DownloadClients = require("../models/DownloadClients");
 const History = require("../models/History");
 const { getAllDownloadClients, getDownloadClientsByProtocol, getDownloadClientDefinition } = require("../data/downloadClientDefinitions");
 
+const canManageDownloadClients = (user) => Boolean(user?.permissions?.admin);
+
 /**
  * Test a download client - CENTRALIZED FUNCTION
  * Supports all 18 download clients from Prowlarr
@@ -170,6 +172,10 @@ function getClientProxy(implementation, settings) {
 
 exports.createDownloadClient = async (req, res) => {
   try {
+    if (!canManageDownloadClients(req.user)) {
+      return res.status(403).json({ error: "Only admins can manage download clients" });
+    }
+
     const { name, implementation, protocol, enabled, priority, settings, categories, tags } = req.body;
 
     // Validate required fields
@@ -214,7 +220,7 @@ exports.createDownloadClient = async (req, res) => {
 exports.readDownloadClients = async (req, res) => {
   try {
     const clients = await DownloadClients.findAll({
-      where: { userId: req.userId },
+      where: {},
       order: [["priority", "ASC"], ["name", "ASC"]],
     });
 
@@ -231,7 +237,7 @@ exports.readDownloadClients = async (req, res) => {
 exports.readDownloadClientFromID = async (req, res) => {
   try {
     const client = await DownloadClients.findOne({
-      where: { id: req.params.id, userId: req.userId },
+      where: { id: req.params.id },
     });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
@@ -246,8 +252,12 @@ exports.readDownloadClientFromID = async (req, res) => {
 
 exports.updateDownloadClient = async (req, res) => {
   try {
+    if (!canManageDownloadClients(req.user)) {
+      return res.status(403).json({ error: "Only admins can manage download clients" });
+    }
+
     const client = await DownloadClients.findOne({
-      where: { id: req.params.id, userId: req.userId },
+      where: { id: req.params.id },
     });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
@@ -284,8 +294,12 @@ exports.updateDownloadClient = async (req, res) => {
 
 exports.deleteDownloadClient = async (req, res) => {
   try {
+    if (!canManageDownloadClients(req.user)) {
+      return res.status(403).json({ error: "Only admins can manage download clients" });
+    }
+
     const client = await DownloadClients.findOne({
-      where: { id: req.params.id, userId: req.userId },
+      where: { id: req.params.id },
     });
     if (!client) {
       return res.status(404).json({ error: "Download client not found" });
@@ -301,12 +315,16 @@ exports.deleteDownloadClient = async (req, res) => {
 
 exports.testDownloadClient = async (req, res) => {
   try {
+    if (!canManageDownloadClients(req.user)) {
+      return res.status(403).json({ success: false, error: "Only admins can manage download clients" });
+    }
+
     console.log('Test download client request received');
     let implementation, settings;
 
     if (req.params.id) {
       const client = await DownloadClients.findOne({
-        where: { id: req.params.id, userId: req.userId },
+        where: { id: req.params.id },
     });
       if (!client) {
         return res.status(404).json({ success: false, error: "Download client not found" });
@@ -340,8 +358,12 @@ exports.testDownloadClient = async (req, res) => {
 
 exports.testAllDownloadClients = async (req, res) => {
   try {
+    if (!canManageDownloadClients(req.user)) {
+      return res.status(403).json({ success: false, error: "Only admins can manage download clients" });
+    }
+
     const clients = await DownloadClients.findAll({
-      where: { userId: req.userId },
+      where: {},
       order: [["priority", "ASC"], ["name", "ASC"]],
     });
 
@@ -426,12 +448,12 @@ exports.grabRelease = async (req, res) => {
     if (clientId) {
       console.log(`[grabRelease] Using specific client ID: ${clientId}`);
       client = await DownloadClients.findOne({
-        where: { id: clientId, userId: req.userId },
+        where: { id: clientId },
       });
     } else {
       // Find all enabled clients of this protocol to log for debugging
       const allClients = await DownloadClients.findAll({
-        where: { enabled: true, protocol: dbProtocol, userId: req.userId },
+        where: { enabled: true, protocol: dbProtocol },
         order: [["priority", "ASC"]],
       });
       console.log(`[grabRelease] Found ${allClients.length} enabled ${dbProtocol} clients:`);
@@ -609,6 +631,37 @@ exports.grabRelease = async (req, res) => {
       error: err.message || "Failed to grab release",
     });
   }
+};
+
+exports.grabReleaseInternal = async (body, userId) => {
+  return new Promise((resolve, reject) => {
+    const req = {
+      body,
+      userId,
+    };
+
+    let statusCode = 200;
+    const res = {
+      status(code) {
+        statusCode = code;
+        return this;
+      },
+      json(payload) {
+        if (statusCode >= 400 || payload?.success === false) {
+          const message = payload?.error || payload?.message || "Failed to grab release";
+          const error = new Error(message);
+          error.statusCode = statusCode;
+          error.payload = payload;
+          reject(error);
+          return;
+        }
+
+        resolve(payload);
+      },
+    };
+
+    exports.grabRelease(req, res).catch(reject);
+  });
 };
 
 exports.getAvailableDownloadClients = async (req, res) => {

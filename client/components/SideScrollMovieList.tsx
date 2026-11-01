@@ -10,16 +10,16 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import { Spinner } from "@nextui-org/spinner";
-import { Chip } from "@nextui-org/chip";
-import { Button } from "@nextui-org/button";
+import { Spinner } from "@heroui/react";
+import { Chip } from "@heroui/react";
+import { Button } from "@heroui/react";
 import {
   Modal,
   ModalContent,
   ModalHeader,
   ModalBody,
   ModalFooter,
-} from "@nextui-org/modal";
+} from "@heroui/react";
 import axios from "axios";
 import AddMovieModal from "./AddMovieModal";
 import AddSeriesModal from "./AddSeriesModal";

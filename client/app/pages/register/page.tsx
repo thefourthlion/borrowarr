@@ -1,12 +1,12 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { Button } from "@nextui-org/button";
-import { Input } from "@nextui-org/input";
-import { Card, CardBody } from "@nextui-org/card";
+import { Button } from "@heroui/react";
+import { Input } from "@heroui/react";
+import { Card, CardBody } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Lock, User, AlertCircle, ShieldX } from "lucide-react";
-import { Spinner } from "@nextui-org/spinner";
+import { Spinner } from "@heroui/react";
 import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
 import "../../../styles/Register.scss";

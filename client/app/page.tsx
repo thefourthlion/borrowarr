@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { Button } from "@nextui-org/button";
-import { Chip } from "@nextui-org/chip";
+import { Button } from "@heroui/react";
+import { Chip } from "@heroui/react";
 import NextLink from "next/link";
 import {
   Film,

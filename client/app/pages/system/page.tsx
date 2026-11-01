@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { Spinner } from "@nextui-org/spinner";
+import { Spinner } from "@heroui/react";
 import {
   ChevronDown,
   ChevronRight,

@@ -2,19 +2,19 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { Button } from "@nextui-org/button";
-import { Card, CardBody } from "@nextui-org/card";
-import { Input } from "@nextui-org/input";
-import { Spinner } from "@nextui-org/spinner";
-import { Chip } from "@nextui-org/chip";
-import { Textarea } from "@nextui-org/input";
+import { Button } from "@heroui/react";
+import { Card, CardBody } from "@heroui/react";
+import { Input } from "@heroui/react";
+import { Spinner } from "@heroui/react";
+import { Chip } from "@heroui/react";
+import { Textarea } from "@heroui/react";
 import {
   Modal,
   ModalContent,
   ModalHeader,
   ModalBody,
   ModalFooter,
-} from "@nextui-org/modal";
+} from "@heroui/react";
 import {
   Inbox,
   Search,

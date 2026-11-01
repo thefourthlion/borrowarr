@@ -1,10 +1,10 @@
 "use client";
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import "@/styles/Discover.scss";
-import { Button } from "@nextui-org/button";
-import { Chip } from "@nextui-org/chip";
-import { Spinner } from "@nextui-org/spinner";
-import { Card, CardBody } from "@nextui-org/card";
+import { Button } from "@heroui/react";
+import { Chip } from "@heroui/react";
+import { Spinner } from "@heroui/react";
+import { Card, CardBody } from "@heroui/react";
 import {
   TrendingUp,
   Star,

@@ -1,8 +1,8 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
-import { Button } from "@nextui-org/button";
-import { Chip } from "@nextui-org/chip";
-import { Spinner } from "@nextui-org/spinner";
+import { Button } from "@heroui/react";
+import { Chip } from "@heroui/react";
+import { Spinner } from "@heroui/react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Film, ChevronLeft, Calendar } from "lucide-react";
 import axios from "axios";

@@ -1,12 +1,12 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Button } from "@nextui-org/button";
-import { Card, CardBody } from "@nextui-org/card";
-import { Chip } from "@nextui-org/chip";
-import { Spinner } from "@nextui-org/spinner";
-import { Input } from "@nextui-org/input";
-import { Select, SelectItem } from "@nextui-org/select";
+import { Button } from "@heroui/react";
+import { Card, CardBody } from "@heroui/react";
+import { Chip } from "@heroui/react";
+import { Spinner } from "@heroui/react";
+import { Input } from "@heroui/react";
+import { Select, SelectItem } from "@heroui/react";
 import {
   ChevronLeft,
   Search,
@@ -919,19 +919,19 @@ const FeaturedListDetail = () => {
               selectedKeys={new Set([sortBy])}
               size="sm"
             >
-              <SelectItem key="popularity.desc" value="popularity.desc">
+              <SelectItem key="popularity.desc">
                 Popularity ↓
               </SelectItem>
-              <SelectItem key="vote_average.desc" value="vote_average.desc">
+              <SelectItem key="vote_average.desc">
                 Rating ↓
               </SelectItem>
-              <SelectItem key="vote_average.asc" value="vote_average.asc">
+              <SelectItem key="vote_average.asc">
                 Rating ↑
               </SelectItem>
-              <SelectItem key="release_date.desc" value="release_date.desc">
+              <SelectItem key="release_date.desc">
                 Newest First
               </SelectItem>
-              <SelectItem key="release_date.asc" value="release_date.asc">
+              <SelectItem key="release_date.asc">
                 Oldest First
               </SelectItem>
             </Select>

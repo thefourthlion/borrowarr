@@ -1,18 +1,18 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
-import { Button } from "@nextui-org/button";
-import { Card, CardBody } from "@nextui-org/card";
-import { Chip } from "@nextui-org/chip";
-import { Spinner } from "@nextui-org/spinner";
-import { Input } from "@nextui-org/input";
-import { Select, SelectItem } from "@nextui-org/select";
+import { Button } from "@heroui/react";
+import { Card, CardBody } from "@heroui/react";
+import { Chip } from "@heroui/react";
+import { Spinner } from "@heroui/react";
+import { Input } from "@heroui/react";
+import { Select, SelectItem } from "@heroui/react";
 import {
   Modal,
   ModalContent,
   ModalHeader,
   ModalBody,
   ModalFooter,
-} from "@nextui-org/modal";
+} from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { Film, Tv, Search, ChevronLeft, EyeOff, Eye } from "lucide-react";
 import axios from "axios";
@@ -353,13 +353,13 @@ const HiddenMediaPage = () => {
             }
             selectedKeys={[mediaTypeFilter]}
           >
-            <SelectItem key="all" value="all">
+            <SelectItem key="all">
               All Types
             </SelectItem>
-            <SelectItem key="movie" value="movie">
+            <SelectItem key="movie">
               Movies
             </SelectItem>
-            <SelectItem key="series" value="series">
+            <SelectItem key="series">
               Series
             </SelectItem>
           </Select>
@@ -372,10 +372,10 @@ const HiddenMediaPage = () => {
             onChange={(e) => setSortBy(e.target.value as "recent" | "title")}
             selectedKeys={[sortBy]}
           >
-            <SelectItem key="recent" value="recent">
+            <SelectItem key="recent">
               Recently Hidden
             </SelectItem>
-            <SelectItem key="title" value="title">
+            <SelectItem key="title">
               Title (A-Z)
             </SelectItem>
           </Select>

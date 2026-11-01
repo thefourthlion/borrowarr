@@ -1,8 +1,8 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { Button } from "@nextui-org/button";
-import { Card, CardBody, CardHeader } from "@nextui-org/card";
-import { Input } from "@nextui-org/input";
+import { Button } from "@heroui/react";
+import { Card, CardBody, CardHeader } from "@heroui/react";
+import { Input } from "@heroui/react";
 import {
   Modal,
   ModalContent,
@@ -10,11 +10,11 @@ import {
   ModalBody,
   ModalFooter,
   useDisclosure,
-} from "@nextui-org/modal";
-import { Chip } from "@nextui-org/chip";
-import { Switch } from "@nextui-org/switch";
-import { Select, SelectItem } from "@nextui-org/select";
-import { Spinner } from "@nextui-org/spinner";
+} from "@heroui/react";
+import { Chip } from "@heroui/react";
+import { Switch } from "@heroui/react";
+import { Select, SelectItem } from "@heroui/react";
+import { Spinner } from "@heroui/react";
 import {
   Plus,
   TestTube,
@@ -431,7 +431,7 @@ const DownloadClients = () => {
             size="sm"
           >
             {field.options?.map((option: any) => (
-              <SelectItem key={String(option)} value={String(option)}>
+              <SelectItem key={String(option)}>
                 {String(option)}
               </SelectItem>
             ))}

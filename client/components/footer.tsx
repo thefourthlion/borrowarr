@@ -25,9 +25,9 @@ import {
   ModalBody,
   ModalFooter,
   useDisclosure,
-} from "@nextui-org/modal";
-import { Button } from "@nextui-org/button";
-import { Snippet } from "@nextui-org/snippet";
+} from "@heroui/react";
+import { Button } from "@heroui/react";
+import { Snippet } from "@heroui/react";
 import { Logo } from "@/components/icons";
 import "../styles/Footer.scss";
 

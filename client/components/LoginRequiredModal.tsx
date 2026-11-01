@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
-import { Button } from "@nextui-org/button";
-import { Input } from "@nextui-org/input";
+import { Button } from "@heroui/react";
+import { Input } from "@heroui/react";
 import {
   Modal,
   ModalBody,
   ModalContent,
-} from "@nextui-org/modal";
+} from "@heroui/react";
 import Link from "next/link";
 import { AlertCircle, Lock, User } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";

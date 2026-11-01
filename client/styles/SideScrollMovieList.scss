@@ -32,7 +32,7 @@
         font-size: 1.5rem;
         font-weight: 700;
         margin: 0;
-        color: hsl(var(--nextui-foreground)) !important;
+        color: hsl(var(--heroui-foreground)) !important;
         visibility: visible !important;
         opacity: 1 !important;
         display: block !important;
@@ -54,12 +54,12 @@
       padding: 0.5rem 1rem;
       border-radius: 0.5rem;
       transition: all 0.2s;
-      color: hsl(var(--nextui-primary));
+      color: hsl(var(--heroui-primary));
       font-weight: 500;
       text-decoration: none;
 
       &:hover {
-        background: hsl(var(--nextui-primary) / 0.1);
+        background: hsl(var(--heroui-primary) / 0.1);
         transform: translateX(4px);
       }
 
@@ -101,7 +101,7 @@
       align-items: center;
       justify-content: center;
       min-height: 300px;
-      color: hsl(var(--nextui-foreground) / 0.5);
+      color: hsl(var(--heroui-foreground) / 0.5);
     }
 
     // Carousel container wrapper
@@ -163,20 +163,20 @@
         visibility: visible !important;
         opacity: 1 !important;
         display: flex !important;
-        background: hsl(var(--nextui-content1)) !important;
-        border: 1px solid hsl(var(--nextui-default-200)) !important;
-        color: hsl(var(--nextui-foreground)) !important;
+        background: hsl(var(--heroui-content1)) !important;
+        border: 1px solid hsl(var(--heroui-default-200)) !important;
+        color: hsl(var(--heroui-foreground)) !important;
         
         svg {
-          color: hsl(var(--nextui-foreground)) !important;
+          color: hsl(var(--heroui-foreground)) !important;
         }
         
         &:hover:not(:disabled) {
-          background: hsl(var(--nextui-primary)) !important;
-          border-color: hsl(var(--nextui-primary)) !important;
+          background: hsl(var(--heroui-primary)) !important;
+          border-color: hsl(var(--heroui-primary)) !important;
           
           svg {
-            color: hsl(var(--nextui-primary-foreground)) !important;
+            color: hsl(var(--heroui-primary-foreground)) !important;
           }
         }
         
@@ -195,7 +195,7 @@
         display: block !important;
         position: relative !important;
         z-index: 1 !important;
-        color: hsl(var(--nextui-foreground)) !important;
+        color: hsl(var(--heroui-foreground)) !important;
       }
     }
   }
@@ -204,7 +204,7 @@
   .movie-card {
     height: 280px;
     transition: all 0.3s ease;
-    border: 1px solid hsl(var(--nextui-default-200));
+    border: 1px solid hsl(var(--heroui-default-200));
 
     @media (min-width: 640px) {
       height: 320px;
@@ -221,7 +221,7 @@
     &:hover {
       transform: scale(1.05) translateY(-5px);
       box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
-      border-color: hsl(var(--nextui-primary));
+      border-color: hsl(var(--heroui-primary));
 
       .movie-info-overlay {
         background: linear-gradient(
@@ -250,8 +250,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: hsl(var(--nextui-content3));
-      color: hsl(var(--nextui-foreground) / 0.5);
+      background: hsl(var(--heroui-content3));
+      color: hsl(var(--heroui-foreground) / 0.5);
       font-size: 0.875rem;
     }
 

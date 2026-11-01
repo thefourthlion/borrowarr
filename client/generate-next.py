@@ -53,19 +53,8 @@ package_json_content = '''{
     "@capacitor/core": "^7.4.3",
     "@capacitor/ios": "^7.4.3",
     "@google-cloud/storage": "^7.14.0",
-    "@nextui-org/button": "^2.2.3",
-    "@nextui-org/card": "^2.2.7",
-    "@nextui-org/code": "2.2.3",
-    "@nextui-org/form": "^2.1.6",
-    "@nextui-org/input": "^2.4.6",
-    "@nextui-org/kbd": "2.2.3",
-    "@nextui-org/link": "2.2.3",
-    "@nextui-org/listbox": "2.3.3",
-    "@nextui-org/navbar": "2.2.3",
-    "@nextui-org/snippet": "2.2.4",
-    "@nextui-org/switch": "2.2.3",
-    "@nextui-org/system": "2.4.3",
-    "@nextui-org/theme": "2.4.1",
+    "@heroui/react": "2.7.10",
+    "@heroui/theme": "2.4.17",
     "@radix-ui/react-avatar": "^1.1.1",
     "@react-aria/ssr": "3.9.7",
     "@react-aria/visually-hidden": "3.8.18",
@@ -126,14 +115,14 @@ const nextConfig = {
 
 module.exports = nextConfig;'''
 
-tailwind_config_content = '''import { nextui } from "@nextui-org/theme";
+tailwind_config_content = '''import { heroui } from "@heroui/theme";
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
-    "./node_modules/@nextui-org/theme/dist/**/*.{js,ts,jsx,tsx}",
+    "./node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
@@ -151,7 +140,7 @@ module.exports = {
   },
   darkMode: "class",
   plugins: [
-    nextui({
+    heroui({
       themes: {
         light: {
           colors: {
@@ -1523,7 +1512,7 @@ providers_content = '''"use client";
 
 import type { ThemeProviderProps } from "next-themes";
 import * as React from "react";
-import { NextUIProvider } from "@nextui-org/system";
+import { HeroUIProvider } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 
@@ -1536,9 +1525,9 @@ export function Providers({ children, themeProps }: ProvidersProps) {
   const router = useRouter();
 
   return (
-    <NextUIProvider navigate={router.push}>
+    <HeroUIProvider navigate={router.push}>
       <NextThemesProvider {...themeProps}>{children}</NextThemesProvider>
-    </NextUIProvider>
+    </HeroUIProvider>
   );
 }'''
 
@@ -1670,9 +1659,9 @@ export const config = {
 # Placeholder content for remaining files (simplified)
 login_page_content = '''"use client";
 import React, { useState } from "react";
-import { Button } from "@nextui-org/button";
-import { Form } from "@nextui-org/form";
-import { Input } from "@nextui-org/input";
+import { Button } from "@heroui/react";
+import { Form } from "@heroui/react";
+import { Input } from "@heroui/react";
 import { GoogleLoginButton } from "react-social-login-buttons";
 import { useRouter } from "next/navigation";
 import { initFirebase } from "@/firebase";
@@ -1790,7 +1779,7 @@ import { initFirebase } from "@/firebase";
 import { getCheckoutUrl } from "../account/stripePayment";
 import "../../../styles/Product.scss";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@nextui-org/button";
+import { Button } from "@heroui/react";
 
 const Product = () => {
   const app = initFirebase();
@@ -1896,9 +1885,9 @@ export default Product;
 # Additional placeholder content
 register_page_content = '''"use client";
 import React, { useState } from "react";
-import { Button } from "@nextui-org/button";
-import { Form } from "@nextui-org/form";
-import { Input } from "@nextui-org/input";
+import { Button } from "@heroui/react";
+import { Form } from "@heroui/react";
+import { Input } from "@heroui/react";
 import { GoogleLoginButton } from "react-social-login-buttons";
 import { useRouter } from "next/navigation";
 import { initFirebase } from "@/firebase";
@@ -2025,9 +2014,9 @@ import { getAuth, updateProfile } from "firebase/auth";
 import { getCheckoutUrl, getPortalUrl } from "./stripePayment";
 import { getSubscriptionStatus } from "./getPremiumStatus";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@nextui-org/button";
-import { Input } from "@nextui-org/input";
-import { Card, CardBody, CardHeader } from "@nextui-org/card";
+import { Button } from "@heroui/react";
+import { Input } from "@heroui/react";
+import { Card, CardBody, CardHeader } from "@heroui/react";
 import { Mail, Calendar, Crown, LogOut } from "lucide-react";
 
 export default function AccountPage() {
@@ -2541,17 +2530,17 @@ export const MoonFilledIcon = ({
 # Additional component content (simplified)
 navbar_content = '''"use client";
 import {
-  Navbar as NextUINavbar,
+  Navbar as HeroUINavbar,
   NavbarContent,
   NavbarMenu,
   NavbarMenuToggle,
   NavbarBrand,
   NavbarItem,
   NavbarMenuItem,
-} from "@nextui-org/navbar";
-import { Button } from "@nextui-org/button";
-import { Link } from "@nextui-org/link";
-import { link as linkStyles } from "@nextui-org/theme";
+} from "@heroui/react";
+import { Button } from "@heroui/react";
+import { Link } from "@heroui/react";
+import { link as linkStyles } from "@heroui/theme";
 import NextLink from "next/link";
 import clsx from "clsx";
 import { ThemeSwitch } from "@/components/theme-switch";
@@ -2577,7 +2566,7 @@ export const Navbar = () => {
   };
 
   return (
-    <NextUINavbar maxWidth="xl" position="sticky" className="bg-content2">
+    <HeroUINavbar maxWidth="xl" position="sticky" className="bg-content2">
       <NavbarContent className="basis-1/5 sm:basis-full" justify="start">
         <NavbarBrand as="li" className="gap-3 max-w-fit">
           <NextLink className="flex justify-start items-center gap-1" href="/">
@@ -2662,7 +2651,7 @@ export const Navbar = () => {
           ))}
         </div>
       </NavbarMenu>
-    </NextUINavbar>
+    </HeroUINavbar>
   );
 };'''
 
@@ -2777,7 +2766,7 @@ theme_switch_content = '''"use client";
 
 import { FC } from "react";
 import { VisuallyHidden } from "@react-aria/visually-hidden";
-import { SwitchProps, useSwitch } from "@nextui-org/switch";
+import { SwitchProps, useSwitch } from "@heroui/react";
 import { useTheme } from "next-themes";
 import { useIsSSR } from "@react-aria/ssr";
 import clsx from "clsx";

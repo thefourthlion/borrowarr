@@ -10,13 +10,13 @@
         
         th {
             font-weight: 600;
-            color: var(--nextui-colors-foreground);
+            color: var(--heroui-colors-foreground);
             user-select: none;
             white-space: nowrap;
         }
         
         td {
-            color: var(--nextui-colors-foreground);
+            color: var(--heroui-colors-foreground);
             word-break: break-word;
         }
         
@@ -35,16 +35,16 @@
         }
         
         &::-webkit-scrollbar-track {
-            background: var(--nextui-colors-content2);
+            background: var(--heroui-colors-content2);
             border-radius: 4px;
         }
         
         &::-webkit-scrollbar-thumb {
-            background: var(--nextui-colors-default-400);
+            background: var(--heroui-colors-default-400);
             border-radius: 4px;
             
             &:hover {
-                background: var(--nextui-colors-default-500);
+                background: var(--heroui-colors-default-500);
             }
         }
     }

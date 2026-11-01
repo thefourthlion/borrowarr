@@ -1,18 +1,18 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
-import { Button } from "@nextui-org/button";
-import { Card, CardBody } from "@nextui-org/card";
-import { Chip } from "@nextui-org/chip";
-import { Spinner } from "@nextui-org/spinner";
-import { Input } from "@nextui-org/input";
-import { Select, SelectItem } from "@nextui-org/select";
+import { Button } from "@heroui/react";
+import { Card, CardBody } from "@heroui/react";
+import { Chip } from "@heroui/react";
+import { Spinner } from "@heroui/react";
+import { Input } from "@heroui/react";
+import { Select, SelectItem } from "@heroui/react";
 import {
   Modal,
   ModalContent,
   ModalHeader,
   ModalBody,
   ModalFooter,
-} from "@nextui-org/modal";
+} from "@heroui/react";
 import { useRouter } from "next/navigation";
 import {
   Film,
@@ -672,13 +672,13 @@ const MediaLibrary = () => {
                   selectedKeys={new Set([mediaTypeFilter])}
                   size="sm"
             >
-              <SelectItem key="all" value="all">
+              <SelectItem key="all">
                 All Types
               </SelectItem>
-              <SelectItem key="movie" value="movie">
+              <SelectItem key="movie">
                 Movies
               </SelectItem>
-              <SelectItem key="show" value="show">
+              <SelectItem key="show">
                 TV Shows
               </SelectItem>
             </Select>
@@ -725,16 +725,16 @@ const MediaLibrary = () => {
                   selectedKeys={[sortBy]}
                   onChange={(e) => setSortBy(e.target.value as any)}
                 >
-                  <SelectItem key="addedAt:desc" value="addedAt:desc">
+                  <SelectItem key="addedAt:desc">
                     Recently Added
                   </SelectItem>
-                  <SelectItem key="title:asc" value="title:asc">
+                  <SelectItem key="title:asc">
                     Title (A-Z)
                   </SelectItem>
-                  <SelectItem key="rating:desc" value="rating:desc">
+                  <SelectItem key="rating:desc">
                     Highest Rated
                   </SelectItem>
-                  <SelectItem key="year:desc" value="year:desc">
+                  <SelectItem key="year:desc">
                     Newest First
                   </SelectItem>
                 </Select>

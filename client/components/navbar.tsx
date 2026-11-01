@@ -1,17 +1,17 @@
 "use client";
 import {
-  Navbar as NextUINavbar,
+  Navbar as HeroUINavbar,
   NavbarContent,
   NavbarMenu,
   NavbarMenuToggle,
   NavbarBrand,
   NavbarItem,
   NavbarMenuItem,
-} from "@nextui-org/navbar";
-import { Button } from "@nextui-org/button";
-import { Link } from "@nextui-org/link";
-import { Input } from "@nextui-org/input";
-import { link as linkStyles } from "@nextui-org/theme";
+} from "@heroui/react";
+import { Button } from "@heroui/react";
+import { Link } from "@heroui/react";
+import { Input } from "@heroui/react";
+import { link as linkStyles } from "@heroui/theme";
 import NextLink from "next/link";
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
@@ -33,7 +33,7 @@ import {
   Inbox,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
-import { Select, SelectItem } from "@nextui-org/select";
+import { Select, SelectItem } from "@heroui/react";
 import axios from "axios";
 import { useAuth } from "@/context/AuthContext";
 import { Logo } from "@/components/icons";
@@ -140,7 +140,7 @@ export const Navbar = () => {
   }, [accountDropdownOpen, discoverDropdownOpen, settingsDropdownOpen]);
 
   return (
-    <NextUINavbar
+    <HeroUINavbar
       className="z-[9999] bg-content1/80 backdrop-blur-xl border-b border-secondary/20 px-4 sm:px-6 w-full"
       classNames={{
         wrapper: "z-[9999] overflow-visible",
@@ -485,7 +485,6 @@ export const Navbar = () => {
               {(indexer: any) => (
                 <SelectItem
                   key={indexer.id.toString()}
-                  value={indexer.id.toString()}
                 >
                   {indexer.name}
                 </SelectItem>
@@ -641,6 +640,6 @@ export const Navbar = () => {
           ))}
         </div>
       </NavbarMenu>
-    </NextUINavbar>
+    </HeroUINavbar>
   );
 };

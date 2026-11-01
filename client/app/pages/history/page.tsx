@@ -2,18 +2,18 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
-import { Input } from "@nextui-org/input";
-import { Button } from "@nextui-org/button";
-import { Select, SelectItem } from "@nextui-org/select";
-import { Spinner } from "@nextui-org/spinner";
-import { Chip } from "@nextui-org/chip";
+import { Input } from "@heroui/react";
+import { Button } from "@heroui/react";
+import { Select, SelectItem } from "@heroui/react";
+import { Spinner } from "@heroui/react";
+import { Chip } from "@heroui/react";
 import {
   Modal,
   ModalContent,
   ModalHeader,
   ModalBody,
   ModalFooter,
-} from "@nextui-org/modal";
+} from "@heroui/react";
 import {
   Search,
   Clock,

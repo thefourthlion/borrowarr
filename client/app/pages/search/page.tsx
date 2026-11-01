@@ -1,9 +1,9 @@
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Input } from "@nextui-org/input";
-import { Chip } from "@nextui-org/chip";
-import { Spinner } from "@nextui-org/spinner";
-import { Button } from "@nextui-org/button";
+import { Input } from "@heroui/react";
+import { Chip } from "@heroui/react";
+import { Spinner } from "@heroui/react";
+import { Button } from "@heroui/react";
 import {
   Search as SearchIcon,
   Download,

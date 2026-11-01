@@ -1,16 +1,16 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
-import { Button } from "@nextui-org/button";
-import { Card, CardBody } from "@nextui-org/card";
-import { Chip } from "@nextui-org/chip";
-import { Spinner } from "@nextui-org/spinner";
+import { Button } from "@heroui/react";
+import { Card, CardBody } from "@heroui/react";
+import { Chip } from "@heroui/react";
+import { Spinner } from "@heroui/react";
 import {
   Modal,
   ModalContent,
   ModalHeader,
   ModalBody,
   ModalFooter,
-} from "@nextui-org/modal";
+} from "@heroui/react";
 import {
   ExternalLink,
   Calendar,

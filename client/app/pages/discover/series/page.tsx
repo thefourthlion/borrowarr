@@ -1,18 +1,18 @@
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Button } from "@nextui-org/button";
-import { Card, CardBody } from "@nextui-org/card";
-import { Chip } from "@nextui-org/chip";
-import { Spinner } from "@nextui-org/spinner";
-import { Input } from "@nextui-org/input";
-import { Select, SelectItem } from "@nextui-org/select";
+import { Button } from "@heroui/react";
+import { Card, CardBody } from "@heroui/react";
+import { Chip } from "@heroui/react";
+import { Spinner } from "@heroui/react";
+import { Input } from "@heroui/react";
+import { Select, SelectItem } from "@heroui/react";
 import {
   Modal,
   ModalContent,
   ModalHeader,
   ModalBody,
   ModalFooter,
-} from "@nextui-org/modal";
+} from "@heroui/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Tv,
@@ -1532,7 +1532,6 @@ const SeriesPage = () => {
                     {(indexer: any) => (
                       <SelectItem
                         key={indexer.id.toString()}
-                        value={indexer.id.toString()}
                       >
                         {indexer.name}
                       </SelectItem>
@@ -1562,24 +1561,22 @@ const SeriesPage = () => {
                   selectedKeys={new Set([sortBy])}
                   size="sm"
                 >
-                  <SelectItem key="popularity.desc" value="popularity.desc">
+                  <SelectItem key="popularity.desc">
                     Popularity Descending
                   </SelectItem>
-                  <SelectItem key="popularity.asc" value="popularity.asc">
+                  <SelectItem key="popularity.asc">
                     Popularity Ascending
                   </SelectItem>
-                  <SelectItem key="vote_average.desc" value="vote_average.desc">
+                  <SelectItem key="vote_average.desc">
                     Rating Descending
                   </SelectItem>
                   <SelectItem
                     key="first_air_date.desc"
-                    value="first_air_date.desc"
                   >
                     First Air Date Descending
                   </SelectItem>
                   <SelectItem
                     key="first_air_date.asc"
-                    value="first_air_date.asc"
                   >
                     First Air Date Ascending
                   </SelectItem>
@@ -1726,7 +1723,6 @@ const SeriesPage = () => {
                     {genres.map((genre) => (
                       <SelectItem
                         key={genre.id.toString()}
-                        value={genre.id.toString()}
                       >
                         {genre.name}
                       </SelectItem>
@@ -1781,28 +1777,28 @@ const SeriesPage = () => {
                     selectedKeys={new Set([originalLanguage])}
                     size="sm"
                   >
-                    <SelectItem key="all" value="all">
+                    <SelectItem key="all">
                       Default (All Languages)
                     </SelectItem>
-                    <SelectItem key="en" value="en">
+                    <SelectItem key="en">
                       English
                     </SelectItem>
-                    <SelectItem key="es" value="es">
+                    <SelectItem key="es">
                       Spanish
                     </SelectItem>
-                    <SelectItem key="fr" value="fr">
+                    <SelectItem key="fr">
                       French
                     </SelectItem>
-                    <SelectItem key="de" value="de">
+                    <SelectItem key="de">
                       German
                     </SelectItem>
-                    <SelectItem key="ja" value="ja">
+                    <SelectItem key="ja">
                       Japanese
                     </SelectItem>
-                    <SelectItem key="ko" value="ko">
+                    <SelectItem key="ko">
                       Korean
                     </SelectItem>
-                    <SelectItem key="zh" value="zh">
+                    <SelectItem key="zh">
                       Chinese
                     </SelectItem>
                   </Select>
@@ -1832,19 +1828,19 @@ const SeriesPage = () => {
                         selectedKeys={new Set([nudityFilter])}
                         size="sm"
                       >
-                        <SelectItem key="all" value="all">
+                        <SelectItem key="all">
                           All
                         </SelectItem>
-                        <SelectItem key="none" value="none">
+                        <SelectItem key="none">
                           None Only
                         </SelectItem>
-                        <SelectItem key="mild" value="mild">
+                        <SelectItem key="mild">
                           Mild or Less
                         </SelectItem>
-                        <SelectItem key="moderate" value="moderate">
+                        <SelectItem key="moderate">
                           Moderate or Less
                         </SelectItem>
-                        <SelectItem key="severe" value="severe">
+                        <SelectItem key="severe">
                           Include Severe
                         </SelectItem>
                       </Select>
@@ -1868,19 +1864,19 @@ const SeriesPage = () => {
                         selectedKeys={new Set([violenceFilter])}
                         size="sm"
                       >
-                        <SelectItem key="all" value="all">
+                        <SelectItem key="all">
                           All
                         </SelectItem>
-                        <SelectItem key="none" value="none">
+                        <SelectItem key="none">
                           None Only
                         </SelectItem>
-                        <SelectItem key="mild" value="mild">
+                        <SelectItem key="mild">
                           Mild or Less
                         </SelectItem>
-                        <SelectItem key="moderate" value="moderate">
+                        <SelectItem key="moderate">
                           Moderate or Less
                         </SelectItem>
-                        <SelectItem key="severe" value="severe">
+                        <SelectItem key="severe">
                           Include Severe
                         </SelectItem>
                       </Select>
@@ -1904,19 +1900,19 @@ const SeriesPage = () => {
                         selectedKeys={new Set([profanityFilter])}
                         size="sm"
                       >
-                        <SelectItem key="all" value="all">
+                        <SelectItem key="all">
                           All
                         </SelectItem>
-                        <SelectItem key="none" value="none">
+                        <SelectItem key="none">
                           None Only
                         </SelectItem>
-                        <SelectItem key="mild" value="mild">
+                        <SelectItem key="mild">
                           Mild or Less
                         </SelectItem>
-                        <SelectItem key="moderate" value="moderate">
+                        <SelectItem key="moderate">
                           Moderate or Less
                         </SelectItem>
-                        <SelectItem key="severe" value="severe">
+                        <SelectItem key="severe">
                           Include Severe
                         </SelectItem>
                       </Select>
@@ -1940,19 +1936,19 @@ const SeriesPage = () => {
                         selectedKeys={new Set([alcoholFilter])}
                         size="sm"
                       >
-                        <SelectItem key="all" value="all">
+                        <SelectItem key="all">
                           All
                         </SelectItem>
-                        <SelectItem key="none" value="none">
+                        <SelectItem key="none">
                           None Only
                         </SelectItem>
-                        <SelectItem key="mild" value="mild">
+                        <SelectItem key="mild">
                           Mild or Less
                         </SelectItem>
-                        <SelectItem key="moderate" value="moderate">
+                        <SelectItem key="moderate">
                           Moderate or Less
                         </SelectItem>
-                        <SelectItem key="severe" value="severe">
+                        <SelectItem key="severe">
                           Include Severe
                         </SelectItem>
                       </Select>
@@ -1976,19 +1972,19 @@ const SeriesPage = () => {
                         selectedKeys={new Set([frighteningFilter])}
                         size="sm"
                       >
-                        <SelectItem key="all" value="all">
+                        <SelectItem key="all">
                           All
                         </SelectItem>
-                        <SelectItem key="none" value="none">
+                        <SelectItem key="none">
                           None Only
                         </SelectItem>
-                        <SelectItem key="mild" value="mild">
+                        <SelectItem key="mild">
                           Mild or Less
                         </SelectItem>
-                        <SelectItem key="moderate" value="moderate">
+                        <SelectItem key="moderate">
                           Moderate or Less
                         </SelectItem>
-                        <SelectItem key="severe" value="severe">
+                        <SelectItem key="severe">
                           Include Severe
                         </SelectItem>
                       </Select>
@@ -2128,34 +2124,34 @@ const SeriesPage = () => {
                     </span>
                   }
                 >
-                  <SelectItem key="US" value="US">
+                  <SelectItem key="US">
                     🇺🇸 United States
                   </SelectItem>
-                  <SelectItem key="GB" value="GB">
+                  <SelectItem key="GB">
                     🇬🇧 United Kingdom
                   </SelectItem>
-                  <SelectItem key="CA" value="CA">
+                  <SelectItem key="CA">
                     🇨🇦 Canada
                   </SelectItem>
-                  <SelectItem key="AU" value="AU">
+                  <SelectItem key="AU">
                     🇦🇺 Australia
                   </SelectItem>
-                  <SelectItem key="DE" value="DE">
+                  <SelectItem key="DE">
                     🇩🇪 Germany
                   </SelectItem>
-                  <SelectItem key="FR" value="FR">
+                  <SelectItem key="FR">
                     🇫🇷 France
                   </SelectItem>
-                  <SelectItem key="ES" value="ES">
+                  <SelectItem key="ES">
                     🇪🇸 Spain
                   </SelectItem>
-                  <SelectItem key="IT" value="IT">
+                  <SelectItem key="IT">
                     🇮🇹 Italy
                   </SelectItem>
-                  <SelectItem key="JP" value="JP">
+                  <SelectItem key="JP">
                     🇯🇵 Japan
                   </SelectItem>
-                  <SelectItem key="KR" value="KR">
+                  <SelectItem key="KR">
                     🇰🇷 South Korea
                   </SelectItem>
                 </Select>

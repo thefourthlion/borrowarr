@@ -1,11 +1,11 @@
 "use client";
 import React, { useState, useEffect, useMemo } from "react";
-import { Button } from "@nextui-org/button";
-import { Card, CardBody } from "@nextui-org/card";
-import { Chip } from "@nextui-org/chip";
-import { Spinner } from "@nextui-org/spinner";
-import { Input } from "@nextui-org/input";
-import { Select, SelectItem } from "@nextui-org/select";
+import { Button } from "@heroui/react";
+import { Card, CardBody } from "@heroui/react";
+import { Chip } from "@heroui/react";
+import { Spinner } from "@heroui/react";
+import { Input } from "@heroui/react";
+import { Select, SelectItem } from "@heroui/react";
 import {
   Modal,
   ModalContent,
@@ -13,7 +13,7 @@ import {
   ModalBody,
   ModalFooter,
   useDisclosure,
-} from "@nextui-org/modal";
+} from "@heroui/react";
 import {
   Film,
   Star,
@@ -988,19 +988,19 @@ const Monitored = () => {
                     size="sm"
                     startContent={<Filter size={16} className="text-secondary" />}
                   >
-                    <SelectItem key="all" value="all">
+                    <SelectItem key="all">
                       All Statuses
                     </SelectItem>
-                    <SelectItem key="monitoring" value="monitoring">
+                    <SelectItem key="monitoring">
                       Monitoring
                     </SelectItem>
-                    <SelectItem key="downloading" value="downloading">
+                    <SelectItem key="downloading">
                       Downloading
                     </SelectItem>
-                    <SelectItem key="downloaded" value="downloaded">
+                    <SelectItem key="downloaded">
                       Downloaded
                     </SelectItem>
-                    <SelectItem key="error" value="error">
+                    <SelectItem key="error">
                       Error
                     </SelectItem>
                   </Select>
@@ -1019,25 +1019,25 @@ const Monitored = () => {
                     selectedKeys={qualityFilter === "all" ? [] : [qualityFilter]}
                     size="sm"
                   >
-                    <SelectItem key="all" value="all">
+                    <SelectItem key="all">
                       All Qualities
                     </SelectItem>
-                    <SelectItem key="any" value="any">
+                    <SelectItem key="any">
                       Any
                     </SelectItem>
-                    <SelectItem key="hd-720p-1080p" value="hd-720p-1080p">
+                    <SelectItem key="hd-720p-1080p">
                       HD - 720p/1080p
                     </SelectItem>
-                    <SelectItem key="hd-720p" value="hd-720p">
+                    <SelectItem key="hd-720p">
                       HD-720p
                     </SelectItem>
-                    <SelectItem key="hd-1080p" value="hd-1080p">
+                    <SelectItem key="hd-1080p">
                       HD-1080p
                     </SelectItem>
-                    <SelectItem key="sd" value="sd">
+                    <SelectItem key="sd">
                       SD
                     </SelectItem>
-                    <SelectItem key="ultra-hd" value="ultra-hd">
+                    <SelectItem key="ultra-hd">
                       Ultra-HD
                     </SelectItem>
                   </Select>
@@ -1056,16 +1056,16 @@ const Monitored = () => {
                     selectedKeys={availabilityFilter === "all" ? [] : [availabilityFilter]}
                     size="sm"
                   >
-                    <SelectItem key="all" value="all">
+                    <SelectItem key="all">
                       All Availabilities
                     </SelectItem>
-                    <SelectItem key="announced" value="announced">
+                    <SelectItem key="announced">
                       Announced
                     </SelectItem>
-                    <SelectItem key="inCinemas" value="inCinemas">
+                    <SelectItem key="inCinemas">
                       In Cinemas
                     </SelectItem>
-                    <SelectItem key="released" value="released">
+                    <SelectItem key="released">
                       Released
                     </SelectItem>
                   </Select>
@@ -1435,7 +1435,7 @@ const Monitored = () => {
                             selectedKeys={editMonitor ? new Set([editMonitor]) : new Set()}
                             size="sm"
                         >
-                          <SelectItem key="movieOnly" value="movieOnly">
+                          <SelectItem key="movieOnly">
                             Movie Only
                           </SelectItem>
                         </Select>
@@ -1470,13 +1470,13 @@ const Monitored = () => {
                             selectedKeys={editMinAvailability ? new Set([editMinAvailability]) : new Set()}
                             size="sm"
                         >
-                          <SelectItem key="announced" value="announced">
+                          <SelectItem key="announced">
                             Announced
                           </SelectItem>
-                          <SelectItem key="inCinemas" value="inCinemas">
+                          <SelectItem key="inCinemas">
                             In Cinemas
                           </SelectItem>
-                          <SelectItem key="released" value="released">
+                          <SelectItem key="released">
                             Released
                           </SelectItem>
                         </Select>
@@ -1516,22 +1516,22 @@ const Monitored = () => {
                           }}
                           disallowEmptySelection
                         >
-                          <SelectItem key="any" value="any">
+                          <SelectItem key="any">
                             Any
                           </SelectItem>
-                          <SelectItem key="hd-720p-1080p" value="hd-720p-1080p">
+                          <SelectItem key="hd-720p-1080p">
                             HD - 720p/1080p
                           </SelectItem>
-                          <SelectItem key="hd-720p" value="hd-720p">
+                          <SelectItem key="hd-720p">
                             HD-720p
                           </SelectItem>
-                          <SelectItem key="hd-1080p" value="hd-1080p">
+                          <SelectItem key="hd-1080p">
                             HD-1080p
                           </SelectItem>
-                          <SelectItem key="sd" value="sd">
+                          <SelectItem key="sd">
                             SD
                           </SelectItem>
-                          <SelectItem key="ultra-hd" value="ultra-hd">
+                          <SelectItem key="ultra-hd">
                             Ultra-HD
                           </SelectItem>
                         </Select>

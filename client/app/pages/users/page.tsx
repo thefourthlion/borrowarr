@@ -1,12 +1,12 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { Button } from "@nextui-org/button";
-import { Card, CardBody, CardHeader } from "@nextui-org/card";
-import { Input } from "@nextui-org/input";
-import { Spinner } from "@nextui-org/spinner";
-import { Chip } from "@nextui-org/chip";
-import { Switch } from "@nextui-org/switch";
+import { Button } from "@heroui/react";
+import { Card, CardBody, CardHeader } from "@heroui/react";
+import { Input } from "@heroui/react";
+import { Spinner } from "@heroui/react";
+import { Chip } from "@heroui/react";
+import { Switch } from "@heroui/react";
 import {
   Modal,
   ModalContent,
@@ -14,7 +14,7 @@ import {
   ModalBody,
   ModalFooter,
   useDisclosure,
-} from "@nextui-org/modal";
+} from "@heroui/react";
 import {
   Users as UsersIcon,
   Plus,

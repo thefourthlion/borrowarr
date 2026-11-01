@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies (including dev dependencies needed for build)
-# Use --legacy-peer-deps to handle NextUI peer dependency conflicts
+# Use --legacy-peer-deps to handle HeroUI peer dependency conflicts
 RUN npm install --legacy-peer-deps
 
 # Copy the .env file first (for build time)

@@ -2,19 +2,19 @@
 
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { Spinner } from "@nextui-org/spinner";
-import { Button } from "@nextui-org/button";
-import { Input } from "@nextui-org/input";
-import { Card, CardBody, CardHeader } from "@nextui-org/card";
-import { Chip } from "@nextui-org/chip";
-import { Switch } from "@nextui-org/switch";
+import { Spinner } from "@heroui/react";
+import { Button } from "@heroui/react";
+import { Input } from "@heroui/react";
+import { Card, CardBody, CardHeader } from "@heroui/react";
+import { Chip } from "@heroui/react";
+import { Switch } from "@heroui/react";
 import {
   Modal,
   ModalContent,
   ModalHeader,
   ModalBody,
   ModalFooter,
-} from "@nextui-org/modal";
+} from "@heroui/react";
 import {
   FolderOpen,
   Film,

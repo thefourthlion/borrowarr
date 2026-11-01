@@ -89,7 +89,7 @@
     width: 4rem;
     height: 4rem;
     margin: 0 auto 1rem;
-    color: var(--nextui-default-400);
+    color: var(--heroui-default-400);
   }
   
   h3 {
@@ -99,7 +99,7 @@
   }
   
   p {
-    color: var(--nextui-foreground-500);
+    color: var(--heroui-foreground-500);
   }
 }
 
@@ -116,7 +116,7 @@
 
 // Review note styling
 .review-note {
-  border-left: 3px solid var(--nextui-secondary);
+  border-left: 3px solid var(--heroui-secondary);
   padding-left: 0.75rem;
   margin: 0.5rem 0;
   font-style: italic;
@@ -128,7 +128,7 @@
   flex-wrap: wrap;
   gap: 1rem;
   font-size: 0.75rem;
-  color: var(--nextui-foreground-400);
+  color: var(--heroui-foreground-400);
   
   .meta-item {
     display: flex;

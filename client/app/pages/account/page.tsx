@@ -1,9 +1,9 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Button } from "@nextui-org/button";
-import { Card, CardBody } from "@nextui-org/card";
-import { Chip } from "@nextui-org/chip";
+import { Button } from "@heroui/react";
+import { Card, CardBody } from "@heroui/react";
+import { Chip } from "@heroui/react";
 import { Calendar, LogOut, User, Shield, Clock } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { PageContent, PageHeader } from "@/components/page-header";

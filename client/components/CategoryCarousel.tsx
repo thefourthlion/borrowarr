@@ -20,7 +20,7 @@ import {
   Swords,
   type LucideIcon,
 } from "lucide-react";
-import { Button } from "@nextui-org/button";
+import { Button } from "@heroui/react";
 import {
   Carousel,
   CarouselContent,
